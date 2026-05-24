@@ -1,0 +1,18 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "encounter",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "doctor_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ]
+}
