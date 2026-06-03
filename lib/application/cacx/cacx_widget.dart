@@ -587,9 +587,9 @@ class _CaCxAppState extends State<CaCxApp> {
 
     if (_cloudFallbackRequested) {
       _setFlowStatus(
-        'Cloud AI review in progress',
+        'Online scan in progress',
         warning:
-            'The device response was recorded. The cloud result requested for this demo remains active.',
+            'The offline device response was recorded. The online scan result remains active.',
       );
       return;
     }
@@ -619,7 +619,7 @@ class _CaCxAppState extends State<CaCxApp> {
       statusMessage: primary.deviceStatus == 'timeout'
           ? 'Device did not respond in time. Sending for second opinion.'
           : 'Device failed. Sending for second opinion.',
-      warning: 'Cloud fallback is using the same uploaded image for this scan.',
+      warning: 'The online scan is using the same uploaded image.',
     );
   }
 
@@ -802,7 +802,7 @@ class _CaCxAppState extends State<CaCxApp> {
       rawResponse: {
         'status': 'pending',
         'endpoint': CervicalDeviceConfig.imagePostUrl,
-        'fallback': 'manual_cloud_skip',
+        'fallback': 'online_scan_selected',
       },
       riskLevel: 'unknown',
       deviceStatus: 'pending',
@@ -831,9 +831,9 @@ class _CaCxAppState extends State<CaCxApp> {
 
     await _runCloudFallbackForCurrentScan(
       primary: primary,
-      statusMessage: 'Using Cloud AI result now...',
+      statusMessage: 'Using online scan result now...',
       warning:
-          'Demo mode: cloud review is using the same uploaded image while the device request continues.',
+          'The online scan is using the same uploaded image while the offline device request continues.',
     );
   }
 
@@ -1239,7 +1239,7 @@ class _CaCxAppState extends State<CaCxApp> {
                             ? null
                             : _skipToCloudResultNow,
                         icon: const Icon(Icons.cloud_outlined, size: 16),
-                        label: const Text('Use Gradio Result Now'),
+                        label: const Text('Use Online Scan Now'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: DawaTokens.brandPrimary,
                           side:
@@ -2776,7 +2776,7 @@ class _CaCxAppState extends State<CaCxApp> {
                       value: secondStatusLabel,
                       detail: secondResult == null
                           ? (_secondOpinionRequired
-                              ? 'Gradio server route'
+                              ? 'Online scan route'
                               : 'Device completed primary diagnosis')
                           : '${secondResult.label} (${secondResult.confidence.toStringAsFixed(1)}%)',
                       color: secondStatusColor,
