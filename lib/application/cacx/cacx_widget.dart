@@ -1,7 +1,9 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/components/dawa_design_system.dart';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'cacx_upload_service.dart';
 import 'cacx_model.dart';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -393,7 +395,11 @@ class _CaCxAppState extends State<CaCxApp> {
   // Current mode determines how the results screen is framed.
   ScreeningMode _screeningMode = ScreeningMode.via;
 
-  String _analyzingStatus = 'Running VIA classification via AI model';
+  String _analyzingStatus = 'Ready for cervical device interpretation';
+  String? _flowWarningMessage;
+  String? _screeningRecordId;
+  int? _deviceSecondsRemaining;
+  int _deviceRetryCount = 0;
 
   // Data Lists
   List<Patient> _patients = [];
@@ -404,11 +410,16 @@ class _CaCxAppState extends State<CaCxApp> {
   String? _selectedImage;
   Patient? _selectedPatient;
   AnalysisResult? _analysisResult;
+  CervicalDeviceInterpretation? _primaryDeviceResult;
+  AnalysisResult? _secondOpinionResult;
   String _patientSearchText = '';
   bool _patientNeedsReviewOnly = false;
 
   // UI States
   bool _isAnalyzing = false;
+  bool _secondOpinionRequired = false;
+  String _secondOpinionStatus = 'not_required';
+  String _resultExplanationLanguage = 'English';
   QuickAccessResultsFilter _resultsFilter = QuickAccessResultsFilter.all;
 
   // Form Controllers
@@ -480,6 +491,26 @@ class _CaCxAppState extends State<CaCxApp> {
     }
   }
 
+  void _setFlowStatus(String message, {String? warning}) {
+    if (!mounted) return;
+    setState(() {
+      _analyzingStatus = message;
+      _flowWarningMessage = warning;
+    });
+  }
+
+  void _resetScreeningFlow() {
+    _flowWarningMessage = null;
+    _screeningRecordId = null;
+    _primaryDeviceResult = null;
+    _secondOpinionResult = null;
+    _secondOpinionRequired = false;
+    _secondOpinionStatus = 'not_required';
+    _analyzingStatus = 'Ready for cervical device interpretation';
+    _deviceSecondsRemaining = null;
+    _deviceRetryCount = 0;
+  }
+
   // ?? Unified image-picker entry point ????????????????????????????????????????
   Future<void> _openImageSourcePicker({required ScreeningMode mode}) async {
     final image = await showImageSourcePicker(context);
@@ -489,6 +520,8 @@ class _CaCxAppState extends State<CaCxApp> {
       _selectedImage = image;
       _screeningMode = mode;
       _isAnalyzing = true;
+      _appState = AppState.dashboard;
+      _resetScreeningFlow();
     });
 
     await _analyzeImage();
@@ -497,31 +530,267 @@ class _CaCxAppState extends State<CaCxApp> {
   Future<void> _analyzeImage() async {
     if (_selectedImage == null) return;
 
-    try {
-      final result = await HuggingFaceService.analyzeVIAImage(_selectedImage!);
+    final image = _selectedImage!;
+    final patientId = _selectedPatient?.id;
+    final userId = currentUserUid.isEmpty ? null : currentUserUid;
+    final imagePath = CacxScreeningResultsRepository.buildImagePath(
+      userId: userId,
+      patientId: patientId,
+    );
+
+    final primary = await _waitForPrimaryDevice(image, patientId);
+
+    final secondRequired = primary.deviceStatus != 'success';
+    final initialSecondStatus = secondRequired ? 'pending' : 'not_required';
+    final recordId = await CacxScreeningResultsRepository.insertPrimaryResult(
+      patientId: patientId,
+      userId: userId,
+      imagePath: imagePath,
+      primary: primary,
+      secondOpinionRequired: secondRequired,
+      secondOpinionStatus: initialSecondStatus,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _screeningRecordId = recordId;
+      _primaryDeviceResult = primary;
+      _secondOpinionRequired = secondRequired;
+      _secondOpinionStatus = initialSecondStatus;
+    });
+    _setFlowStatus(
+      recordId == null
+          ? 'Device status received, but Supabase save failed'
+          : 'Device result saved to Supabase',
+      warning: recordId == null
+          ? 'The screening flow continued, but the screening result row could not be saved.'
+          : _flowWarningMessage,
+    );
+
+    if (!secondRequired) {
+      _setFlowStatus('Device handled case');
       setState(() {
-        _analysisResult = result;
+        _deviceSecondsRemaining = null;
+        _analysisResult = primary.toAnalysisResult(image);
         _isAnalyzing = false;
         _appState = AppState.results;
       });
-    } catch (e) {
-      debugPrint('HF Error: $e');
-      setState(() => _analyzingStatus = 'AI model is warming up, please wait');
-      // Fallback mock result for demo / offline dev
-      final mockResult = AnalysisResult(
-        imageUrl: _selectedImage!,
-        label: 'High Grade Lesion (CIN2+)',
-        confidence: 94.2,
-        suspicionLevel: SuspicionLevel.high,
-        recommendation:
-            "Refer for colposcopy and biopsy immediately. Consider 'See and Treat' if eligible.",
-      );
-      setState(() {
-        _analysisResult = mockResult;
-        _isAnalyzing = false;
-        _appState = AppState.results;
-      });
+      return;
     }
+
+    debugPrint('[Device] Routing to Gradio');
+    _setFlowStatus(
+      'Device unavailable. Sending for cloud review.',
+      warning:
+          'The device did not complete within the retry window. Cloud fallback is being used.',
+    );
+
+    final secondOpinion = await HuggingFaceService.analyzeVIAImage(image);
+    final secondOpinionFailed = secondOpinion.error != null ||
+        secondOpinion.label.toLowerCase().contains('failed') ||
+        secondOpinion.label.toLowerCase().contains('error');
+    final finalSecondStatus = secondOpinionFailed ? 'failed' : 'completed';
+
+    await CacxScreeningResultsRepository.updateSecondOpinion(
+      recordId: recordId,
+      result: secondOpinion,
+      status: finalSecondStatus,
+    );
+
+    if (!mounted) return;
+
+    final finalResult = secondOpinionFailed
+        ? AnalysisResult(
+            imageUrl: image,
+            label: primary.toAnalysisResult(image).label,
+            confidence: primary.confidence,
+            suspicionLevel: CacxRiskMapper.suspicionForRisk(primary.riskLevel),
+            recommendation:
+                'Primary device result requires second opinion, but the server second opinion failed. Please retry the server route or escalate for manual clinical review.',
+            rawOutput: primary.rawResponse,
+            error: secondOpinion.error ?? secondOpinion.label,
+          )
+        : secondOpinion;
+
+    _setFlowStatus(
+      secondOpinionFailed
+          ? 'Second opinion failed - manual review required'
+          : 'Second opinion completed',
+      warning: secondOpinionFailed
+          ? 'The server fallback did not complete. Please retry or escalate for clinical review.'
+          : _flowWarningMessage,
+    );
+
+    setState(() {
+      _deviceSecondsRemaining = null;
+      _secondOpinionResult = secondOpinion;
+      _secondOpinionStatus = finalSecondStatus;
+      _analysisResult = finalResult;
+      _isAnalyzing = false;
+      _appState = AppState.results;
+    });
+  }
+
+  Future<CervicalDeviceInterpretation> _waitForPrimaryDevice(
+    String image,
+    String? patientId,
+  ) async {
+    final deadline = DateTime.now().add(
+      const Duration(seconds: CervicalDeviceConfig.timeoutSeconds),
+    );
+    Object? lastError;
+    var retryCount = 0;
+
+    debugPrint('[Device] Connection attempt');
+    _setDeviceCountdown(deadline, retryCount);
+    _setFlowStatus('Connecting to device...');
+
+    while (DateTime.now().isBefore(deadline)) {
+      final remaining = deadline.difference(DateTime.now());
+      try {
+        debugPrint('[Device] Connection attempt');
+        _setDeviceCountdown(deadline, retryCount);
+        _setFlowStatus('Connecting to device...');
+        await CervicalDeviceService.checkHealth();
+
+        _setFlowStatus('Sending image to device...');
+        debugPrint('[Device] Upload started');
+
+        _setFlowStatus('Waiting for device response...');
+        debugPrint('[Device] Waiting for response');
+
+        final result = await CervicalDeviceService.analyzeImage(
+          image,
+          patientId,
+          timeout: remaining,
+        );
+
+        if (result.failed) {
+          debugPrint('[Device] Unrecoverable error: ${result.error}');
+          return result;
+        }
+
+        debugPrint('[Device] Success');
+        _setDeviceCountdown(deadline, retryCount);
+        _setFlowStatus('Device result received');
+        return result;
+      } catch (error) {
+        lastError = error;
+
+        if (!DateTime.now().isBefore(deadline)) {
+          break;
+        }
+
+        retryCount += 1;
+        debugPrint('[Device] Retry $retryCount');
+        await _waitBeforeDeviceRetry(deadline, retryCount, error);
+      }
+    }
+
+    final message =
+        'Device timeout after ${CervicalDeviceConfig.timeoutSeconds} seconds';
+    debugPrint(
+        '[Device] Timeout after ${CervicalDeviceConfig.timeoutSeconds} seconds');
+    _setFlowStatus(
+      message,
+      warning:
+          'Device did not respond after retrying for 2 minutes. Preparing cloud fallback.',
+    );
+
+    return CervicalDeviceInterpretation.failure(
+      label: 'Error',
+      message: message,
+      deviceStatus: 'timeout',
+      rawResponse: {
+        'status': 'timeout',
+        'error': lastError?.toString(),
+        'endpoint': CervicalDeviceConfig.imagePostUrl,
+        'retry_count': retryCount,
+        'timeout_seconds': CervicalDeviceConfig.timeoutSeconds,
+      },
+    );
+  }
+
+  Future<void> _waitBeforeDeviceRetry(
+    DateTime deadline,
+    int retryCount,
+    Object error,
+  ) async {
+    final secondsUntilDeadline = deadline.difference(DateTime.now()).inSeconds;
+    final secondsToWait = secondsUntilDeadline
+        .clamp(
+          0,
+          CervicalDeviceConfig.retryIntervalSeconds,
+        )
+        .toInt();
+
+    for (var second = secondsToWait; second > 0; second--) {
+      if (!mounted) return;
+      _setDeviceCountdown(deadline, retryCount);
+      _setFlowStatus(
+        'Connecting to device...',
+        warning: 'Retry $retryCount in $second seconds. Last error: $error',
+      );
+      await Future<void>.delayed(const Duration(seconds: 1));
+    }
+  }
+
+  void _setDeviceCountdown(DateTime deadline, int retryCount) {
+    if (!mounted) return;
+    final remaining = deadline.difference(DateTime.now()).inSeconds;
+    setState(() {
+      _deviceSecondsRemaining = remaining
+          .clamp(
+            0,
+            CervicalDeviceConfig.timeoutSeconds,
+          )
+          .toInt();
+      _deviceRetryCount = retryCount;
+    });
+  }
+
+  Future<void> _runManualSecondOpinion() async {
+    if (_selectedImage == null) return;
+
+    setState(() {
+      _isAnalyzing = true;
+      _secondOpinionRequired = true;
+      _secondOpinionStatus = 'pending';
+    });
+    _setFlowStatus('Sending for second opinion...');
+
+    final secondOpinion = await HuggingFaceService.analyzeVIAImage(
+      _selectedImage!,
+    );
+    final failed = secondOpinion.error != null ||
+        secondOpinion.label.toLowerCase().contains('failed') ||
+        secondOpinion.label.toLowerCase().contains('error');
+    final status = failed ? 'failed' : 'completed';
+
+    await CacxScreeningResultsRepository.updateSecondOpinion(
+      recordId: _screeningRecordId,
+      result: secondOpinion,
+      status: status,
+    );
+
+    if (!mounted) return;
+
+    _setFlowStatus(
+      failed
+          ? 'Second opinion failed - manual review required'
+          : 'Second opinion completed',
+      warning: failed
+          ? 'The server fallback did not complete. Please retry or escalate for clinical review.'
+          : null,
+    );
+
+    setState(() {
+      _secondOpinionResult = secondOpinion;
+      _secondOpinionStatus = status;
+      _analysisResult = failed ? _analysisResult : secondOpinion;
+      _isAnalyzing = false;
+      _appState = AppState.results;
+    });
   }
 
   void _saveAnalysisResult() {
@@ -600,9 +869,6 @@ class _CaCxAppState extends State<CaCxApp> {
 
   @override
   Widget build(BuildContext context) {
-    // Show a full-screen loader while the HF endpoint is running
-    if (_isAnalyzing) return _buildAnalyzingScreen();
-
     switch (_appState) {
       case AppState.splash:
         return _buildSplashScreen();
@@ -611,52 +877,6 @@ class _CaCxAppState extends State<CaCxApp> {
       default:
         return _buildMainLayout();
     }
-  }
-
-  // ??? ANALYZING OVERLAY ????????????????????????????????????????????????????
-  Widget _buildAnalyzingScreen() {
-    return Scaffold(
-      backgroundColor: DawaTokens.brandPrimary,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (_selectedImage != null)
-              Container(
-                width: 200,
-                height: 200,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  image: DecorationImage(
-                    image: MemoryImage(
-                      base64Decode(_selectedImage!.split(',').last),
-                    ),
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-            const SizedBox(height: 32),
-            const CircularProgressIndicator(color: Colors.white),
-            const SizedBox(height: 24),
-            const Text(
-              'Analysing Image',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _screeningMode == ScreeningMode.training
-                  ? 'Running training feedback via AI model'
-                  : 'Running VIA classification via AI model',
-              style: const TextStyle(color: Colors.white70, fontSize: 14),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   // ??? SPLASH SCREEN ????????????????????????????????????????????????????????
@@ -733,6 +953,7 @@ class _CaCxAppState extends State<CaCxApp> {
                     _buildMobileHeader(),
                     const Divider(height: 1),
                   ],
+                  if (_shouldShowFlowStatus) _buildFlowStatusBanner(),
                   Expanded(child: _buildCurrentTab()),
                 ],
               ),
@@ -741,6 +962,121 @@ class _CaCxAppState extends State<CaCxApp> {
         ),
       ),
       bottomNavigationBar: isMobile ? _buildMobileBottomNav() : null,
+    );
+  }
+
+  bool get _shouldShowFlowStatus =>
+      _isAnalyzing ||
+      _primaryDeviceResult != null ||
+      _flowWarningMessage != null ||
+      _analyzingStatus != 'Ready for cervical device interpretation';
+
+  Widget _buildFlowStatusBanner() {
+    final warning = _flowWarningMessage != null;
+    final statusColor =
+        warning ? DawaTokens.statusWarning : DawaTokens.brandPrimary;
+    final background =
+        warning ? DawaTokens.statusWarningBg : DawaTokens.brandPrimaryPale;
+    final statusIcon = warning
+        ? Icons.warning_amber_rounded
+        : _isAnalyzing
+            ? Icons.sync_rounded
+            : Icons.check_circle_outline;
+    final remaining = _deviceSecondsRemaining;
+    final progress = remaining == null
+        ? null
+        : 1 -
+            (remaining / CervicalDeviceConfig.timeoutSeconds)
+                .clamp(0.0, 1.0)
+                .toDouble();
+
+    return Container(
+      width: double.infinity,
+      color: DawaTokens.surface,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
+          border: Border.all(
+            color: warning ? DawaTokens.statusWarning : DawaTokens.border,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_isAnalyzing)
+              SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: statusColor,
+                ),
+              )
+            else
+              Icon(statusIcon, color: statusColor, size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _analyzingStatus,
+                    style: DawaTextStyles.secondary.copyWith(
+                      color: warning
+                          ? DawaTokens.statusWarningText
+                          : DawaTokens.brandPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if (_flowWarningMessage != null) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      _flowWarningMessage!,
+                      style: DawaTextStyles.secondary.copyWith(
+                        color: DawaTokens.statusWarningText,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                  if (_isAnalyzing && remaining != null) ...[
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(99),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 5,
+                        color: statusColor,
+                        backgroundColor: Colors.white.withOpacity(0.65),
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      '$remaining seconds remaining'
+                      '${_deviceRetryCount > 0 ? ' - retry $_deviceRetryCount' : ''}',
+                      style: DawaTextStyles.secondary.copyWith(
+                        color: warning
+                            ? DawaTokens.statusWarningText
+                            : DawaTokens.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (!_isAnalyzing &&
+                _selectedImage != null &&
+                _secondOpinionStatus == 'failed')
+              TextButton(
+                onPressed: _runManualSecondOpinion,
+                child: const Text('Retry server'),
+              ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -793,6 +1129,10 @@ class _CaCxAppState extends State<CaCxApp> {
               ],
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+            child: _buildBackToHomeButton(),
+          ),
           const Divider(),
           Expanded(
             child: ListView(
@@ -806,40 +1146,48 @@ class _CaCxAppState extends State<CaCxApp> {
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: Colors.grey[200]!)),
-            ),
-            child: Row(
-              children: [
-                const CircleAvatar(
-                  backgroundColor: DawaTokens.brandPrimary,
-                  child: Text('B', style: TextStyle(color: Colors.white)),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Back to Home',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 14)),
-                      Text('Dawa Clinic',
-                          style: TextStyle(fontSize: 12, color: Colors.grey)),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Back to Home',
-                  icon: const Icon(Icons.arrow_back_rounded),
-                  onPressed: _handleLogout,
-                  color: Colors.grey,
-                ),
-              ],
-            ),
-          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBackToHomeButton({
+    bool compact = false,
+    double? width,
+    Color color = DawaTokens.brandPrimary,
+  }) {
+    final style = OutlinedButton.styleFrom(
+      foregroundColor: color,
+      side: BorderSide(color: color.withOpacity(0.28)),
+      minimumSize: Size.zero,
+      padding: compact
+          ? EdgeInsets.zero
+          : const EdgeInsets.symmetric(horizontal: 12),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
+      ),
+    );
+
+    final button = compact
+        ? OutlinedButton(
+            onPressed: _handleLogout,
+            style: style,
+            child: const Icon(Icons.arrow_back_rounded, size: 18),
+          )
+        : OutlinedButton.icon(
+            onPressed: _handleLogout,
+            icon: const Icon(Icons.arrow_back_rounded, size: 18),
+            label: const Text('Back to Home'),
+            style: style,
+          );
+
+    return SizedBox(
+      width: width ?? double.infinity,
+      height: 38,
+      child: Tooltip(
+        message: 'Back to Home',
+        child: button,
       ),
     );
   }
@@ -872,18 +1220,16 @@ class _CaCxAppState extends State<CaCxApp> {
 
   // ??? MOBILE HEADER ????????????????????????????????????????????????????????
   Widget _buildMobileHeader() {
+    final compact = MediaQuery.of(context).size.width < 430;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       color: Colors.white,
       child: Row(
         children: [
-          IconButton(
-            tooltip: 'Back to Home',
-            onPressed: _handleLogout,
-            icon: const Icon(
-              Icons.arrow_back_rounded,
-              color: DawaTokens.brandPrimary,
-            ),
+          _buildBackToHomeButton(
+            compact: compact,
+            width: compact ? 38 : 136,
           ),
           const SizedBox(width: 4),
           SizedBox(
@@ -893,14 +1239,18 @@ class _CaCxAppState extends State<CaCxApp> {
                 fit: BoxFit.contain),
           ),
           const SizedBox(width: 12),
-          const Text(
-            'Dawa CaCx',
-            style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-                color: Colors.black87),
+          const Expanded(
+            child: Text(
+              'Dawa CaCx',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: Colors.black87),
+            ),
           ),
-          const Spacer(),
+          const SizedBox(width: 8),
           const CircleAvatar(
             backgroundColor: DawaTokens.brandPrimaryPale,
             child: Text('MM',
@@ -1200,12 +1550,6 @@ class _CaCxAppState extends State<CaCxApp> {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: DawaTokens.border),
             boxShadow: DawaTokens.shadowSm,
-          ),
-          foregroundDecoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border(
-              top: BorderSide(color: color, width: 3),
-            ),
           ),
           child: Stack(
             children: [
@@ -2175,6 +2519,173 @@ class _CaCxAppState extends State<CaCxApp> {
     );
   }
 
+  Widget _buildScreeningFlowSummary() {
+    final primary = _primaryDeviceResult!;
+    final secondResult = _secondOpinionResult;
+    final secondStatusLabel = switch (_secondOpinionStatus) {
+      'not_required' => 'Not required',
+      'pending' => 'Pending',
+      'completed' => 'Completed',
+      'failed' => 'Failed',
+      _ => 'Unknown',
+    };
+    final secondStatusColor = switch (_secondOpinionStatus) {
+      'not_required' => DawaTokens.statusSuccessText,
+      'completed' => DawaTokens.statusSuccessText,
+      'pending' => DawaTokens.statusWarningText,
+      'failed' => DawaTokens.statusDangerText,
+      _ => DawaTokens.textSecondary,
+    };
+
+    return DawaCard(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.route_outlined,
+                color: DawaTokens.brandPrimary,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'CaCx Upload Flow',
+                  style: DawaTextStyles.cardTitle,
+                ),
+              ),
+              if (_screeningRecordId != null)
+                DawaStatusBadge(status: 'completed', label: 'Result saved'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final stacked = constraints.maxWidth < 640;
+              final itemWidth =
+                  stacked ? double.infinity : (constraints.maxWidth - 10) / 2;
+
+              return Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  SizedBox(
+                    width: itemWidth,
+                    child: _flowSummaryItem(
+                      icon: Icons.memory_outlined,
+                      title: 'Primary device',
+                      value:
+                          '${primary.label} (${primary.confidence.toStringAsFixed(1)}%)',
+                      detail: 'Risk level: ${primary.riskLevel}',
+                      color: DawaTokens.brandPrimary,
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth,
+                    child: _flowSummaryItem(
+                      icon: Icons.fact_check_outlined,
+                      title: 'Second opinion',
+                      value: secondStatusLabel,
+                      detail: secondResult == null
+                          ? (_secondOpinionRequired
+                              ? 'Gradio server route'
+                              : 'Device completed primary diagnosis')
+                          : '${secondResult.label} (${secondResult.confidence.toStringAsFixed(1)}%)',
+                      color: secondStatusColor,
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          if (_flowWarningMessage != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              _flowWarningMessage!,
+              style: DawaTextStyles.secondary.copyWith(
+                color: DawaTokens.statusWarningText,
+                fontSize: 12,
+              ),
+            ),
+          ],
+          if (_secondOpinionStatus == 'failed' && _selectedImage != null) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _isAnalyzing ? null : _runManualSecondOpinion,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry server second opinion'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _flowSummaryItem({
+    required IconData icon,
+    required String title,
+    required String value,
+    required String detail,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: DawaTokens.surfaceSecondary,
+        borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
+        border: Border.all(color: DawaTokens.border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color, size: 17),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: DawaTextStyles.label.copyWith(
+                    color: DawaTokens.textMuted,
+                    fontSize: 10,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: DawaTextStyles.secondary.copyWith(
+                    color: DawaTokens.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  detail,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: DawaTextStyles.secondary.copyWith(fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ??? RESULTS SCREEN ???????????????????????????????????????????????????????
   Widget _buildResultsScreen() {
     if (_analysisResult == null) {
@@ -2182,6 +2693,11 @@ class _CaCxAppState extends State<CaCxApp> {
     }
 
     final isTraining = _screeningMode == ScreeningMode.training;
+    final resultSourceLabel = !isTraining &&
+            _secondOpinionRequired &&
+            _secondOpinionStatus == 'completed'
+        ? 'Second Opinion'
+        : 'Device AI';
 
     return Scaffold(
       appBar: AppBar(
@@ -2207,260 +2723,96 @@ class _CaCxAppState extends State<CaCxApp> {
           ],
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            // Training mode banner
-            if (isTraining)
-              Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: DawaTokens.statusSuccessBg,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: DawaTokens.statusSuccess),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.school, color: DawaTokens.statusSuccessText),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Training Mode - results are for educational purposes only and will not be saved to patient records.',
-                        style: TextStyle(
-                          color: DawaTokens.statusSuccessText,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final isWide = width >= 900;
+          final pagePadding = width < 560
+              ? const EdgeInsets.all(16)
+              : const EdgeInsets.symmetric(horizontal: 28, vertical: 24);
 
-            // Image preview
-            Container(
-              height: 300,
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(16),
-                image: _selectedImage != null
-                    ? DecorationImage(
-                        image: MemoryImage(
-                          base64Decode(_selectedImage!.split(',').last),
-                        ),
-                        fit: BoxFit.contain,
-                      )
-                    : null,
-              ),
-              child: _selectedImage == null
-                  ? const Center(
-                      child: Icon(Icons.image, color: Colors.white, size: 64))
-                  : null,
-            ),
-
-            const SizedBox(height: 24),
-
-            // Confidence
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
+          return SingleChildScrollView(
+            padding: pagePadding,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1240),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('AI Confidence Score',
-                            style: TextStyle(
-                                color: Colors.grey,
-                                fontWeight: FontWeight.bold)),
-                        Text('${_analysisResult!.confidence}%',
-                            style: const TextStyle(
-                                fontSize: 24, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    LinearProgressIndicator(
-                      value: _analysisResult!.confidence / 100,
-                      backgroundColor: Colors.grey[200],
-                      color: _analysisResult!.confidence > 80
-                          ? DawaTokens.statusSuccess
-                          : _analysisResult!.confidence > 50
-                              ? DawaTokens.statusWarning
-                              : DawaTokens.statusDanger,
-                      minHeight: 10,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Classification
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: _analysisResult!.suspicionColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(Icons.analytics,
-                          color: _analysisResult!.suspicionColor, size: 32),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
+                    if (isTraining) ...[
+                      _buildTrainingBanner(),
+                      const SizedBox(height: 16),
+                    ],
+                    if (!isTraining && _primaryDeviceResult != null) ...[
+                      _buildScreeningFlowSummary(),
+                      const SizedBox(height: 18),
+                    ],
+                    if (isWide)
+                      Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            isTraining
-                                ? 'Training Classification'
-                                : 'Staging Classification',
-                            style: const TextStyle(
-                                color: Colors.grey,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold),
+                          Expanded(
+                            flex: 11,
+                            child: Column(
+                              children: [
+                                _buildResultImageCard(isWide: true),
+                                const SizedBox(height: 16),
+                                _buildImageMetadataCard(resultSourceLabel),
+                              ],
+                            ),
                           ),
-                          Text(
-                            _analysisResult!.label,
-                            style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: _analysisResult!.suspicionColor),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Based on visual pattern analysis consistent with ${_analysisResult!.suspicionLevelString} risk markers.',
-                            style: const TextStyle(color: Colors.grey),
+                          const SizedBox(width: 18),
+                          Expanded(
+                            flex: 13,
+                            child: Column(
+                              children: [
+                                _buildResultSummaryCard(
+                                  resultSourceLabel: resultSourceLabel,
+                                  isTraining: isTraining,
+                                ),
+                                const SizedBox(height: 16),
+                                _buildConfidenceCard(resultSourceLabel),
+                                const SizedBox(height: 16),
+                                _buildClassificationCard(
+                                  resultSourceLabel: resultSourceLabel,
+                                  isTraining: isTraining,
+                                ),
+                              ],
+                            ),
                           ),
                         ],
+                      )
+                    else ...[
+                      _buildResultImageCard(isWide: false),
+                      const SizedBox(height: 16),
+                      _buildImageMetadataCard(resultSourceLabel),
+                      const SizedBox(height: 16),
+                      _buildResultSummaryCard(
+                        resultSourceLabel: resultSourceLabel,
+                        isTraining: isTraining,
                       ),
-                    ),
+                      const SizedBox(height: 16),
+                      _buildConfidenceCard(resultSourceLabel),
+                      const SizedBox(height: 16),
+                      _buildClassificationCard(
+                        resultSourceLabel: resultSourceLabel,
+                        isTraining: isTraining,
+                      ),
+                    ],
+                    const SizedBox(height: 18),
+                    _buildRecommendationCard(isTraining: isTraining),
+                    const SizedBox(height: 18),
+                    _buildResultDisclaimer(isTraining),
+                    if (isTraining) ...[
+                      const SizedBox(height: 18),
+                      _buildTryAnotherTrainingImageButton(),
+                    ],
                   ],
                 ),
               ),
             ),
-
-            const SizedBox(height: 24),
-
-            // Recommendation
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          isTraining
-                              ? Icons.tips_and_updates
-                              : Icons.description,
-                          color: DawaTokens.brandPrimary,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          isTraining
-                              ? 'Learning Guidance'
-                              : 'Clinical Recommendation',
-                          style: const TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      _analysisResult!.recommendation,
-                      style:
-                          const TextStyle(fontSize: 16, color: Colors.black87),
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _infoTile(
-                            isTraining ? 'Practice Tip' : 'Next Step',
-                            isTraining
-                                ? 'Review VIA criteria'
-                                : 'Schedule Follow-up',
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _infoTile(
-                            'Protocol',
-                            'Zambian MoH / WHO',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Disclaimer
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: DawaTokens.statusInfoBg,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: DawaTokens.statusInfo),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.info, color: DawaTokens.statusInfo),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      isTraining
-                          ? 'Training Note: Compare this AI feedback with your own assessment to build diagnostic confidence.'
-                          : 'Midwife Note: This analysis is an assistive tool. Always verify results with your clinical judgment and standard diagnostic procedures.',
-                      style: const TextStyle(
-                        color: DawaTokens.statusInfo,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Training: try another image button
-            if (isTraining) ...[
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      _appState = AppState.dashboard;
-                      _analysisResult = null;
-                      _selectedImage = null;
-                    });
-                    _openImageSourcePicker(mode: ScreeningMode.training);
-                  },
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Try Another Image'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: DawaTokens.brandPrimary,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -2488,6 +2840,668 @@ class _CaCxAppState extends State<CaCxApp> {
       ),
     );
   }
+
+  Widget _buildTrainingBanner() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: DawaTokens.statusSuccessBg,
+        borderRadius: BorderRadius.circular(DawaTokens.radiusLg),
+        border: Border.all(color: DawaTokens.statusSuccess.withOpacity(0.4)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.school, color: DawaTokens.statusSuccessText),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Training Mode - results are for educational purposes only and will not be saved to patient records.',
+              style: DawaTextStyles.secondary.copyWith(
+                color: DawaTokens.statusSuccessText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResultImageCard({required bool isWide}) {
+    final image = _selectedImage;
+    return DawaCard(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.image_outlined,
+                color: DawaTokens.brandPrimary,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Text('Uploaded Image', style: DawaTextStyles.cardTitle),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            height: isWide ? 390 : 300,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: DawaTokens.surfaceSecondary,
+              borderRadius: BorderRadius.circular(DawaTokens.radiusLg),
+              border: Border.all(color: DawaTokens.border),
+            ),
+            child: image == null
+                ? const Center(
+                    child: Icon(
+                      Icons.image_outlined,
+                      color: DawaTokens.textMuted,
+                      size: 52,
+                    ),
+                  )
+                : Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
+                      child: Image.memory(
+                        base64Decode(image.split(',').last),
+                        fit: BoxFit.contain,
+                        alignment: Alignment.center,
+                      ),
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImageMetadataCard(String sourceLabel) {
+    return DawaCard(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          Expanded(
+            child: _compactMetric(
+              'Source',
+              sourceLabel,
+              Icons.hub_outlined,
+              DawaTokens.brandPrimary,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _compactMetric(
+              'Mode',
+              _screeningMode == ScreeningMode.training
+                  ? 'Training'
+                  : 'Clinical',
+              Icons.assignment_outlined,
+              DawaTokens.brandAccent,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResultSummaryCard({
+    required String resultSourceLabel,
+    required bool isTraining,
+  }) {
+    final tone = _riskTone();
+    return DawaCard(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: tone.background,
+                  borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
+                ),
+                child: Icon(
+                  _riskIcon(),
+                  color: tone.foreground,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isTraining ? 'Training Result' : 'Diagnosis',
+                      style: DawaTextStyles.label.copyWith(
+                        color: DawaTokens.textMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _analysisResult!.label,
+                      style: DawaTextStyles.pageTitle.copyWith(
+                        color: DawaTokens.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _pillBadge(
+                _analysisResult!.suspicionLevelString,
+                tone.background,
+                tone.foreground,
+                Icons.health_and_safety_outlined,
+              ),
+              _pillBadge(
+                resultSourceLabel,
+                DawaTokens.brandPrimaryPale,
+                DawaTokens.brandPrimary,
+                Icons.memory_outlined,
+              ),
+              _pillBadge(
+                _screeningRecordId != null ? 'Saved' : 'Completed',
+                DawaTokens.statusSuccessBg,
+                DawaTokens.statusSuccessText,
+                Icons.check_circle_outline,
+              ),
+              if (!_secondOpinionRequired)
+                _pillBadge(
+                  'Second opinion not required',
+                  DawaTokens.surfaceTertiary,
+                  DawaTokens.textSecondary,
+                  Icons.fact_check_outlined,
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _compactMetric(
+            'Confidence',
+            '${_analysisResult!.confidence.toStringAsFixed(1)}%',
+            Icons.bar_chart_rounded,
+            _confidenceColor(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConfidenceCard(String resultSourceLabel) {
+    final confidence = _analysisResult!.confidence.clamp(0, 100).toDouble();
+    return DawaCard(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '$resultSourceLabel Confidence',
+                  style: DawaTextStyles.cardTitle,
+                ),
+              ),
+              Text(
+                '${confidence.toStringAsFixed(1)}%',
+                style: DawaTextStyles.statNumber.copyWith(
+                  color: _confidenceColor(),
+                  fontSize: 24,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              value: confidence / 100,
+              backgroundColor: DawaTokens.surfaceTertiary,
+              color: _confidenceColor(),
+              minHeight: 9,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Confidence is interpreted together with clinical judgement and local screening protocols.',
+            style: DawaTextStyles.secondary.copyWith(
+              color: DawaTokens.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClassificationCard({
+    required String resultSourceLabel,
+    required bool isTraining,
+  }) {
+    final tone = _riskTone();
+    return DawaCard(
+      padding: const EdgeInsets.all(18),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: tone.background,
+              borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
+            ),
+            child: Icon(Icons.analytics_outlined,
+                color: tone.foreground, size: 26),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        isTraining
+                            ? 'Training Classification'
+                            : '$resultSourceLabel Classification',
+                        style: DawaTextStyles.label.copyWith(
+                          color: DawaTokens.textMuted,
+                        ),
+                      ),
+                    ),
+                    _pillBadge(
+                      _analysisResult!.suspicionLevelString,
+                      tone.background,
+                      tone.foreground,
+                      null,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _analysisResult!.label,
+                  style: DawaTextStyles.cardTitle.copyWith(
+                    color: tone.foreground,
+                    fontSize: 18,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Visual pattern analysis is consistent with ${_analysisResult!.suspicionLevelString.toLowerCase()} risk markers.',
+                  style: DawaTextStyles.secondary.copyWith(
+                    color: DawaTokens.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecommendationCard({required bool isTraining}) {
+    return DawaCard(
+      padding: const EdgeInsets.all(18),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final sideBySide = constraints.maxWidth >= 760;
+          final guidance = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    isTraining ? Icons.tips_and_updates : Icons.description,
+                    color: DawaTokens.brandPrimary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      isTraining
+                          ? 'Learning Guidance'
+                          : 'Clinical Recommendation',
+                      style: DawaTextStyles.cardTitle.copyWith(fontSize: 18),
+                    ),
+                  ),
+                  if (!isTraining) _buildLanguageSelector(),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                _localizedResultExplanation(isTraining: isTraining),
+                style: DawaTextStyles.body.copyWith(
+                  color: DawaTokens.textPrimary,
+                  fontSize: 15,
+                ),
+              ),
+              if (!isTraining && _resultExplanationLanguage != 'English') ...[
+                const SizedBox(height: 10),
+                Text(
+                  'Original recommendation: ${_analysisResult!.recommendation}',
+                  style: DawaTextStyles.secondary.copyWith(
+                    color: DawaTokens.textSecondary,
+                  ),
+                ),
+              ],
+            ],
+          );
+          final actions = sideBySide
+              ? Row(
+                  children: [
+                    Expanded(
+                      child: _infoTile(
+                        isTraining ? 'Practice Tip' : 'Next Step',
+                        isTraining ? 'Review VIA criteria' : _nextStepLabel(),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _infoTile(
+                        'Protocol',
+                        'Zambian MoH / WHO',
+                      ),
+                    ),
+                  ],
+                )
+              : Column(
+                  children: [
+                    _infoTile(
+                      isTraining ? 'Practice Tip' : 'Next Step',
+                      isTraining ? 'Review VIA criteria' : _nextStepLabel(),
+                    ),
+                    const SizedBox(height: 10),
+                    _infoTile('Protocol', 'Zambian MoH / WHO'),
+                  ],
+                );
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              guidance,
+              const SizedBox(height: 18),
+              actions,
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildLanguageSelector() {
+    const languages = [
+      'English',
+      'Nyanja',
+      'Bemba',
+      'Tonga',
+      'Shona',
+      'Ndebele',
+    ];
+
+    return Container(
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: DawaTokens.surfaceSecondary,
+        borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
+        border: Border.all(color: DawaTokens.border),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _resultExplanationLanguage,
+          iconSize: 18,
+          style: DawaTextStyles.secondary.copyWith(
+            color: DawaTokens.textPrimary,
+            fontWeight: FontWeight.w700,
+          ),
+          items: languages
+              .map(
+                (language) => DropdownMenuItem(
+                  value: language,
+                  child: Text(language),
+                ),
+              )
+              .toList(),
+          onChanged: (value) {
+            if (value == null) return;
+            setState(() => _resultExplanationLanguage = value);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResultDisclaimer(bool isTraining) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: DawaTokens.statusInfoBg,
+        borderRadius: BorderRadius.circular(DawaTokens.radiusLg),
+        border: Border.all(color: DawaTokens.statusInfo.withOpacity(0.25)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline, color: DawaTokens.statusInfo),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              isTraining
+                  ? 'Training Note: Compare this AI feedback with your own assessment to build diagnostic confidence.'
+                  : 'Midwife Note: This analysis is an assistive tool. Always verify results with your clinical judgment and standard diagnostic procedures.',
+              style: DawaTextStyles.secondary.copyWith(
+                color: DawaTokens.statusInfo,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTryAnotherTrainingImageButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: () {
+          setState(() {
+            _appState = AppState.dashboard;
+            _analysisResult = null;
+            _selectedImage = null;
+          });
+          _openImageSourcePicker(mode: ScreeningMode.training);
+        },
+        icon: const Icon(Icons.refresh),
+        label: const Text('Try Another Image'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: DawaTokens.brandPrimary,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _compactMetric(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: DawaTokens.surfaceSecondary,
+        borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
+        border: Border.all(color: DawaTokens.border),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: DawaTextStyles.label.copyWith(
+                    color: DawaTokens.textMuted,
+                    fontSize: 10,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: DawaTextStyles.secondary.copyWith(
+                    color: DawaTokens.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pillBadge(
+    String label,
+    Color background,
+    Color foreground,
+    IconData? icon,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(99),
+        border: Border.all(color: foreground.withOpacity(0.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 13, color: foreground),
+            const SizedBox(width: 5),
+          ],
+          Text(
+            label,
+            style: DawaTextStyles.secondary.copyWith(
+              color: foreground,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _confidenceColor() {
+    final confidence = _analysisResult?.confidence ?? 0;
+    if (confidence >= 80) return DawaTokens.statusSuccess;
+    if (confidence >= 50) return DawaTokens.statusWarning;
+    return DawaTokens.statusDanger;
+  }
+
+  _ResultTone _riskTone() {
+    switch (_analysisResult!.suspicionLevel) {
+      case SuspicionLevel.low:
+        return const _ResultTone(
+          background: DawaTokens.statusSuccessBg,
+          foreground: DawaTokens.statusSuccessText,
+        );
+      case SuspicionLevel.medium:
+        return const _ResultTone(
+          background: DawaTokens.statusWarningBg,
+          foreground: DawaTokens.statusWarningText,
+        );
+      case SuspicionLevel.high:
+        return const _ResultTone(
+          background: Color(0xFFFFF7ED),
+          foreground: Color(0xFFC2410C),
+        );
+    }
+  }
+
+  IconData _riskIcon() {
+    switch (_analysisResult!.suspicionLevel) {
+      case SuspicionLevel.low:
+        return Icons.check_circle_outline;
+      case SuspicionLevel.medium:
+        return Icons.manage_search_outlined;
+      case SuspicionLevel.high:
+        return Icons.priority_high_rounded;
+    }
+  }
+
+  String _nextStepLabel() {
+    switch (_analysisResult!.suspicionLevel) {
+      case SuspicionLevel.low:
+        return 'Routine follow-up';
+      case SuspicionLevel.medium:
+        return 'Clinical review';
+      case SuspicionLevel.high:
+        return 'Referral planning';
+    }
+  }
+
+  String _localizedResultExplanation({required bool isTraining}) {
+    if (isTraining || _resultExplanationLanguage == 'English') {
+      return _analysisResult!.recommendation;
+    }
+
+    final diagnosis = _analysisResult!.label;
+    final risk = _analysisResult!.suspicionLevelString.toLowerCase();
+    final confidence = _analysisResult!.confidence.toStringAsFixed(1);
+
+    switch (_resultExplanationLanguage) {
+      case 'Nyanja':
+        return 'Zotsatira za $diagnosis zikuonetsa chiopsezo cha $risk. Chikhulupiriro cha makina ndi $confidence%. Gwiritsani ntchito izi ngati chithandizo, kenako tsimikizani ndi kuunika kwa chipatala ndi malamulo a MoH/WHO.';
+      case 'Bemba':
+        return 'Ifyo cafumamo pa $diagnosis filelanga ubusanso bwa $risk. Ukusumina kwa makina kuli $confidence%. Bomfya ici nga ubukafwilisho, elyo ukashinishishe ne kupima kwa chipatala pamo ne milao ya MoH/WHO.';
+      case 'Tonga':
+        return 'Mabbazu a $diagnosis alanga bubi bwa $risk. Kusinizya kwa muchina kuli $confidence%. Kozya kucibelesya buyo kuti cikugwasye, pele kasinizyeula mukulanga kwa cipatala alimwi njiila ya MoH/WHO.';
+      case 'Shona':
+        return 'Mhedzisiro ye $diagnosis inoratidza njodzi ye $risk. Kuvimba kwemuchina kuri $confidence%. Shandisa izvi sekubatsira, wozosimbisa nekuongorora kwekiriniki uye mitemo yeMoH/WHO.';
+      case 'Ndebele':
+        return 'Umphumela we $diagnosis utshengisa ubungozi be $risk. Ukuthembeka komshini kungu $confidence%. Sebenzisa lokhu njengosizo, ubusukuqinisekisa ngokuhlolwa kwekliniki langemithetho yeMoH/WHO.';
+      default:
+        return _analysisResult!.recommendation;
+    }
+  }
+}
+
+class _ResultTone {
+  const _ResultTone({
+    required this.background,
+    required this.foreground,
+  });
+
+  final Color background;
+  final Color foreground;
 }
 
 class _ChartSummaryPill extends StatelessWidget {
@@ -3064,17 +4078,7 @@ class _QuickAccessServiceAppState extends State<QuickAccessServiceApp> {
             ),
             child: Row(
               children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  width: 3,
-                  height: 26,
-                  decoration: BoxDecoration(
-                    color:
-                        selected ? DawaTokens.textInverse : Colors.transparent,
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 15),
                 Icon(
                   icon,
                   color:
