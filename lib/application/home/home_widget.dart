@@ -700,9 +700,6 @@ class _HomeWidgetState extends State<HomeWidget> {
             decoration: BoxDecoration(
               border: Border(
                 bottom: BorderSide(color: DawaTokens.border),
-                left: missingData
-                    ? BorderSide(color: DawaTokens.statusDanger, width: 3.0)
-                    : BorderSide.none,
               ),
             ),
             child: Row(

@@ -708,20 +708,6 @@ class _MomsWidgetState extends State<MomsWidget> {
                       ? []
                       : DawaTokens.shadowSm,
                 ),
-                foregroundDecoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(DawaTokens.radiusLg),
-                  border: Border(
-                    left: missingData
-                        ? BorderSide(
-                            color: DawaTokens.statusDanger,
-                            width: 3.0,
-                          )
-                        : BorderSide(
-                            color: DawaTokens.statusSuccess,
-                            width: 3.0,
-                          ),
-                  ),
-                ),
                 child: compact
                     ? Column(
                         crossAxisAlignment: CrossAxisAlignment.start,

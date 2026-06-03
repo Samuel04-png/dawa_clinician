@@ -332,16 +332,7 @@ class _SidebarItem extends StatelessWidget {
             ),
             child: Row(
               children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  width: 3,
-                  height: 26,
-                  decoration: BoxDecoration(
-                    color: active ? DawaTokens.textInverse : Colors.transparent,
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 15),
                 Icon(icon, color: foreground, size: 21),
                 const SizedBox(width: 12),
                 Expanded(

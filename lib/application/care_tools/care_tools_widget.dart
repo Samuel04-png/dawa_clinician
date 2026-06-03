@@ -99,8 +99,12 @@ class _CareToolsWidgetState extends State<CareToolsWidget> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 900;
         final horizontalPadding = constraints.maxWidth < 560 ? 16.0 : 24.0;
+        final contentWidth =
+            constraints.maxWidth > 1200.0 ? 1200.0 : constraints.maxWidth;
+        final columns = contentWidth >= 900.0 ? 2 : 1;
+        final toolCardWidth =
+            columns == 1 ? contentWidth : (contentWidth - 16.0) / 2;
 
         return SingleChildScrollView(
           padding: EdgeInsets.fromLTRB(
@@ -132,20 +136,20 @@ class _CareToolsWidgetState extends State<CareToolsWidget> {
                       ),
                     ),
                   if (urgentTotal > 0) const SizedBox(height: 24),
-                  GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: isNarrow ? 1 : 2,
-                      mainAxisSpacing: 16,
-                      crossAxisSpacing: 16,
-                      mainAxisExtent: 260,
-                    ),
-                    itemCount: tools.length,
-                    itemBuilder: (context, index) => _ToolStatusCard(
-                      summary: tools[index],
-                      onOpen: () => _openTool(context, tools[index]),
-                    ),
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 16,
+                    children: tools
+                        .map(
+                          (tool) => SizedBox(
+                            width: toolCardWidth,
+                            child: _ToolStatusCard(
+                              summary: tool,
+                              onOpen: () => _openTool(context, tool),
+                            ),
+                          ),
+                        )
+                        .toList(),
                   ),
                 ],
               ),
@@ -191,11 +195,6 @@ class _UrgentBannerState extends State<_UrgentBanner> {
         color: DawaTokens.statusWarningBg,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: DawaTokens.statusWarning),
-      ),
-      foregroundDecoration: const BoxDecoration(
-        border: Border(
-          left: BorderSide(color: DawaTokens.statusWarning, width: 4),
-        ),
       ),
       child: Row(
         children: [
@@ -246,6 +245,7 @@ class _ToolStatusCard extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
@@ -350,17 +350,21 @@ class _ToolStatusCard extends StatelessWidget {
               ],
             ),
           ),
-          const Spacer(),
+          const SizedBox(height: 16),
           const Divider(height: 1, color: DawaTokens.border),
           const SizedBox(height: 14),
           Row(
             children: [
-              Text(
-                'Open ${summary.title}',
-                style: GoogleFonts.dmSans(
-                  color: DawaTokens.brandPrimary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
+              Expanded(
+                child: Text(
+                  'Open ${summary.title}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.dmSans(
+                    color: DawaTokens.brandPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
               const SizedBox(width: 4),

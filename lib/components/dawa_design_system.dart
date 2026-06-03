@@ -146,16 +146,6 @@ class DawaCard extends StatelessWidget {
         border: Border.all(color: border),
         boxShadow: shadow,
       ),
-      foregroundDecoration: urgent
-          ? const BoxDecoration(
-              border: Border(
-                left: BorderSide(
-                  color: DawaTokens.statusDanger,
-                  width: 3,
-                ),
-              ),
-            )
-          : null,
       child: child,
     );
 
@@ -491,13 +481,6 @@ class DawaStatCard extends StatelessWidget {
             final compact = constraints.maxWidth <= 230;
 
             return Container(
-              decoration: accentBorder
-                  ? BoxDecoration(
-                      border: Border(
-                        top: BorderSide(color: color, width: 3),
-                      ),
-                    )
-                  : null,
               padding: const EdgeInsets.all(16),
               child: compact
                   ? Column(
