@@ -446,6 +446,32 @@ class CacxScreeningResultsRepository {
     }
   }
 
+  static Future<void> updatePrimaryResult({
+    required String? recordId,
+    required CervicalDeviceInterpretation primary,
+  }) async {
+    if (recordId == null || recordId.isEmpty) return;
+
+    final payload = <String, dynamic>{
+      'primary_source': 'arduino_device',
+      'primary_result': primary.label,
+      'primary_confidence': primary.confidence,
+      'primary_raw_response': primary.rawResponse,
+      'risk_level': primary.riskLevel,
+      'device_endpoint': primary.deviceEndpoint,
+      'device_status': primary.deviceStatus,
+      'device_error': primary.error,
+    };
+
+    try {
+      await runSupabaseRequest(
+        () => supabaseClient.from(table).update(payload).eq('id', recordId),
+      );
+    } catch (error) {
+      debugPrint('[CaCx Supabase] primary update failed: $error');
+    }
+  }
+
   static String _pathPart(String? value, {required String fallback}) {
     final raw = value?.trim();
     if (raw == null || raw.isEmpty) return fallback;

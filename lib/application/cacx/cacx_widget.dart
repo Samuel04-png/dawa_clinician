@@ -400,6 +400,13 @@ class _CaCxAppState extends State<CaCxApp> {
   String? _screeningRecordId;
   int? _deviceSecondsRemaining;
   int _deviceRetryCount = 0;
+  Timer? _deviceCountdownTimer;
+  bool _deviceUploadInProgress = false;
+  bool _cloudFallbackRequested = false;
+  bool _cloudFallbackInProgress = false;
+  String? _currentScanImagePath;
+  String? _currentScanPatientId;
+  String? _currentScanUserId;
 
   // Data Lists
   List<Patient> _patients = [];
@@ -437,6 +444,7 @@ class _CaCxAppState extends State<CaCxApp> {
 
   @override
   void dispose() {
+    _deviceCountdownTimer?.cancel();
     _nameController.dispose();
     _ageController.dispose();
     _phoneController.dispose();
@@ -509,10 +517,26 @@ class _CaCxAppState extends State<CaCxApp> {
     _analyzingStatus = 'Ready for cervical device interpretation';
     _deviceSecondsRemaining = null;
     _deviceRetryCount = 0;
+    _deviceCountdownTimer?.cancel();
+    _deviceCountdownTimer = null;
+    _deviceUploadInProgress = false;
+    _cloudFallbackRequested = false;
+    _cloudFallbackInProgress = false;
+    _currentScanImagePath = null;
+    _currentScanPatientId = null;
+    _currentScanUserId = null;
   }
 
   // ?? Unified image-picker entry point ????????????????????????????????????????
   Future<void> _openImageSourcePicker({required ScreeningMode mode}) async {
+    if (_isAnalyzing || _deviceUploadInProgress || _cloudFallbackInProgress) {
+      showDawaToast(
+        context,
+        'A CaCx scan is already in progress. Please wait for the result.',
+      );
+      return;
+    }
+
     final image = await showImageSourcePicker(context);
     if (image == null) return;
 
@@ -537,15 +561,15 @@ class _CaCxAppState extends State<CaCxApp> {
       userId: userId,
       patientId: patientId,
     );
+    _currentScanImagePath = imagePath;
+    _currentScanPatientId = patientId;
+    _currentScanUserId = userId;
 
-    final primary = await _waitForPrimaryDevice(image, patientId);
+    final primary = await _sendImageToDeviceOnce(image, patientId);
 
     final secondRequired = primary.deviceStatus != 'success';
     final initialSecondStatus = secondRequired ? 'pending' : 'not_required';
-    final recordId = await CacxScreeningResultsRepository.insertPrimaryResult(
-      patientId: patientId,
-      userId: userId,
-      imagePath: imagePath,
+    final recordId = await _savePrimaryResultForCurrentScan(
       primary: primary,
       secondOpinionRequired: secondRequired,
       secondOpinionStatus: initialSecondStatus,
@@ -555,9 +579,21 @@ class _CaCxAppState extends State<CaCxApp> {
     setState(() {
       _screeningRecordId = recordId;
       _primaryDeviceResult = primary;
-      _secondOpinionRequired = secondRequired;
-      _secondOpinionStatus = initialSecondStatus;
+      if (!_cloudFallbackRequested) {
+        _secondOpinionRequired = secondRequired;
+        _secondOpinionStatus = initialSecondStatus;
+      }
     });
+
+    if (_cloudFallbackRequested) {
+      _setFlowStatus(
+        'Cloud AI review in progress',
+        warning:
+            'The device response was recorded. The cloud result requested for this demo remains active.',
+      );
+      return;
+    }
+
     _setFlowStatus(
       recordId == null
           ? 'Device status received, but Supabase save failed'
@@ -578,161 +614,139 @@ class _CaCxAppState extends State<CaCxApp> {
       return;
     }
 
-    debugPrint('[Device] Routing to Gradio');
-    _setFlowStatus(
-      'Device unavailable. Sending for cloud review.',
-      warning:
-          'The device did not complete within the retry window. Cloud fallback is being used.',
+    await _runCloudFallbackForCurrentScan(
+      primary: primary,
+      statusMessage: primary.deviceStatus == 'timeout'
+          ? 'Device did not respond in time. Sending for second opinion.'
+          : 'Device failed. Sending for second opinion.',
+      warning: 'Cloud fallback is using the same uploaded image for this scan.',
     );
-
-    final secondOpinion = await HuggingFaceService.analyzeVIAImage(image);
-    final secondOpinionFailed = secondOpinion.error != null ||
-        secondOpinion.label.toLowerCase().contains('failed') ||
-        secondOpinion.label.toLowerCase().contains('error');
-    final finalSecondStatus = secondOpinionFailed ? 'failed' : 'completed';
-
-    await CacxScreeningResultsRepository.updateSecondOpinion(
-      recordId: recordId,
-      result: secondOpinion,
-      status: finalSecondStatus,
-    );
-
-    if (!mounted) return;
-
-    final finalResult = secondOpinionFailed
-        ? AnalysisResult(
-            imageUrl: image,
-            label: primary.toAnalysisResult(image).label,
-            confidence: primary.confidence,
-            suspicionLevel: CacxRiskMapper.suspicionForRisk(primary.riskLevel),
-            recommendation:
-                'Primary device result requires second opinion, but the server second opinion failed. Please retry the server route or escalate for manual clinical review.',
-            rawOutput: primary.rawResponse,
-            error: secondOpinion.error ?? secondOpinion.label,
-          )
-        : secondOpinion;
-
-    _setFlowStatus(
-      secondOpinionFailed
-          ? 'Second opinion failed - manual review required'
-          : 'Second opinion completed',
-      warning: secondOpinionFailed
-          ? 'The server fallback did not complete. Please retry or escalate for clinical review.'
-          : _flowWarningMessage,
-    );
-
-    setState(() {
-      _deviceSecondsRemaining = null;
-      _secondOpinionResult = secondOpinion;
-      _secondOpinionStatus = finalSecondStatus;
-      _analysisResult = finalResult;
-      _isAnalyzing = false;
-      _appState = AppState.results;
-    });
   }
 
-  Future<CervicalDeviceInterpretation> _waitForPrimaryDevice(
+  Future<CervicalDeviceInterpretation> _sendImageToDeviceOnce(
     String image,
     String? patientId,
   ) async {
+    if (_deviceUploadInProgress) {
+      return CervicalDeviceInterpretation.failure(
+        label: 'Device Upload In Progress',
+        message: 'A device upload is already in progress for this scan.',
+        deviceStatus: 'failed',
+        rawResponse: {
+          'status': 'duplicate_blocked',
+          'endpoint': CervicalDeviceConfig.imagePostUrl,
+        },
+      );
+    }
+
     final deadline = DateTime.now().add(
       const Duration(seconds: CervicalDeviceConfig.timeoutSeconds),
     );
-    Object? lastError;
-    var retryCount = 0;
+    _deviceUploadInProgress = true;
+    _setDeviceCountdown(deadline, 0);
 
     debugPrint('[Device] Connection attempt');
-    _setDeviceCountdown(deadline, retryCount);
     _setFlowStatus('Connecting to device...');
+    _startDeviceCountdown(deadline);
 
-    while (DateTime.now().isBefore(deadline)) {
+    try {
+      await CervicalDeviceService.checkHealth();
+
+      _setFlowStatus('Sending image to device...');
+      debugPrint('[Device] Upload started');
+
+      _setFlowStatus('Waiting for device response...');
+      debugPrint('[Device] Waiting for response');
       final remaining = deadline.difference(DateTime.now());
-      try {
-        debugPrint('[Device] Connection attempt');
-        _setDeviceCountdown(deadline, retryCount);
-        _setFlowStatus('Connecting to device...');
-        await CervicalDeviceService.checkHealth();
-
-        _setFlowStatus('Sending image to device...');
-        debugPrint('[Device] Upload started');
-
-        _setFlowStatus('Waiting for device response...');
-        debugPrint('[Device] Waiting for response');
-
-        final result = await CervicalDeviceService.analyzeImage(
-          image,
-          patientId,
-          timeout: remaining,
+      if (remaining <= Duration.zero) {
+        throw TimeoutException(
+          'Device did not respond within ${CervicalDeviceConfig.timeoutSeconds} seconds',
         );
-
-        if (result.failed) {
-          debugPrint('[Device] Unrecoverable error: ${result.error}');
-          return result;
-        }
-
-        debugPrint('[Device] Success');
-        _setDeviceCountdown(deadline, retryCount);
-        _setFlowStatus('Device result received');
-        return result;
-      } catch (error) {
-        lastError = error;
-
-        if (!DateTime.now().isBefore(deadline)) {
-          break;
-        }
-
-        retryCount += 1;
-        debugPrint('[Device] Retry $retryCount');
-        await _waitBeforeDeviceRetry(deadline, retryCount, error);
       }
+
+      final result = await CervicalDeviceService.analyzeImage(
+        image,
+        patientId,
+        timeout: remaining,
+      );
+
+      if (result.failed) {
+        debugPrint('[Device] Unrecoverable error: ${result.error}');
+      } else {
+        debugPrint('[Device] Success');
+        _setFlowStatus('Device result received');
+      }
+
+      return result;
+    } on TimeoutException catch (error) {
+      final message =
+          'Device timeout after ${CervicalDeviceConfig.timeoutSeconds} seconds';
+      debugPrint(
+          '[Device] Timeout after ${CervicalDeviceConfig.timeoutSeconds} seconds');
+      _setFlowStatus(
+        'Device timed out. Sending for second opinion...',
+        warning: 'Device did not respond in time. Sending for second opinion.',
+      );
+      return CervicalDeviceInterpretation.failure(
+        label: 'Error',
+        message: message,
+        deviceStatus: 'timeout',
+        rawResponse: {
+          'status': 'timeout',
+          'error': error.toString(),
+          'endpoint': CervicalDeviceConfig.imagePostUrl,
+          'timeout_seconds': CervicalDeviceConfig.timeoutSeconds,
+        },
+      );
+    } on CervicalDeviceHttpException catch (error) {
+      debugPrint('[Device] HTTP failure: $error');
+      _setFlowStatus(
+        'Device failed. Sending for second opinion...',
+        warning: error.body.isEmpty ? error.toString() : error.body,
+      );
+      return CervicalDeviceInterpretation.failure(
+        label: 'Error',
+        message: error.toString(),
+        deviceStatus: 'failed',
+        rawResponse: {
+          'status': 'failed',
+          'status_code': error.statusCode,
+          'error': error.body,
+          'endpoint': CervicalDeviceConfig.imagePostUrl,
+        },
+      );
+    } catch (error) {
+      debugPrint('[Device] Network failure: $error');
+      _setFlowStatus(
+        'Device failed. Sending for second opinion...',
+        warning: error.toString(),
+      );
+      return CervicalDeviceInterpretation.failure(
+        label: 'Error',
+        message: error.toString(),
+        deviceStatus: 'failed',
+        rawResponse: {
+          'status': 'offline',
+          'error': error.toString(),
+          'endpoint': CervicalDeviceConfig.imagePostUrl,
+        },
+      );
+    } finally {
+      _deviceUploadInProgress = false;
+      _stopDeviceCountdown();
     }
-
-    final message =
-        'Device timeout after ${CervicalDeviceConfig.timeoutSeconds} seconds';
-    debugPrint(
-        '[Device] Timeout after ${CervicalDeviceConfig.timeoutSeconds} seconds');
-    _setFlowStatus(
-      message,
-      warning:
-          'Device did not respond after retrying for 2 minutes. Preparing cloud fallback.',
-    );
-
-    return CervicalDeviceInterpretation.failure(
-      label: 'Error',
-      message: message,
-      deviceStatus: 'timeout',
-      rawResponse: {
-        'status': 'timeout',
-        'error': lastError?.toString(),
-        'endpoint': CervicalDeviceConfig.imagePostUrl,
-        'retry_count': retryCount,
-        'timeout_seconds': CervicalDeviceConfig.timeoutSeconds,
-      },
-    );
   }
 
-  Future<void> _waitBeforeDeviceRetry(
-    DateTime deadline,
-    int retryCount,
-    Object error,
-  ) async {
-    final secondsUntilDeadline = deadline.difference(DateTime.now()).inSeconds;
-    final secondsToWait = secondsUntilDeadline
-        .clamp(
-          0,
-          CervicalDeviceConfig.retryIntervalSeconds,
-        )
-        .toInt();
+  void _startDeviceCountdown(DateTime deadline) {
+    _deviceCountdownTimer?.cancel();
+    _deviceCountdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _setDeviceCountdown(deadline, 0);
+    });
+  }
 
-    for (var second = secondsToWait; second > 0; second--) {
-      if (!mounted) return;
-      _setDeviceCountdown(deadline, retryCount);
-      _setFlowStatus(
-        'Connecting to device...',
-        warning: 'Retry $retryCount in $second seconds. Last error: $error',
-      );
-      await Future<void>.delayed(const Duration(seconds: 1));
-    }
+  void _stopDeviceCountdown() {
+    _deviceCountdownTimer?.cancel();
+    _deviceCountdownTimer = null;
   }
 
   void _setDeviceCountdown(DateTime deadline, int retryCount) {
@@ -747,6 +761,144 @@ class _CaCxAppState extends State<CaCxApp> {
           .toInt();
       _deviceRetryCount = retryCount;
     });
+  }
+
+  Future<String?> _savePrimaryResultForCurrentScan({
+    required CervicalDeviceInterpretation primary,
+    required bool secondOpinionRequired,
+    required String secondOpinionStatus,
+  }) async {
+    final existingId = _screeningRecordId;
+    if (existingId != null && existingId.isNotEmpty) {
+      await CacxScreeningResultsRepository.updatePrimaryResult(
+        recordId: existingId,
+        primary: primary,
+      );
+      return existingId;
+    }
+
+    final recordId = await CacxScreeningResultsRepository.insertPrimaryResult(
+      patientId: _currentScanPatientId,
+      userId: _currentScanUserId,
+      imagePath: _currentScanImagePath ??
+          CacxScreeningResultsRepository.buildImagePath(
+            userId: _currentScanUserId,
+            patientId: _currentScanPatientId,
+          ),
+      primary: primary,
+      secondOpinionRequired: secondOpinionRequired,
+      secondOpinionStatus: secondOpinionStatus,
+    );
+    if (recordId != null && mounted) {
+      setState(() => _screeningRecordId = recordId);
+    }
+    return recordId;
+  }
+
+  CervicalDeviceInterpretation _pendingDeviceInterpretation() {
+    return CervicalDeviceInterpretation(
+      label: 'Awaiting device response',
+      confidence: 0,
+      rawResponse: {
+        'status': 'pending',
+        'endpoint': CervicalDeviceConfig.imagePostUrl,
+        'fallback': 'manual_cloud_skip',
+      },
+      riskLevel: 'unknown',
+      deviceStatus: 'pending',
+      deviceEndpoint: CervicalDeviceConfig.imagePostUrl,
+    );
+  }
+
+  Future<void> _skipToCloudResultNow() async {
+    if (_selectedImage == null || _cloudFallbackInProgress) return;
+
+    _cloudFallbackRequested = true;
+    final primary = _primaryDeviceResult ?? _pendingDeviceInterpretation();
+
+    await _savePrimaryResultForCurrentScan(
+      primary: primary,
+      secondOpinionRequired: true,
+      secondOpinionStatus: 'pending',
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _primaryDeviceResult = primary;
+      _secondOpinionRequired = true;
+      _secondOpinionStatus = 'pending';
+    });
+
+    await _runCloudFallbackForCurrentScan(
+      primary: primary,
+      statusMessage: 'Using Cloud AI result now...',
+      warning:
+          'Demo mode: cloud review is using the same uploaded image while the device request continues.',
+    );
+  }
+
+  Future<void> _runCloudFallbackForCurrentScan({
+    required CervicalDeviceInterpretation primary,
+    required String statusMessage,
+    String? warning,
+  }) async {
+    if (_selectedImage == null || _cloudFallbackInProgress) return;
+
+    _cloudFallbackRequested = true;
+    _cloudFallbackInProgress = true;
+    debugPrint('[Device] Routing to Gradio');
+    _setFlowStatus(statusMessage, warning: warning);
+
+    final image = _selectedImage!;
+    try {
+      final secondOpinion = await HuggingFaceService.analyzeVIAImage(image);
+      final secondOpinionFailed = secondOpinion.error != null ||
+          secondOpinion.label.toLowerCase().contains('failed') ||
+          secondOpinion.label.toLowerCase().contains('error');
+      final finalSecondStatus = secondOpinionFailed ? 'failed' : 'completed';
+
+      await CacxScreeningResultsRepository.updateSecondOpinion(
+        recordId: _screeningRecordId,
+        result: secondOpinion,
+        status: finalSecondStatus,
+      );
+
+      if (!mounted) return;
+
+      final finalResult = secondOpinionFailed
+          ? AnalysisResult(
+              imageUrl: image,
+              label: primary.toAnalysisResult(image).label,
+              confidence: primary.confidence,
+              suspicionLevel:
+                  CacxRiskMapper.suspicionForRisk(primary.riskLevel),
+              recommendation:
+                  'Primary device result requires second opinion, but the server second opinion failed. Please retry the server route or escalate for manual clinical review.',
+              rawOutput: primary.rawResponse,
+              error: secondOpinion.error ?? secondOpinion.label,
+            )
+          : secondOpinion;
+
+      _setFlowStatus(
+        secondOpinionFailed
+            ? 'Second opinion failed - manual review required'
+            : 'Second opinion completed',
+        warning: secondOpinionFailed
+            ? 'The server fallback did not complete. Please retry or escalate for clinical review.'
+            : null,
+      );
+
+      setState(() {
+        _deviceSecondsRemaining = null;
+        _secondOpinionResult = secondOpinion;
+        _secondOpinionStatus = finalSecondStatus;
+        _analysisResult = finalResult;
+        _isAnalyzing = false;
+        _appState = AppState.results;
+      });
+    } finally {
+      _cloudFallbackInProgress = false;
+    }
   }
 
   Future<void> _runManualSecondOpinion() async {
@@ -989,6 +1141,10 @@ class _CaCxAppState extends State<CaCxApp> {
             (remaining / CervicalDeviceConfig.timeoutSeconds)
                 .clamp(0.0, 1.0)
                 .toDouble();
+    final showCloudSkip = _isAnalyzing &&
+        _deviceUploadInProgress &&
+        !_cloudFallbackRequested &&
+        _selectedImage != null;
 
     return Container(
       width: double.infinity,
@@ -1043,6 +1199,16 @@ class _CaCxAppState extends State<CaCxApp> {
                   ],
                   if (_isAnalyzing && remaining != null) ...[
                     const SizedBox(height: 8),
+                    Text(
+                      'This may take up to 2 minutes.',
+                      style: DawaTextStyles.secondary.copyWith(
+                        color: warning
+                            ? DawaTokens.statusWarningText
+                            : DawaTokens.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(99),
                       child: LinearProgressIndicator(
@@ -1064,10 +1230,30 @@ class _CaCxAppState extends State<CaCxApp> {
                       ),
                     ),
                   ],
+                  if (showCloudSkip) ...[
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        onPressed: _cloudFallbackInProgress
+                            ? null
+                            : _skipToCloudResultNow,
+                        icon: const Icon(Icons.cloud_outlined, size: 16),
+                        label: const Text('Use Gradio Result Now'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: DawaTokens.brandPrimary,
+                          side:
+                              const BorderSide(color: DawaTokens.brandPrimary),
+                          backgroundColor: DawaTokens.surface,
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
-            if (!_isAnalyzing &&
+            if (!showCloudSkip &&
+                !_isAnalyzing &&
                 _selectedImage != null &&
                 _secondOpinionStatus == 'failed')
               TextButton(
