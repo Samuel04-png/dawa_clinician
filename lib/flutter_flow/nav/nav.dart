@@ -164,6 +164,25 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
           ),
         ),
         FFRoute(
+          name: PatientDetailsWidget.routeName,
+          path: PatientDetailsWidget.routePath,
+          requireAuth: true,
+          builder: (context, params) => PatientDetailsWidget(
+            momDetails: params.getParam(
+              'momDetails',
+              ParamType.DocumentReference,
+              isList: false,
+              collectionNamePath: ['mother'],
+            ),
+            firstEncounter: params.getParam(
+              'firstEncounter',
+              ParamType.DocumentReference,
+              isList: false,
+              collectionNamePath: ['first_encounter'],
+            ),
+          ),
+        ),
+        FFRoute(
           name: EncounterWidget.routeName,
           path: EncounterWidget.routePath,
           requireAuth: true,

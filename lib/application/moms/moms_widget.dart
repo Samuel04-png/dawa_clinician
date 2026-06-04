@@ -1016,7 +1016,7 @@ class _MomsWidgetState extends State<MomsWidget> {
     FirstEncounterRecord? firstEncounter,
   ) async {
     context.pushNamed(
-      MomDetailsWidget.routeName,
+      PatientDetailsWidget.routeName,
       queryParameters: {
         'momDetails': serializeParam(
           mother.reference,

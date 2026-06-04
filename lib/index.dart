@@ -22,3 +22,5 @@ export '/edit_profile/edit_profile_widget.dart' show EditProfileWidget;
 export '/auth/login_copy/login_copy_widget.dart' show LoginCopyWidget;
 export '/application/mom_details2/mom_details2_widget.dart'
     show MomDetails2Widget;
+export '/application/patient_details/patient_details_widget.dart'
+    show PatientDetailsWidget;

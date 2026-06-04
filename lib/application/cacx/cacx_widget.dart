@@ -382,7 +382,16 @@ enum QuickAccessResultsFilter { all, completed, needsReview }
 
 // ??? MAIN APP WIDGET ??????????????????????????????????????????????????????????
 class CaCxApp extends StatefulWidget {
-  const CaCxApp({super.key});
+  const CaCxApp({
+    super.key,
+    this.initialPatient,
+    this.autoStartScreening = false,
+    this.returnToPreviousOnSave = false,
+  });
+
+  final Patient? initialPatient;
+  final bool autoStartScreening;
+  final bool returnToPreviousOnSave;
 
   @override
   _CaCxAppState createState() => _CaCxAppState();
@@ -440,6 +449,16 @@ class _CaCxAppState extends State<CaCxApp> {
   void initState() {
     super.initState();
     _loadMockData();
+    if (widget.initialPatient != null) {
+      _selectedPatient = widget.initialPatient;
+      _patientSearchText = widget.initialPatient!.name;
+    }
+    if (widget.autoStartScreening) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await _openImageSourcePicker(mode: ScreeningMode.via);
+      });
+    }
   }
 
   @override
@@ -457,6 +476,11 @@ class _CaCxAppState extends State<CaCxApp> {
       _patients = MockData.getPatients();
       _historyRecords = MockData.getHistoryRecords();
       _screeningData = MockData.getScreeningData();
+      final seededPatient = widget.initialPatient;
+      if (seededPatient != null &&
+          !_patients.any((patient) => patient.id == seededPatient.id)) {
+        _patients = [seededPatient, ..._patients];
+      }
     });
   }
 
@@ -538,7 +562,15 @@ class _CaCxAppState extends State<CaCxApp> {
     }
 
     final image = await showImageSourcePicker(context);
-    if (image == null) return;
+    if (image == null) {
+      if (widget.autoStartScreening &&
+          widget.returnToPreviousOnSave &&
+          mounted &&
+          _analysisResult == null) {
+        Navigator.of(context).pop(false);
+      }
+      return;
+    }
 
     setState(() {
       _selectedImage = image;
@@ -946,6 +978,11 @@ class _CaCxAppState extends State<CaCxApp> {
   }
 
   void _saveAnalysisResult() {
+    if (widget.returnToPreviousOnSave) {
+      Navigator.of(context).pop(true);
+      return;
+    }
+
     if (_analysisResult == null || _selectedPatient == null) return;
 
     final updatedPatients = _patients.map((patient) {
@@ -2889,14 +2926,20 @@ class _CaCxAppState extends State<CaCxApp> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => setState(() {
-            _appState = AppState.dashboard;
-            _analysisResult = null;
-          }),
+          onPressed: () {
+            if (widget.returnToPreviousOnSave) {
+              Navigator.of(context).pop(true);
+              return;
+            }
+            setState(() {
+              _appState = AppState.dashboard;
+              _analysisResult = null;
+            });
+          },
         ),
         title: Text(isTraining ? 'Training Feedback' : 'Analysis Results'),
         actions: [
-          if (!isTraining) ...[
+          if (!isTraining && !widget.returnToPreviousOnSave) ...[
             IconButton(
               icon: const Icon(Icons.share),
               onPressed: () => showDawaToast(
@@ -2989,6 +3032,17 @@ class _CaCxAppState extends State<CaCxApp> {
                     _buildRecommendationCard(isTraining: isTraining),
                     const SizedBox(height: 18),
                     _buildResultDisclaimer(isTraining),
+                    if (!isTraining && widget.returnToPreviousOnSave) ...[
+                      const SizedBox(height: 18),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: ElevatedButton.icon(
+                          onPressed: () => Navigator.of(context).pop(true),
+                          icon: const Icon(Icons.arrow_back_rounded),
+                          label: const Text('Back to Patient Details'),
+                        ),
+                      ),
+                    ],
                     if (isTraining) ...[
                       const SizedBox(height: 18),
                       _buildTryAnotherTrainingImageButton(),
