@@ -8,8 +8,8 @@ This document maps what the app currently accepts, where it is stored, and what 
 - Persisted clinical data is defined in `supabase/migrations/20260507111000_clinician_supabase_schema.sql`.
 - Main persisted clinical tables are `mother`, `first_encounter`, `encounter`, `parity`, and `appointments`.
 - Cervical cancer and ultrasound modules have richer local/demo models, but those results are mostly not persisted to Supabase yet.
-- The app has these deployed/declared edge functions: `send-sms`, `delete-user`, `gemini`, and `analyze-via-image`.
-- The ultrasound code calls `analyze-ultrasound-image`, but that Supabase function is not present in this repo.
+- The app has these deployed/declared edge functions: `send-sms`, `delete-user`, `gemini`, `analyze-via-image`, and `analyze-ultrasound-image`.
+- The ultrasound analysis function uses `GEMINI_API_KEY` when configured and returns a clinician-review fallback response when no vision model secret is available.
 
 ## Persisted Data The App Accepts Today
 
@@ -147,7 +147,7 @@ Current app behavior:
 
 - The ultrasound module accepts image capture/gallery as base64.
 - It sends `{ imageBase64, gestationalAgeWeeks }` to a Supabase function named `analyze-ultrasound-image`.
-- That edge function is not present in this repo, so production analysis is incomplete unless deployed elsewhere.
+- That edge function is present in `supabase/functions/analyze-ultrasound-image` and can return Gemini-backed structured findings when `GEMINI_API_KEY` is configured.
 - Saved ultrasound scan records are currently local app state as `UltrasoundScanRecord`, not persisted to Supabase.
 - Existing persisted fields that can partially receive ultrasound results are:
   - `encounter.us_obstetrics`
@@ -360,7 +360,7 @@ Clinical review workflow.
 
 - Cervical cancer scan results are not persisted to Supabase in a structured table.
 - Ultrasound scan results are not persisted to Supabase in a structured table.
-- `analyze-ultrasound-image` is referenced but missing from `supabase/functions`.
+- `analyze-ultrasound-image` returns analysis results, but production deployments still need a configured vision model secret and clinical validation workflow.
 - `encounter.hemocheck` is integer-only and does not store units or decimal precision.
 - There is no device registry, device event audit table, media table, or clinician review table.
 - Existing row-level security allows any authenticated user to manage core clinical records, so device ingestion needs tighter authorization.
