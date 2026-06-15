@@ -223,9 +223,9 @@ const _serviceCases = [
     resultsLabel: 'Scan Reports',
     actions: [
       'Add Scan Record',
+      'AI-Guided Scan',
       'View Patient Records',
-      'View Scan Reports',
-      'Search Results',
+      'View Scan History',
     ],
   ),
   _ServiceCase(

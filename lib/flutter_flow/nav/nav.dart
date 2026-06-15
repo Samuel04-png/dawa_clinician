@@ -139,6 +139,12 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
           builder: (context, params) => CareToolsWidget(),
         ),
         FFRoute(
+          name: UltrasoundApp.routeName,
+          path: UltrasoundApp.routePath,
+          requireAuth: true,
+          builder: (context, params) => UltrasoundApp(),
+        ),
+        FFRoute(
           name: MomsWidget.routeName,
           path: MomsWidget.routePath,
           requireAuth: true,

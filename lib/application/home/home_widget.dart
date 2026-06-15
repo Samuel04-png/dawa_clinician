@@ -1,4 +1,5 @@
 import 'package:clinician/application/cacx/cacx_widget.dart';
+import 'package:clinician/application/ultrasound/ultrasound.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/components/appbar_nav/appbar_nav_widget.dart';
@@ -860,16 +861,14 @@ class _HomeWidgetState extends State<HomeWidget> {
                 _actionCard(
                   width: itemWidth,
                   title: 'Ultrasound',
-                  subtitle: 'Scan reports',
+                  subtitle: 'Scan workflows',
                   icon: Icons.sensors_rounded,
                   color: DawaTokens.brandPrimary,
                   onTap: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const QuickAccessServiceApp(
-                          service: QuickAccessServiceType.ultrasound,
-                        ),
+                        builder: (context) => const UltrasoundApp(),
                       ),
                     );
                   },

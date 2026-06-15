@@ -1,4 +1,6 @@
 import '/auth/firebase_auth/auth_util.dart';
+import '/application/ultrasound/ultrasound.dart'
+    show UltrasoundApp, UltrasoundLaunchMode;
 import '/components/dawa_design_system.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -4018,6 +4020,9 @@ Widget quickAccessServiceWidget(QuickAccessServiceType type) {
   if (type == QuickAccessServiceType.cervicalCancer) {
     return const CaCxApp();
   }
+  if (type == QuickAccessServiceType.ultrasound) {
+    return const UltrasoundApp();
+  }
   return QuickAccessServiceApp(service: type);
 }
 
@@ -4516,6 +4521,10 @@ class _QuickAccessServiceAppState extends State<QuickAccessServiceApp> {
   }
 
   Widget _buildActionGrid(_QuickAccessServiceConfig config) {
+    if (config.type == QuickAccessServiceType.ultrasound) {
+      return _buildUltrasoundActionGrid(config);
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final columns = constraints.maxWidth >= 920
@@ -4575,6 +4584,77 @@ class _QuickAccessServiceAppState extends State<QuickAccessServiceApp> {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildUltrasoundActionGrid(_QuickAccessServiceConfig config) {
+    final actions = [
+      (
+        title: config.actions[0],
+        subtitle: 'Choose normal or AI-guided ultrasound workflow.',
+        icon: Icons.add_circle_outline,
+        color: config.color,
+        onTap: () => _launchUltrasound(UltrasoundLaunchMode.chooseScanWorkflow),
+      ),
+      (
+        title: config.actions[1],
+        subtitle: 'Use the guided sweep protocol and AI analysis flow.',
+        icon: Icons.auto_fix_high_outlined,
+        color: DawaTokens.statusSuccess,
+        onTap: () => _launchUltrasound(UltrasoundLaunchMode.aiGuidedScan),
+      ),
+      (
+        title: config.actions[2],
+        subtitle: 'Review patient-linked scan records and activity.',
+        icon: Icons.people_outline,
+        color: config.color,
+        onTap: () =>
+            setState(() => _activeTab = QuickAccessDashboardTab.records),
+      ),
+      (
+        title: config.actions[3],
+        subtitle: 'Open searchable scan reports and AI findings.',
+        icon: Icons.fact_check_outlined,
+        color: config.color,
+        onTap: () =>
+            setState(() => _activeTab = QuickAccessDashboardTab.results),
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 920
+            ? 4
+            : constraints.maxWidth >= 620
+                ? 2
+                : 1;
+        final itemWidth =
+            (constraints.maxWidth - (12 * (columns - 1))) / columns;
+
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            for (final action in actions)
+              _buildQuickAction(
+                action.title,
+                action.subtitle,
+                action.icon,
+                action.color,
+                itemWidth,
+                action.onTap,
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _launchUltrasound(UltrasoundLaunchMode mode) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => UltrasoundApp(initialMode: mode),
+      ),
     );
   }
 
@@ -5300,15 +5380,15 @@ _QuickAccessServiceConfig _quickAccessConfig(QuickAccessServiceType type) {
         key: 'ultrasound',
         title: 'Ultrasound',
         description:
-            'Review obstetric scan records, measurements, reports, and follow-up flags.',
+            'Start traditional or AI-assisted obstetric scan workflows and review reports.',
         recordName: 'Scan Record',
         resultsLabel: 'Scan Reports',
-        addDescription: 'Create a new ultrasound scan record.',
+        addDescription: 'Open the ultrasound scan workspace.',
         actions: [
           'Add Scan Record',
+          'AI-Guided Scan',
           'View Patient Records',
-          'View Scan Reports',
-          'Search Results',
+          'View Scan History',
         ],
         icon: Icons.sensors_rounded,
         color: DawaTokens.brandPrimary,
