@@ -10,10 +10,15 @@ import 'package:http_parser/http_parser.dart';
 class CervicalDeviceConfig {
   const CervicalDeviceConfig._();
 
-  static const deviceBaseUrl = String.fromEnvironment(
+  static const _deviceSpecificBaseUrl = String.fromEnvironment(
     'CERVICAL_DEVICE_BASE_URL',
-    defaultValue: 'http://192.168.137.239:8083',
+    defaultValue: '',
   );
+
+  static String get deviceBaseUrl {
+    final cervicalUrl = _deviceSpecificBaseUrl.trim();
+    return cervicalUrl.isNotEmpty ? cervicalUrl : PiDeviceConfig.baseUrl;
+  }
 
   static String get normalizedDeviceBaseUrl =>
       deviceBaseUrl.replaceFirst(RegExp(r'/+$'), '');
@@ -36,6 +41,33 @@ class CervicalDeviceConfig {
     'CERVICAL_DEVICE_RETRY_INTERVAL_SECONDS',
     defaultValue: 5,
   );
+}
+
+class PiDeviceConfig {
+  const PiDeviceConfig._();
+
+  static const _baseUrl = String.fromEnvironment(
+    'PI_DEVICE_BASE_URL',
+    defaultValue: 'http://DAWA.local:8084',
+  );
+
+  static String get baseUrl => _baseUrl.trim();
+
+  static String get normalizedBaseUrl =>
+      baseUrl.replaceFirst(RegExp(r'/+$'), '');
+
+  static String get healthUrl => '$normalizedBaseUrl/health';
+
+  static String uploadUrlFor(String examinationType) {
+    final cleanType = examinationType
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9_\-]+'), '-')
+        .replaceAll(RegExp(r'-+'), '-')
+        .replaceAll(RegExp(r'^-|-$'), '');
+
+    return '$normalizedBaseUrl/upload/$cleanType';
+  }
 }
 
 class CacxRiskMapper {

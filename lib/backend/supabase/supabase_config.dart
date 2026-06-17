@@ -42,6 +42,13 @@ Future<T> runSupabaseRequest<T>(FutureOr<T> Function() request) async {
     }
     await ensureFreshSupabaseSession(forceRefresh: true);
     return await request();
+  } on FormatException catch (e) {
+    // Supabase returned non-JSON (e.g. HTML maintenance page).
+    // Wrap in a more descriptive error so callers can handle it gracefully.
+    throw FormatException(
+      'Supabase returned non-JSON response. The project may be paused or unavailable.\n'
+      'Details: ${e.message}',
+    );
   }
 }
 

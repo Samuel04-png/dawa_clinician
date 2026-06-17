@@ -46,20 +46,37 @@ class DocumentReference<T extends Object?> {
   CollectionReference<T> get parent => CollectionReference<T>(collectionName);
 
   Future<DocumentSnapshot<T>> get() async {
-    final response = await runSupabaseRequest(
-      () => supabaseClient
-          .from(collectionName)
-          .select()
-          .eq('id', id)
-          .maybeSingle(),
-    );
-    return DocumentSnapshot<T>._(
-      reference: this,
-      data: response == null
-          ? null
-          : _decodeRow(collectionName, Map<String, dynamic>.from(response)),
-      exists: response != null,
-    );
+    try {
+      final response = await runSupabaseRequest(
+        () => supabaseClient
+            .from(collectionName)
+            .select()
+            .eq('id', id)
+            .maybeSingle(),
+      );
+      return DocumentSnapshot<T>._(
+        reference: this,
+        data: response == null
+            ? null
+            : _decodeRow(collectionName, Map<String, dynamic>.from(response)),
+        exists: response != null,
+      );
+    } on FormatException catch (e) {
+      // Supabase returned non-JSON (e.g. HTML maintenance page). Treat as not found.
+      print('FormatException fetching document $path: $e');
+      return DocumentSnapshot<T>._(
+        reference: this,
+        data: null,
+        exists: false,
+      );
+    } catch (e) {
+      print('Error fetching document $path: $e');
+      return DocumentSnapshot<T>._(
+        reference: this,
+        data: null,
+        exists: false,
+      );
+    }
   }
 
   Stream<DocumentSnapshot<T>> snapshots() => Stream.fromFuture(get());
@@ -68,30 +85,48 @@ class DocumentReference<T extends Object?> {
     Map<String, dynamic> data, [
     SetOptions? options,
   ]) async {
-    final payload = _encodeRow(data, collectionName)..['id'] = id;
-    await runSupabaseRequest(
-      () => supabaseClient
-          .from(collectionName)
-          .upsert(payload, onConflict: 'id')
-          .select()
-          .maybeSingle(),
-    );
+    try {
+      final payload = _encodeRow(data, collectionName)..['id'] = id;
+      await runSupabaseRequest(
+        () => supabaseClient
+            .from(collectionName)
+            .upsert(payload, onConflict: 'id')
+            .select()
+            .maybeSingle(),
+      );
+    } on FormatException catch (e) {
+      print('FormatException setting document $path: $e');
+    } catch (e) {
+      print('Error setting document $path: $e');
+    }
   }
 
   Future<void> update(Map<String, dynamic> data) async {
-    final payload = _encodeRow(data, collectionName);
-    if (payload.isEmpty) {
-      return;
+    try {
+      final payload = _encodeRow(data, collectionName);
+      if (payload.isEmpty) {
+        return;
+      }
+      await runSupabaseRequest(
+        () => supabaseClient.from(collectionName).update(payload).eq('id', id),
+      );
+    } on FormatException catch (e) {
+      print('FormatException updating document $path: $e');
+    } catch (e) {
+      print('Error updating document $path: $e');
     }
-    await runSupabaseRequest(
-      () => supabaseClient.from(collectionName).update(payload).eq('id', id),
-    );
   }
 
   Future<void> delete() async {
-    await runSupabaseRequest(
-      () => supabaseClient.from(collectionName).delete().eq('id', id),
-    );
+    try {
+      await runSupabaseRequest(
+        () => supabaseClient.from(collectionName).delete().eq('id', id),
+      );
+    } on FormatException catch (e) {
+      print('FormatException deleting document $path: $e');
+    } catch (e) {
+      print('Error deleting document $path: $e');
+    }
   }
 
   @override
@@ -187,36 +222,45 @@ class Query<T extends Object?> {
   AggregateQuery count() => AggregateQuery(this);
 
   Future<QuerySnapshot<T>> get() async {
-    final offset = startAfterOffset ?? 0;
-    final response = await runSupabaseRequest(() {
-      dynamic request = supabaseClient.from(table).select();
-      for (final filter in filters) {
-        request = _applyFilter(request, filter);
-      }
-      for (final order in orders) {
-        request = request.order(order.field, ascending: !order.descending);
-      }
-      if (limitCount != null) {
-        request = request.range(offset, offset + limitCount! - 1);
-      } else if (offset > 0) {
-        request = request.range(offset, offset + 999);
-      }
-      return request;
-    });
-    final rows = (response as List)
-        .whereType<Map>()
-        .map((row) => Map<String, dynamic>.from(row))
-        .toList();
-    final docs = rows.asMap().entries.map((entry) {
-      final row = _decodeRow(table, entry.value);
-      final id = row['id']?.toString() ?? entry.value['id']?.toString() ?? '';
-      return QueryDocumentSnapshot<T>._(
-        reference: DocumentReference<T>(table, id),
-        data: row,
-        rowIndex: offset + entry.key,
-      );
-    }).toList();
-    return QuerySnapshot<T>(docs);
+    try {
+      final offset = startAfterOffset ?? 0;
+      final response = await runSupabaseRequest(() {
+        dynamic request = supabaseClient.from(table).select();
+        for (final filter in filters) {
+          request = _applyFilter(request, filter);
+        }
+        for (final order in orders) {
+          request = request.order(order.field, ascending: !order.descending);
+        }
+        if (limitCount != null) {
+          request = request.range(offset, offset + limitCount! - 1);
+        } else if (offset > 0) {
+          request = request.range(offset, offset + 999);
+        }
+        return request;
+      });
+      final rows = (response as List)
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList();
+      final docs = rows.asMap().entries.map((entry) {
+        final row = _decodeRow(table, entry.value);
+        final id = row['id']?.toString() ?? entry.value['id']?.toString() ?? '';
+        return QueryDocumentSnapshot<T>._(
+          reference: DocumentReference<T>(table, id),
+          data: row,
+          rowIndex: offset + entry.key,
+        );
+      }).toList();
+      return QuerySnapshot<T>(docs);
+    } on FormatException catch (e) {
+      // Supabase returned non-JSON (e.g. HTML maintenance page). Return empty.
+      print('FormatException querying table $table: $e');
+      return QuerySnapshot<T>([]);
+    } catch (e) {
+      print('Error querying table $table: $e');
+      return QuerySnapshot<T>([]);
+    }
   }
 
   Stream<QuerySnapshot<T>> snapshots() => Stream.fromFuture(get());
@@ -278,8 +322,13 @@ class AggregateQuery {
   final Query query;
 
   Future<AggregateQuerySnapshot> get() async {
-    final snapshot = await query.get();
-    return AggregateQuerySnapshot(snapshot.docs.length);
+    try {
+      final snapshot = await query.get();
+      return AggregateQuerySnapshot(snapshot.docs.length);
+    } catch (e) {
+      print('Error in aggregate query: $e');
+      return AggregateQuerySnapshot(0);
+    }
   }
 }
 

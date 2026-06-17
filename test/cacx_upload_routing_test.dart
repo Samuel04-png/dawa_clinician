@@ -39,15 +39,15 @@ void main() {
   test('device endpoint defaults match cervical upload configuration', () {
     expect(
       CervicalDeviceConfig.deviceBaseUrl,
-      'http://192.168.137.239:8083',
+      'http://DAWA.local:8084',
     );
     expect(
       CervicalDeviceConfig.healthUrl,
-      'http://192.168.137.239:8083/health',
+      'http://DAWA.local:8084/health',
     );
     expect(
       CervicalDeviceConfig.imagePostUrl,
-      'http://192.168.137.239:8083/upload/cervical',
+      'http://DAWA.local:8084/upload/cervical',
     );
     expect(CervicalDeviceConfig.timeoutSeconds, 120);
     expect(CervicalDeviceConfig.healthTimeoutSeconds, 5);
