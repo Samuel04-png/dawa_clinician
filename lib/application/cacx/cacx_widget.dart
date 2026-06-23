@@ -1,10 +1,15 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/application/ultrasound/ultrasound.dart'
     show UltrasoundApp, UltrasoundLaunchMode;
+import '/reset_password/reset_password_widget.dart';
+import '/components/image_source_picker_dialog/image_source_picker_dialog_widget.dart';
 import '/components/dawa_design_system.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'dart:ui' as ui;
 import 'package:image_picker/image_picker.dart';
+import '/flutter_flow/flutter_flow_util.dart';
 import 'cacx_upload_service.dart';
 import 'cacx_model.dart';
 import 'dart:convert';
@@ -15,24 +20,6 @@ import 'package:http_parser/http_parser.dart';
 // ─── HUGGING FACE / GRADIO SERVICE ────────────────────────────────────────────
 class HuggingFaceService {
   static const String _spaceBaseUrl = 'https://kmunzwa-medsiglip-demo.hf.space';
-
-  // Maps whatever the Gradio Space returns → display-friendly canonical label.
-  // The Space outputs: Normal, CIN1, CIN2, CIN3, Cancer  (confirmed from /info page)
-  static const Map<String, String> _labelMap = {
-    'normal': 'Negative',
-    'cin1': 'CIN1',
-    'cin2': 'CIN2',
-    'cin3': 'CIN3',
-    'cancer': 'Positive',
-    // Fallbacks in case the Space uses different casing
-    'negative': 'Negative',
-    'positive': 'Positive',
-    'label_0': 'Negative',
-    'label_1': 'CIN1',
-    'label_2': 'CIN2',
-    'label_3': 'CIN3',
-    'label_4': 'Positive',
-  };
 
   static Future<AnalysisResult> analyzeVIAImage(String base64Image) async {
     try {
@@ -140,38 +127,57 @@ class HuggingFaceService {
           (jsonDecode(dataLine.substring(5).trim()) as List<dynamic>).first;
 
       // ── Step 4: Parse (same logic as before) ───────────────────────────────
-      String mappedLabel;
-      double confidence;
+      final breakdown = extractPredictionBreakdown(resultData);
+      String mappedLabel = breakdown.isNotEmpty
+          ? canonicalCacxBaseLabel(breakdown.first.label)
+          : '';
+      double confidence = breakdown.isNotEmpty ? breakdown.first.confidence : 0;
 
-      if (resultData is Map<String, dynamic>) {
-        final String rawLabel = (resultData['label'] as String).trim();
-        mappedLabel = _labelMap[rawLabel.toLowerCase()] ?? rawLabel;
-
-        final List<dynamic>? confidences =
-            resultData['confidences'] as List<dynamic>?;
-        if (confidences != null && confidences.isNotEmpty) {
-          final topConf = confidences.firstWhere(
-            (c) =>
-                (c['label'] as String).toLowerCase() == rawLabel.toLowerCase(),
-            orElse: () => confidences.first,
+      if (mappedLabel.isEmpty) {
+        if (resultData is Map<String, dynamic>) {
+          final String rawLabel =
+              (resultData['label'] ?? resultData['prediction'] ?? '')
+                  .toString();
+          mappedLabel = canonicalCacxBaseLabel(rawLabel);
+          confidence = normalizeCacxConfidence(
+            resultData['confidence'] ??
+                resultData['confidence_percent'] ??
+                resultData['probability'] ??
+                resultData['score'],
           );
-          confidence = (topConf['confidence'] as num) * 100;
+        } else if (resultData is List<dynamic> && resultData.isNotEmpty) {
+          final top = resultData.reduce(
+            (a, b) {
+              final aScore = normalizeCacxConfidence(
+                a is Map ? a['score'] ?? a['confidence'] ?? 0 : 0,
+              );
+              final bScore = normalizeCacxConfidence(
+                b is Map ? b['score'] ?? b['confidence'] ?? 0 : 0,
+              );
+              return aScore >= bScore ? a : b;
+            },
+          );
+          final rawLabel =
+              (top is Map ? top['label'] ?? top['class'] ?? '' : '')
+                  .toString()
+                  .trim();
+          mappedLabel = canonicalCacxBaseLabel(rawLabel);
+          confidence = normalizeCacxConfidence(
+            top is Map ? top['score'] ?? top['confidence'] ?? 0 : 0,
+          );
         } else {
-          confidence = 0.0;
+          throw Exception('Unexpected Gradio response shape: $resultData');
         }
-      } else if (resultData is List<dynamic>) {
-        final top = resultData.reduce(
-          (a, b) => (a['score'] as num) >= (b['score'] as num) ? a : b,
-        );
-        final rawLabel = (top['label'] as String).toLowerCase().trim();
-        mappedLabel = _labelMap[rawLabel] ?? rawLabel;
-        confidence = (top['score'] as num) * 100;
-      } else {
-        throw Exception('Unexpected Gradio response shape: $resultData');
       }
 
-      debugPrint('Gradio → label: $mappedLabel  confidence: $confidence%');
-      return _processResult(base64Image, mappedLabel, confidence);
+      debugPrint(
+          'Gradio -> label: $mappedLabel confidence: ${confidence.toStringAsFixed(1)}% breakdown=${breakdown.length}');
+      return _processResult(
+        base64Image,
+        mappedLabel,
+        confidence,
+        predictionBreakdown: breakdown,
+      );
     } catch (e) {
       debugPrint('Gradio Error: $e');
       return AnalysisResult(
@@ -181,43 +187,49 @@ class HuggingFaceService {
         suspicionLevel: SuspicionLevel.low,
         recommendation:
             'Could not connect to AI model. Please check your connection and try again.',
+        predictionBreakdown: const [],
         error: e.toString(),
       );
     }
   }
 
   static AnalysisResult _processResult(
-      String imageUrl, String label, double confidence) {
+    String imageUrl,
+    String label,
+    double confidence, {
+    List<PredictionBreakdownItem> predictionBreakdown = const [],
+  }) {
     SuspicionLevel suspicion;
     String displayLabel;
     String recommendation;
+    final key = canonicalCacxBaseLabel(label);
 
-    switch (label) {
-      case 'Negative':
+    switch (key) {
+      case 'negative':
         suspicion = SuspicionLevel.low;
         displayLabel = 'Normal / Negative VIA';
         recommendation =
             'No acetowhite lesion or other abnormality seen. Routine follow-up: repeat VIA in 3 years per national MoH guidelines. Provide patient education on cervical cancer warning signs (e.g., post-coital bleeding, intermenstrual bleeding, foul discharge). Document findings in patient record. No referral needed.';
         break;
-      case 'CIN1':
+      case 'cin1':
         suspicion = SuspicionLevel.medium;
         displayLabel = 'Low Grade Lesion (CIN1)';
         recommendation =
             'Well-defined, faint/thin acetowhite lesions. Management: Repeat VIA in 12 months. Counsel patient on likely regression, but emphasize importance of returning for repeat screening. Advise smoking cessation if applicable, and discuss HPV transmission. Schedule recall appointment before discharge. No immediate colposcopy unless patient is HIV-positive, immunocompromised, or persistent at 12-24 months.';
         break;
-      case 'CIN2':
+      case 'cin2':
         suspicion = SuspicionLevel.high;
         displayLabel = 'High Grade Lesion (CIN2)';
         recommendation =
             "Distinct, dense, opaque acetowhite lesions with irregular borders. Action: Refer for colposcopy and directed biopsy within 4 weeks. If colposcopy confirms CIN2+ and patient has completed childbearing or lesion is fully visible, proceed with LEEP/cryotherapy same day. Document lesion size, location, and extension onto fornices. Offer HPV testing if available. Exclude pregnancy before treatment.";
         break;
-      case 'CIN3':
+      case 'cin3':
         suspicion = SuspicionLevel.high;
         displayLabel = 'High Grade Lesion (CIN3)';
         recommendation =
             "Dense, acetowhite epithelium with sharp borders. May involve crypts. Action: Urgent colposcopy referral within 2 weeks. Biopsy mandatory. 'See and Treat' acceptable if colposcopy suspicious for invasion. Do not delay for results if lesion is large or concerning. Check HIV status — treat earlier if positive. Discuss risk of progression if untreated. Prepare for possible LEEP or cone biopsy.";
         break;
-      case 'Positive':
+      case 'positive':
         suspicion = SuspicionLevel.high;
         displayLabel = 'Positive - Cancer Suspected';
         recommendation =
@@ -225,7 +237,7 @@ class HuggingFaceService {
         break;
       default:
         suspicion = SuspicionLevel.low;
-        displayLabel = 'Inconclusive - $label';
+        displayLabel = 'Inconclusive - ${canonicalCacxDisplayLabel(label)}';
         recommendation =
             'Image quality insufficient or interpretation unclear. Likely causes: excess mucus, poor illumination, incomplete acetic acid application, or blurred image. Action: Repeat VIA with clearer visualization. Clean cervix with saline-soaked swab, reapply 5% acetic acid, wait 60 seconds, and reassess. If repeatedly inconclusive, refer for colposcopy. Document reason for inconclusive result in chart.';
     }
@@ -236,6 +248,7 @@ class HuggingFaceService {
       confidence: double.parse(confidence.toStringAsFixed(1)),
       suspicionLevel: suspicion,
       recommendation: recommendation,
+      predictionBreakdown: predictionBreakdown,
     );
   }
 }
@@ -244,133 +257,28 @@ class HuggingFaceService {
 /// Shows a bottom sheet that lets the user choose between camera and gallery.
 /// Returns a base64-encoded data URL string, or null if cancelled.
 Future<String?> showImageSourcePicker(BuildContext context) async {
-  return showModalBottomSheet<String?>(
+  return showDialog<String?>(
     context: context,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
-    builder: (ctx) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Select Image Source',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'How would you like to provide the cervix image?',
-              style: TextStyle(color: Colors.grey),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 28),
-            Row(
-              children: [
-                // ?? Camera ??
-                Expanded(
-                  child: _ImageSourceButton(
-                    icon: Icons.camera_alt,
-                    label: 'Take Photo',
-                    subtitle: 'Use device camera',
-                    color: DawaTokens.brandPrimary,
-                    onTap: () async {
-                      final image = await ImagePickerService.captureImage();
-                      Navigator.pop(ctx, image);
-                    },
-                  ),
-                ),
-                const SizedBox(width: 16),
-                // ?? Gallery ??
-                Expanded(
-                  child: _ImageSourceButton(
-                    icon: Icons.photo_library,
-                    label: 'Upload Image',
-                    subtitle: 'Choose from gallery',
-                    color: DawaTokens.brandPrimary,
-                    onTap: () async {
-                      final image = await ImagePickerService.pickImage();
-                      Navigator.pop(ctx, image);
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
+    barrierDismissible: true,
+    builder: (ctx) => ImageSourcePickerDialogWidget(
+      title: 'Select Image Source',
+      subtitle: 'Choose how you want to provide the cervix image.',
+      takePhotoLabel: 'Take Photo',
+      takePhotoSubtitle: 'Use the device camera',
+      uploadLabel: 'Upload Image',
+      uploadSubtitle: 'Choose from gallery',
+      onTakePhoto: () async {
+        final image = await ImagePickerService.captureImage();
+        if (!ctx.mounted) return;
+        Navigator.pop(ctx, image);
+      },
+      onUploadImage: () async {
+        final image = await ImagePickerService.pickImage();
+        if (!ctx.mounted) return;
+        Navigator.pop(ctx, image);
+      },
     ),
   );
-}
-
-class _ImageSourceButton extends StatelessWidget {
-  const _ImageSourceButton({
-    required this.icon,
-    required this.label,
-    required this.subtitle,
-    required this.color,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final String subtitle;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.25)),
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(icon, color: Colors.white, size: 28),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              label,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: color,
-                fontSize: 14,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: const TextStyle(color: Colors.grey, fontSize: 11),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 // ??? APP MODES ????????????????????????????????????????????????????????????????
@@ -432,6 +340,7 @@ class _CaCxAppState extends State<CaCxApp> {
   AnalysisResult? _secondOpinionResult;
   String _patientSearchText = '';
   bool _patientNeedsReviewOnly = false;
+  bool _showAllPredictionClasses = false;
 
   // UI States
   bool _isAnalyzing = false;
@@ -494,6 +403,104 @@ class _CaCxAppState extends State<CaCxApp> {
     }
   }
 
+  Future<void> _showNotificationPreferencesSheet() async {
+    var emailAlerts = true;
+    var smsAlerts = false;
+    var inAppAlerts = true;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
+                boxShadow: DawaTokens.shadowLg,
+              ),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 44,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: DawaTokens.borderStrong,
+                            borderRadius: BorderRadius.circular(99),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Notification Preferences',
+                        style: DawaTextStyles.cardTitle,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Choose how you want to receive screening and follow-up updates.',
+                        style: DawaTextStyles.secondary,
+                      ),
+                      const SizedBox(height: 12),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        value: emailAlerts,
+                        onChanged: (value) => setSheetState(
+                          () => emailAlerts = value,
+                        ),
+                        title: const Text('Email alerts'),
+                      ),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        value: smsAlerts,
+                        onChanged: (value) => setSheetState(
+                          () => smsAlerts = value,
+                        ),
+                        title: const Text('SMS alerts'),
+                      ),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        value: inAppAlerts,
+                        onChanged: (value) => setSheetState(
+                          () => inAppAlerts = value,
+                        ),
+                        title: const Text('In-app alerts'),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('Close'),
+                          ),
+                          const Spacer(),
+                          ElevatedButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('Save preferences'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _openPatientFromRecord(VIATestRecord record) {
     Patient? patient;
     for (final item in _patients) {
@@ -507,22 +514,24 @@ class _CaCxAppState extends State<CaCxApp> {
       _patientSearchText = record.patientName;
       _activeTab = DashboardTab.patients;
     });
-    showDawaToast(context, 'Opened patient registry for ${record.patientName}');
   }
 
   void _handleViaFollowUp(VIATestRecord record) {
     final needsReview = _recordNeedsReview(record);
-    if (needsReview) {
-      showDawaToast(
-        context,
-        'Follow-up planning started for ${record.patientName}',
-      );
-    } else {
-      showDawaToast(
-        context,
-        'Marked ${record.patientName} for routine follow-up',
-      );
+    Patient? patient;
+    for (final item in _patients) {
+      if (item.id == record.patientId) {
+        patient = item;
+        break;
+      }
     }
+
+    setState(() {
+      _selectedPatient = patient;
+      _patientSearchText = record.patientName;
+      _patientNeedsReviewOnly = needsReview;
+      _activeTab = needsReview ? DashboardTab.patients : DashboardTab.history;
+    });
   }
 
   void _setFlowStatus(String message, {String? warning}) {
@@ -551,6 +560,7 @@ class _CaCxAppState extends State<CaCxApp> {
     _currentScanImagePath = null;
     _currentScanPatientId = null;
     _currentScanUserId = null;
+    _showAllPredictionClasses = false;
   }
 
   // ?? Unified image-picker entry point ????????????????????????????????????????
@@ -1018,6 +1028,7 @@ class _CaCxAppState extends State<CaCxApp> {
           : 'Suspicious',
       notes: 'AI Analysis: ${_analysisResult!.label}',
       aiAnalysis: 'Confidence: ${_analysisResult!.confidence}%',
+      analysisJson: _analysisResult!.toJson(),
     );
 
     setState(() {
@@ -1032,6 +1043,25 @@ class _CaCxAppState extends State<CaCxApp> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Record Saved Successfully!')),
+    );
+  }
+
+  Future<void> _shareAnalysisSummary() async {
+    if (_analysisResult == null) return;
+
+    final summary = StringBuffer()
+      ..writeln('CaCx analysis summary')
+      ..writeln('Diagnosis: ${_analysisResult!.label}')
+      ..writeln(
+          'Confidence: ${_analysisResult!.confidence.toStringAsFixed(1)}%')
+      ..writeln('Risk: ${_analysisResult!.suspicionLevelString}')
+      ..writeln('Recommendation: ${_analysisResult!.recommendation}');
+
+    await Clipboard.setData(ClipboardData(text: summary.toString().trim()));
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Analysis summary copied to clipboard')),
     );
   }
 
@@ -2421,6 +2451,13 @@ class _CaCxAppState extends State<CaCxApp> {
             const SizedBox(height: 8),
             DawaAIConfidenceBar(analysis: record.aiAnalysis!),
           ],
+          const SizedBox(height: 10),
+          _buildPredictionBreakdownCard(
+            resultSourceLabel: 'Saved result',
+            isTraining: false,
+            breakdown: record.analysisResult?.predictionBreakdown,
+            compact: true,
+          ),
           const SizedBox(height: 14),
           Wrap(
             spacing: 8,
@@ -2692,19 +2729,16 @@ class _CaCxAppState extends State<CaCxApp> {
                 Column(
                   children: [
                     ListTile(
-                        leading: const Icon(Icons.lock),
-                        title: const Text('Change Password'),
-                        onTap: () => showDawaToast(
-                              context,
-                              'Password changes are managed from Settings',
-                            )),
+                      leading: const Icon(Icons.lock),
+                      title: const Text('Change Password'),
+                      onTap: () =>
+                          context.pushNamed(ResetPasswordWidget.routeName),
+                    ),
                     ListTile(
-                        leading: const Icon(Icons.notifications),
-                        title: const Text('Notification Preferences'),
-                        onTap: () => showDawaToast(
-                              context,
-                              'Notification preferences will be available in Settings',
-                            )),
+                      leading: const Icon(Icons.notifications),
+                      title: const Text('Notification Preferences'),
+                      onTap: _showNotificationPreferencesSheet,
+                    ),
                     ListTile(
                       leading: const Icon(
                         Icons.logout,
@@ -2944,10 +2978,7 @@ class _CaCxAppState extends State<CaCxApp> {
           if (!isTraining && !widget.returnToPreviousOnSave) ...[
             IconButton(
               icon: const Icon(Icons.share),
-              onPressed: () => showDawaToast(
-                context,
-                'Analysis summary ready to share',
-              ),
+              onPressed: _shareAnalysisSummary,
             ),
             IconButton(
                 icon: const Icon(Icons.save), onPressed: _saveAnalysisResult),
@@ -3002,7 +3033,13 @@ class _CaCxAppState extends State<CaCxApp> {
                                   isTraining: isTraining,
                                 ),
                                 const SizedBox(height: 16),
-                                _buildConfidenceCard(resultSourceLabel),
+                                _buildRecommendationCard(
+                                    isTraining: isTraining),
+                                const SizedBox(height: 16),
+                                _buildPredictionBreakdownCard(
+                                  resultSourceLabel: resultSourceLabel,
+                                  isTraining: isTraining,
+                                ),
                                 const SizedBox(height: 16),
                                 _buildClassificationCard(
                                   resultSourceLabel: resultSourceLabel,
@@ -3023,15 +3060,18 @@ class _CaCxAppState extends State<CaCxApp> {
                         isTraining: isTraining,
                       ),
                       const SizedBox(height: 16),
-                      _buildConfidenceCard(resultSourceLabel),
+                      _buildRecommendationCard(isTraining: isTraining),
+                      const SizedBox(height: 16),
+                      _buildPredictionBreakdownCard(
+                        resultSourceLabel: resultSourceLabel,
+                        isTraining: isTraining,
+                      ),
                       const SizedBox(height: 16),
                       _buildClassificationCard(
                         resultSourceLabel: resultSourceLabel,
                         isTraining: isTraining,
                       ),
                     ],
-                    const SizedBox(height: 18),
-                    _buildRecommendationCard(isTraining: isTraining),
                     const SizedBox(height: 18),
                     _buildResultDisclaimer(isTraining),
                     if (!isTraining && widget.returnToPreviousOnSave) ...[
@@ -3256,6 +3296,13 @@ class _CaCxAppState extends State<CaCxApp> {
                 DawaTokens.brandPrimary,
                 Icons.memory_outlined,
               ),
+              if (!isTraining)
+                _pillBadge(
+                  'Risk: ${_analysisResult!.suspicionLevelString}',
+                  tone.background,
+                  tone.foreground,
+                  Icons.health_and_safety_outlined,
+                ),
               _pillBadge(
                 _screeningRecordId != null ? 'Saved' : 'Completed',
                 DawaTokens.statusSuccessBg,
@@ -3283,6 +3330,7 @@ class _CaCxAppState extends State<CaCxApp> {
     );
   }
 
+  // ignore: unused_element
   Widget _buildConfidenceCard(String resultSourceLabel) {
     final confidence = _analysisResult!.confidence.clamp(0, 100).toDouble();
     return DawaCard(
@@ -3327,6 +3375,368 @@ class _CaCxAppState extends State<CaCxApp> {
         ],
       ),
     );
+  }
+
+  Widget _buildPredictionBreakdownCard({
+    required String resultSourceLabel,
+    required bool isTraining,
+    List<PredictionBreakdownItem>? breakdown,
+    bool compact = false,
+  }) {
+    final items = _compactPredictionBreakdownItems(
+      breakdown ?? _analysisResult?.predictionBreakdown ?? const [],
+    );
+    final helperText = isTraining
+        ? 'Training breakdown shows how the model distributed confidence across the available classes.'
+        : 'Confidence scores should be interpreted together with clinical judgment and local screening protocols.';
+    final isWideDesktop = MediaQuery.sizeOf(context).width >= 1024;
+    final showAll =
+        isWideDesktop || _showAllPredictionClasses || items.length <= 3;
+    final visibleItems = showAll ? items : items.take(3).toList();
+    final hiddenCount = items.length - visibleItems.length;
+    final toggleLabel =
+        showAll ? 'Show top 3' : 'Show all ${items.length.clamp(3, 6)}';
+
+    return DawaCard(
+      padding: EdgeInsets.all(compact ? 14 : 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  '$resultSourceLabel Confidence',
+                  style: DawaTextStyles.cardTitle,
+                ),
+              ),
+              DawaStatusBadge(
+                status: 'completed',
+                label: '${items.length} classes',
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            helperText,
+            style: DawaTextStyles.secondary.copyWith(
+              color: DawaTokens.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (items.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: DawaTokens.surfaceSecondary,
+                borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
+                border: Border.all(color: DawaTokens.border),
+              ),
+              child: Text(
+                'Detailed class breakdown was not returned by the model.',
+                style: DawaTextStyles.secondary.copyWith(
+                  color: DawaTokens.textSecondary,
+                ),
+              ),
+            )
+          else ...[
+            AnimatedSize(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeInOut,
+              child: Column(
+                children: [
+                  for (final item in visibleItems) ...[
+                    _buildCompactPredictionBreakdownItem(item),
+                    const SizedBox(height: 8),
+                  ],
+                  if (!showAll && hiddenCount > 0)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: DawaTokens.surfaceSecondary,
+                        borderRadius:
+                            BorderRadius.circular(DawaTokens.radiusMd),
+                        border: Border.all(color: DawaTokens.border),
+                      ),
+                      child: Text(
+                        '$hiddenCount more classes are hidden until you expand the list.',
+                        style: DawaTextStyles.secondary.copyWith(
+                          color: DawaTokens.textSecondary,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            if (items.length > 3 && !isWideDesktop)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _showAllPredictionClasses = !showAll;
+                    });
+                  },
+                  icon: Icon(
+                    showAll
+                        ? Icons.expand_less_rounded
+                        : Icons.expand_more_rounded,
+                  ),
+                  label: Text(toggleLabel),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactPredictionBreakdownItem(PredictionBreakdownItem item) {
+    final percent = item.confidence.clamp(0, 100).toDouble();
+    final riskLevel = (item.riskLevel ?? 'review').toLowerCase();
+    final color = _predictionBreakdownColor(item);
+    final showRiskBadge = percent >= 5 && riskLevel != 'low';
+    final rowBackground = item.isTopPrediction && riskLevel == 'low'
+        ? DawaTokens.statusSuccessBg
+        : percent <= 0
+            ? DawaTokens.surfaceSecondary
+            : color.withOpacity(item.isTopPrediction ? 0.08 : 0.05);
+    final borderColor = item.isTopPrediction && riskLevel == 'low'
+        ? DawaTokens.statusSuccess.withOpacity(0.35)
+        : percent <= 0
+            ? DawaTokens.border
+            : color.withOpacity(0.18);
+    final barColor = percent <= 0 ? DawaTokens.borderStrong : color;
+
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: 52),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: rowBackground,
+        borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: DawaTextStyles.body.copyWith(
+                          color: DawaTokens.textPrimary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    if (item.isTopPrediction) ...[
+                      const SizedBox(width: 8),
+                      _predictionMiniBadge(
+                        'Top match',
+                        DawaTokens.brandPrimaryPale,
+                        DawaTokens.brandPrimary,
+                      ),
+                    ],
+                    if (showRiskBadge) ...[
+                      const SizedBox(width: 8),
+                      _predictionMiniBadge(
+                        _predictionRiskLabel(riskLevel),
+                        _predictionBadgeBackground(riskLevel),
+                        _predictionBadgeForeground(riskLevel),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(99),
+                  child: LinearProgressIndicator(
+                    minHeight: 4,
+                    value: percent / 100,
+                    backgroundColor: DawaTokens.surfaceTertiary,
+                    color: barColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            '${percent.toStringAsFixed(1)}%',
+            style: DawaTextStyles.cardTitle.copyWith(
+              color: percent <= 0 ? DawaTokens.textMuted : color,
+              fontSize: 17,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<PredictionBreakdownItem> _compactPredictionBreakdownItems(
+    List<PredictionBreakdownItem> rawItems,
+  ) {
+    final merged = <String, PredictionBreakdownItem>{};
+
+    for (final rawItem in rawItems) {
+      final canonicalLabel = canonicalCacxDisplayLabel(rawItem.label);
+      final key = canonicalCacxBaseLabel(canonicalLabel);
+      final existing = merged[key];
+      if (existing == null) {
+        merged[key] = PredictionBreakdownItem(
+          label: canonicalLabel,
+          confidence: rawItem.confidence.clamp(0, 100).toDouble(),
+          riskLevel: rawItem.riskLevel,
+          isTopPrediction: rawItem.isTopPrediction,
+        );
+        continue;
+      }
+
+      merged[key] = PredictionBreakdownItem(
+        label: canonicalLabel,
+        confidence: existing.confidence >= rawItem.confidence
+            ? existing.confidence
+            : rawItem.confidence.clamp(0, 100).toDouble(),
+        riskLevel: _preferredRiskLevel(existing.riskLevel, rawItem.riskLevel),
+        isTopPrediction: existing.isTopPrediction || rawItem.isTopPrediction,
+      );
+    }
+
+    final items = merged.values.toList()
+      ..sort((a, b) {
+        final confidenceCompare = b.confidence.compareTo(a.confidence);
+        if (confidenceCompare != 0) return confidenceCompare;
+        return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+      });
+
+    if (items.isNotEmpty) {
+      final topIndex = items.indexWhere((item) => item.isTopPrediction);
+      final resolvedTopIndex = topIndex >= 0 ? topIndex : 0;
+      for (var i = 0; i < items.length; i++) {
+        final item = items[i];
+        items[i] = PredictionBreakdownItem(
+          label: item.label,
+          confidence: item.confidence,
+          riskLevel: item.riskLevel,
+          isTopPrediction: i == resolvedTopIndex,
+        );
+      }
+    }
+
+    return items;
+  }
+
+  String? _preferredRiskLevel(String? current, String? next) {
+    final currentValue = current?.trim();
+    final nextValue = next?.trim();
+    if (nextValue == null || nextValue.isEmpty) return currentValue;
+    if (currentValue == null || currentValue.isEmpty) return nextValue;
+    if (currentValue == nextValue) return currentValue;
+
+    const priority = {'high': 3, 'medium': 2, 'low': 1, 'review': 0};
+    final currentPriority = priority[currentValue.toLowerCase()] ?? 0;
+    final nextPriority = priority[nextValue.toLowerCase()] ?? 0;
+    return nextPriority >= currentPriority ? nextValue : currentValue;
+  }
+
+  Widget _predictionMiniBadge(
+    String label,
+    Color background,
+    Color foreground,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: foreground.withOpacity(0.16)),
+      ),
+      child: Text(
+        label,
+        style: DawaTextStyles.label.copyWith(
+          color: foreground,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Color _predictionBreakdownColor(PredictionBreakdownItem item) {
+    final risk = (item.riskLevel ?? '').toLowerCase();
+    if (item.confidence <= 0) return DawaTokens.textMuted;
+    if (risk == 'low') return DawaTokens.statusSuccess;
+    if (risk == 'medium') return DawaTokens.statusWarning;
+    if (risk == 'high') return DawaTokens.statusDanger;
+    return const Color(0xFF64748B);
+  }
+
+  String _predictionRiskLabel(String? riskLevel) {
+    switch ((riskLevel ?? 'review').toLowerCase()) {
+      case 'low':
+        return 'Low Risk';
+      case 'medium':
+        return 'Moderate';
+      case 'high':
+        return 'High Risk';
+      case 'review':
+      default:
+        return 'Review';
+    }
+  }
+
+  Color _predictionBadgeBackground(String riskLevel) {
+    switch (riskLevel.toLowerCase()) {
+      case 'low':
+        return DawaTokens.statusSuccessBg;
+      case 'medium':
+        return DawaTokens.statusWarningBg;
+      case 'high':
+        return DawaTokens.statusDangerBg;
+      default:
+        return DawaTokens.surfaceTertiary;
+    }
+  }
+
+  Color _predictionBadgeForeground(String riskLevel) {
+    switch (riskLevel.toLowerCase()) {
+      case 'low':
+        return DawaTokens.statusSuccessText;
+      case 'medium':
+        return DawaTokens.statusWarningText;
+      case 'high':
+        return DawaTokens.statusDangerText;
+      default:
+        return DawaTokens.textSecondary;
+    }
+  }
+
+  String _statusForRiskLevel(String riskLabel) {
+    switch (riskLabel.toLowerCase()) {
+      case 'low':
+        return 'completed';
+      case 'medium':
+        return 'pending';
+      case 'high':
+        return 'needs_review';
+      default:
+        return 'info';
+    }
   }
 
   Widget _buildClassificationCard({
@@ -3836,7 +4246,7 @@ class _ScreeningStackedBarPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final textPainter = TextPainter(
-      textDirection: TextDirection.ltr,
+      textDirection: ui.TextDirection.ltr,
       textAlign: TextAlign.center,
     );
     final chartWidth = size.width - _leftAxis - _rightPadding;
@@ -4106,22 +4516,19 @@ class _QuickAccessServiceAppState extends State<QuickAccessServiceApp> {
       _selectedPatient = record.patientName;
       _resultsSearchController.text = record.patientName;
       _activeTab = QuickAccessDashboardTab.records;
+      _resultsFilter = QuickAccessResultsFilter.all;
     });
-    showDawaToast(context, 'Opened records for ${record.patientName}');
   }
 
   void _handleQuickAccessFollowUp(_QuickAccessRecord record) {
-    if (record.needsReview) {
-      showDawaToast(
-        context,
-        'Follow-up planning started for ${record.patientName}',
-      );
-    } else {
-      showDawaToast(
-        context,
-        'Marked ${record.patientName} for routine follow-up',
-      );
-    }
+    setState(() {
+      _selectedPatient = record.patientName;
+      _resultsSearchController.text = record.patientName;
+      _activeTab = QuickAccessDashboardTab.results;
+      _resultsFilter = record.needsReview
+          ? QuickAccessResultsFilter.needsReview
+          : QuickAccessResultsFilter.completed;
+    });
   }
 
   @override

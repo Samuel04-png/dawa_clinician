@@ -5849,7 +5849,7 @@ class _EncounterWidgetState extends State<EncounterWidget> {
                                                       MainAxisSize.min,
                                                   children: [
                                                     Text(
-                                                      'Mother Hemocheck',
+                                                      'Maternal haemocheck',
                                                       style:
                                                           FlutterFlowTheme.of(
                                                                   context)
@@ -6725,7 +6725,7 @@ class _EncounterWidgetState extends State<EncounterWidget> {
                                                   .showSnackBar(
                                                 SnackBar(
                                                   content: Text(
-                                                    'Encounter recorded succesfully',
+                                                    'Encounter recorded successfully',
                                                     style: TextStyle(
                                                       color: FlutterFlowTheme
                                                               .of(context)

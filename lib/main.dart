@@ -169,6 +169,14 @@ class _MyAppState extends State<MyApp> {
           backgroundColor: DawaTokens.brandPrimary,
           foregroundColor: DawaTokens.textInverse,
         ),
+        dialogTheme: DialogThemeData(
+          backgroundColor: DawaTokens.surface,
+          elevation: 12.0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(DawaTokens.radiusXl),
+          ),
+          alignment: Alignment.center,
+        ),
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(
             foregroundColor: DawaTokens.brandPrimary,
@@ -319,6 +327,14 @@ class _MyAppState extends State<MyApp> {
               borderRadius: BorderRadius.circular(8.0),
             ),
           ),
+        ),
+        dialogTheme: DialogThemeData(
+          backgroundColor: const Color(0xFF151B2A),
+          elevation: 12.0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16.0),
+          ),
+          alignment: Alignment.center,
         ),
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(

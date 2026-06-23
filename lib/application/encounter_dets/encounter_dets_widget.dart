@@ -782,8 +782,7 @@ class _EncounterDetsWidgetState extends State<EncounterDetsWidget> {
                                       context: context,
                                       builder: (alertDialogContext) {
                                         return AlertDialog(
-                                          title: Text(
-                                              'Are you sure you want to delete?'),
+                                          title: Text('Delete this encounter?'),
                                           content: Text(
                                               'This action cannot be undone.'),
                                           actions: [

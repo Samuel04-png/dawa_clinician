@@ -157,6 +157,28 @@ void main() {
     expect(find.text('Nancy Kaira'), findsNothing);
   });
 
+  testWidgets('Quick Access open patient navigates to the records tab',
+      (tester) async {
+    await _pumpQuickAccess(
+      tester,
+      const QuickAccessServiceApp(service: QuickAccessServiceType.hemonix),
+      size: const Size(1180, 860),
+    );
+
+    final openPatient = find.text('Open patient').first;
+    await tester.ensureVisible(openPatient);
+    await tester.pumpAndSettle();
+    await tester.tap(openPatient);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('Ready to add hb record for '),
+      findsOneWidget,
+    );
+    expect(find.text('Patient-linked hb record entries are ready for review.'),
+        findsNothing);
+  });
+
   testWidgets('Cervical Cancer results search and filter are usable',
       (tester) async {
     await _pumpQuickAccess(

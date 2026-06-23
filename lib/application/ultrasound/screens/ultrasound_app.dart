@@ -2,7 +2,9 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '/reset_password/reset_password_widget.dart';
 import '/components/dawa_design_system.dart';
+import '/flutter_flow/flutter_flow_util.dart';
 import '../mock/ultrasound_mock_data.dart';
 import '../models/ultrasound_models.dart';
 import '../services/ultrasound_ai_service.dart';
@@ -91,6 +93,104 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
       return;
     }
     Navigator.of(context).maybePop();
+  }
+
+  Future<void> _showNotificationPreferencesSheet() async {
+    var emailAlerts = true;
+    var smsAlerts = false;
+    var inAppAlerts = true;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
+                boxShadow: DawaTokens.shadowLg,
+              ),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 44,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: DawaTokens.borderStrong,
+                            borderRadius: BorderRadius.circular(99),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Notification Preferences',
+                        style: DawaTextStyles.cardTitle,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Choose how you want to receive ultrasound updates.',
+                        style: DawaTextStyles.secondary,
+                      ),
+                      const SizedBox(height: 12),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        value: emailAlerts,
+                        onChanged: (value) => setSheetState(
+                          () => emailAlerts = value,
+                        ),
+                        title: const Text('Email alerts'),
+                      ),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        value: smsAlerts,
+                        onChanged: (value) => setSheetState(
+                          () => smsAlerts = value,
+                        ),
+                        title: const Text('SMS alerts'),
+                      ),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        value: inAppAlerts,
+                        onChanged: (value) => setSheetState(
+                          () => inAppAlerts = value,
+                        ),
+                        title: const Text('In-app alerts'),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('Close'),
+                          ),
+                          const Spacer(),
+                          ElevatedButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('Save preferences'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   void _handleInitialLaunch() {
@@ -2629,94 +2729,130 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
   }
 
   void _showAddPatientSheet() {
-    showModalBottomSheet(
+    showDialog<void>(
       context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(
-            24, 24, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('New Patient',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                    labelText: 'Full Name', border: OutlineInputBorder())),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                      controller: _ageController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                          labelText: 'Age', border: OutlineInputBorder())),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                      controller: _gaController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                          labelText: 'GA (weeks)',
-                          border: OutlineInputBorder())),
-                ),
-              ],
+      barrierDismissible: true,
+      builder: (ctx) {
+        final size = MediaQuery.sizeOf(ctx);
+        final isCompact = size.width < 700.0;
+
+        return Dialog(
+          insetPadding: EdgeInsets.symmetric(
+            horizontal: isCompact ? 12.0 : 24.0,
+            vertical: isCompact ? 12.0 : 24.0,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(isCompact ? 20.0 : 28.0),
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: isCompact ? size.width - 24.0 : 560.0,
+              maxHeight: size.height * 0.88,
             ),
-            const SizedBox(height: 12),
-            TextField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                    labelText: 'Phone', border: OutlineInputBorder())),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  if (_nameController.text.isEmpty) return;
-                  final ga = int.tryParse(_gaController.text);
-                  final newP = PregnantPatient(
-                    id: 'OB-${2000 + _patients.length}',
-                    name: _nameController.text,
-                    age: int.tryParse(_ageController.text) ?? 0,
-                    contact: _phoneController.text,
-                    gestationalAgeWeeks: ga,
-                    pregnancyStatus: ga == null
-                        ? PregnancyStatus.unknown
-                        : ga < 14
-                            ? PregnancyStatus.firstTrimester
-                            : ga < 28
-                                ? PregnancyStatus.secondTrimester
-                                : PregnancyStatus.thirdTrimester,
-                    scanStatus: ScanStatus.unscanned,
-                    riskLevel: RiskLevel.low,
-                  );
-                  setState(() {
-                    _patients = [newP, ..._patients];
-                    _nameController.clear();
-                    _ageController.clear();
-                    _gaController.clear();
-                    _phoneController.clear();
-                  });
-                  Navigator.pop(ctx);
-                },
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: DawaTokens.brandPrimary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14)),
-                child: const Text('Register Patient'),
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                24,
+                24,
+                24,
+                MediaQuery.of(ctx).viewInsets.bottom + 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'New Patient',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Full Name',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _ageController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Age',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: _gaController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'GA (weeks)',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Phone',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        if (_nameController.text.isEmpty) return;
+                        final ga = int.tryParse(_gaController.text);
+                        final newP = PregnantPatient(
+                          id: 'OB-${2000 + _patients.length}',
+                          name: _nameController.text,
+                          age: int.tryParse(_ageController.text) ?? 0,
+                          contact: _phoneController.text,
+                          gestationalAgeWeeks: ga,
+                          pregnancyStatus: ga == null
+                              ? PregnancyStatus.unknown
+                              : ga < 14
+                                  ? PregnancyStatus.firstTrimester
+                                  : ga < 28
+                                      ? PregnancyStatus.secondTrimester
+                                      : PregnancyStatus.thirdTrimester,
+                          scanStatus: ScanStatus.unscanned,
+                          riskLevel: RiskLevel.low,
+                        );
+                        setState(() {
+                          _patients = [newP, ..._patients];
+                          _nameController.clear();
+                          _ageController.clear();
+                          _gaController.clear();
+                          _phoneController.clear();
+                        });
+                        Navigator.pop(ctx);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: DawaTokens.brandPrimary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: const Text('Register Patient'),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -2874,15 +3010,12 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
                 ListTile(
                   leading: const Icon(Icons.lock),
                   title: const Text('Change Password'),
-                  onTap: () =>
-                      _showToast('Password changes are managed from Settings'),
+                  onTap: () => context.pushNamed(ResetPasswordWidget.routeName),
                 ),
                 ListTile(
                   leading: const Icon(Icons.notifications),
                   title: const Text('Notification Preferences'),
-                  onTap: () => _showToast(
-                    'Notification preferences will be available in Settings',
-                  ),
+                  onTap: _showNotificationPreferencesSheet,
                 ),
                 ListTile(
                   leading:

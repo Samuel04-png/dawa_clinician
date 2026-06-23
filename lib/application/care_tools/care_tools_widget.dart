@@ -5,6 +5,7 @@ import '/components/small_side_nav/small_side_nav_widget.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 
 class CareToolsWidget extends StatefulWidget {
@@ -19,11 +20,31 @@ class CareToolsWidget extends StatefulWidget {
 
 class _CareToolsWidgetState extends State<CareToolsWidget> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
+  static const _urgentBannerHiddenKey = 'care_tools_urgent_banner_hidden_v1';
+  bool _hideUrgentBanner = false;
 
   @override
   void initState() {
     super.initState();
     FFAppState().selectedPage = 'Care Tools';
+    _loadUrgentBannerPreference();
+  }
+
+  Future<void> _loadUrgentBannerPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _hideUrgentBanner = prefs.getBool(_urgentBannerHiddenKey) ?? false;
+    });
+  }
+
+  Future<void> _hideUrgentBannerPersistently() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_urgentBannerHiddenKey, true);
+    if (!mounted) return;
+    setState(() {
+      _hideUrgentBanner = true;
+    });
   }
 
   @override
@@ -127,15 +148,13 @@ class _CareToolsWidgetState extends State<CareToolsWidget> {
                     style: DawaTextStyles.secondary,
                   ),
                   const SizedBox(height: 20),
-                  if (urgentTotal > 0)
+                  if (urgentTotal > 0 && !_hideUrgentBanner)
                     _UrgentBanner(
                       urgentTotal: urgentTotal,
-                      onDismiss: () => showDawaToast(
-                        context,
-                        'Urgent banner dismissed for this session',
-                      ),
+                      onDismiss: _hideUrgentBannerPersistently,
                     ),
-                  if (urgentTotal > 0) const SizedBox(height: 24),
+                  if (urgentTotal > 0 && !_hideUrgentBanner)
+                    const SizedBox(height: 24),
                   Wrap(
                     spacing: 16,
                     runSpacing: 16,
@@ -219,7 +238,7 @@ class _UrgentBannerState extends State<_UrgentBanner> {
               setState(() => _hidden = true);
               widget.onDismiss();
             },
-            child: const Text('Dismiss'),
+            child: const Text('Hide for now'),
           ),
         ],
       ),

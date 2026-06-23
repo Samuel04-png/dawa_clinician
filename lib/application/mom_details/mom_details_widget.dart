@@ -7714,7 +7714,7 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                                   .showSnackBar(
                                                                 SnackBar(
                                                                   content: Text(
-                                                                    'Patient History successfully added',
+                                                                    'Maternal history saved successfully',
                                                                     style:
                                                                         TextStyle(
                                                                       color: FlutterFlowTheme.of(
@@ -8034,7 +8034,7 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                                   .showSnackBar(
                                                                 SnackBar(
                                                                   content: Text(
-                                                                    'Patient History successfully added',
+                                                                    'Maternal history saved successfully',
                                                                     style:
                                                                         TextStyle(
                                                                       color: FlutterFlowTheme.of(
@@ -10738,7 +10738,7 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                                           builder:
                                                                               (alertDialogContext) {
                                                                             return AlertDialog(
-                                                                              title: Text('Are you sure you want to delete first encounter'),
+                                                                              title: Text('Delete this first encounter?'),
                                                                               actions: [
                                                                                 TextButton(
                                                                                   onPressed: () => Navigator.pop(alertDialogContext, false),

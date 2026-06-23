@@ -1,7 +1,9 @@
 import 'package:clinician/application/cacx/cacx_widget.dart';
 import 'package:clinician/application/ultrasound/ultrasound.dart';
+import '/application/patient_details/patient_details_widget.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/application/create_mom/create_patient_modal_widget.dart';
 import '/components/appbar_nav/appbar_nav_widget.dart';
 import '/components/clinician_bottom_nav/clinician_bottom_nav_widget.dart';
 import '/components/dawa_design_system.dart';
@@ -747,7 +749,7 @@ class _HomeWidgetState extends State<HomeWidget> {
   void _openPatient(
       MotherRecord patient, FirstEncounterRecord? firstEncounter) {
     context.pushNamed(
-      MomDetailsWidget.routeName,
+      PatientDetailsWidget.routeName,
       queryParameters: {
         'momDetails': serializeParam(
           patient.reference,
@@ -882,30 +884,10 @@ class _HomeWidgetState extends State<HomeWidget> {
   }
 
   Future<void> _showCreatePatientModal(BuildContext context) async {
-    await showModalBottomSheet<bool>(
+    await showDialog<bool>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (modalContext) {
-        final height = MediaQuery.sizeOf(modalContext).height;
-        final isCompact = MediaQuery.sizeOf(modalContext).width < 640.0;
-        return Align(
-          alignment: Alignment.bottomCenter,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: isCompact ? double.infinity : 820.0,
-              maxHeight: height * 0.92,
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.vertical(
-                top: Radius.circular(isCompact ? 20.0 : 24.0),
-              ),
-              child: const CreateMomWidget(embedded: true),
-            ),
-          ),
-        );
-      },
+      barrierDismissible: true,
+      builder: (modalContext) => const CreatePatientModalWidget(),
     );
   }
 
