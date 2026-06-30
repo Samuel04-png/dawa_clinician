@@ -10,6 +10,7 @@ import 'auth/firebase_auth/auth_util.dart';
 
 import 'backend/supabase/supabase_config.dart';
 import 'components/dawa_design_system.dart';
+import 'components/offline_status_banner.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import 'flutter_flow/flutter_flow_util.dart';
 
@@ -349,22 +350,24 @@ class _MyAppState extends State<MyApp> {
       themeMode: _themeMode,
       // We use the builder to stack the Splash Screen ON TOP of the Router
       builder: (context, child) {
-        return Stack(
-          children: [
-            // The actual App Router
-            Router(
-              routerDelegate: _router.routerDelegate,
-              routeInformationParser: _router.routeInformationParser,
-              routeInformationProvider: _router.routeInformationProvider,
-            ),
-            // The Custom Splash Screen Overlay
-            if (_showCustomSplash)
-              Positioned.fill(
-                child: DawaSplashScreen(
-                  onAnimationComplete: _onSplashComplete,
-                ),
+        return OfflineStatusScope(
+          child: Stack(
+            children: [
+              // The actual App Router
+              Router(
+                routerDelegate: _router.routerDelegate,
+                routeInformationParser: _router.routeInformationParser,
+                routeInformationProvider: _router.routeInformationProvider,
               ),
-          ],
+              // The Custom Splash Screen Overlay
+              if (_showCustomSplash)
+                Positioned.fill(
+                  child: DawaSplashScreen(
+                    onAnimationComplete: _onSplashComplete,
+                  ),
+                ),
+            ],
+          ),
         );
       },
     );

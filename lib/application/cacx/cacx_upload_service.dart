@@ -6,6 +6,7 @@ import 'cacx_model.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class CervicalDeviceConfig {
   const CervicalDeviceConfig._();
@@ -407,6 +408,7 @@ class CacxScreeningResultsRepository {
   const CacxScreeningResultsRepository._();
 
   static const table = 'cacx_screening_results';
+  static const _pendingQueueKey = 'dawa_pending_cacx_screenings_v1';
 
   static String buildImagePath({
     required String? userId,
@@ -426,22 +428,14 @@ class CacxScreeningResultsRepository {
     required bool secondOpinionRequired,
     required String secondOpinionStatus,
   }) async {
-    final payload = <String, dynamic>{
-      'patient_id': patientId,
-      'user_id': userId,
-      'image_path': imagePath,
-      'primary_source': 'arduino_device',
-      'primary_result': primary.label,
-      'primary_confidence': primary.confidence,
-      'primary_raw_response': primary.rawResponse,
-      'second_opinion_required': secondOpinionRequired,
-      'second_opinion_status': secondOpinionStatus,
-      'second_opinion_source': secondOpinionRequired ? 'gradio_server' : null,
-      'risk_level': primary.riskLevel,
-      'device_endpoint': primary.deviceEndpoint,
-      'device_status': primary.deviceStatus,
-      'device_error': primary.error,
-    };
+    final payload = _primaryPayload(
+      patientId: patientId,
+      userId: userId,
+      imagePath: imagePath,
+      primary: primary,
+      secondOpinionRequired: secondOpinionRequired,
+      secondOpinionStatus: secondOpinionStatus,
+    );
 
     try {
       final response = await runSupabaseRequest(
@@ -450,8 +444,29 @@ class CacxScreeningResultsRepository {
       return response['id']?.toString();
     } catch (error) {
       debugPrint('[CaCx Supabase] primary save failed: $error');
+      await _enqueuePendingInsert(payload);
       return null;
     }
+  }
+
+  static Future<void> enqueuePrimaryResult({
+    required String? patientId,
+    required String? userId,
+    required String imagePath,
+    required CervicalDeviceInterpretation primary,
+    required bool secondOpinionRequired,
+    required String secondOpinionStatus,
+  }) async {
+    await _enqueuePendingInsert(
+      _primaryPayload(
+        patientId: patientId,
+        userId: userId,
+        imagePath: imagePath,
+        primary: primary,
+        secondOpinionRequired: secondOpinionRequired,
+        secondOpinionStatus: secondOpinionStatus,
+      ),
+    );
   }
 
   static Future<void> updateSecondOpinion({
@@ -508,6 +523,109 @@ class CacxScreeningResultsRepository {
     final raw = value?.trim();
     if (raw == null || raw.isEmpty) return fallback;
     return raw.replaceAll(RegExp(r'[^A-Za-z0-9_\-]+'), '_');
+  }
+
+  static Map<String, dynamic> _primaryPayload({
+    required String? patientId,
+    required String? userId,
+    required String imagePath,
+    required CervicalDeviceInterpretation primary,
+    required bool secondOpinionRequired,
+    required String secondOpinionStatus,
+  }) {
+    return <String, dynamic>{
+      'patient_id': patientId,
+      'user_id': userId,
+      'image_path': imagePath,
+      'primary_source': 'arduino_device',
+      'primary_result': primary.label,
+      'primary_confidence': primary.confidence,
+      'primary_raw_response': primary.rawResponse,
+      'second_opinion_required': secondOpinionRequired,
+      'second_opinion_status': secondOpinionStatus,
+      'second_opinion_source': secondOpinionRequired ? 'gradio_server' : null,
+      'risk_level': primary.riskLevel,
+      'device_endpoint': primary.deviceEndpoint,
+      'device_status': primary.deviceStatus,
+      'device_error': primary.error,
+    };
+  }
+
+  static Future<void> syncPending() async {
+    final pending = await _readPending();
+    if (pending.isEmpty) {
+      return;
+    }
+
+    final remaining = <Map<String, dynamic>>[];
+    for (final item in pending) {
+      final payload = _mapValue(item['payload']);
+      if (payload == null) {
+        continue;
+      }
+      try {
+        await runSupabaseRequest(
+          () =>
+              supabaseClient.from(table).insert(payload).select('id').single(),
+        );
+      } catch (error) {
+        debugPrint('[CaCx Supabase] pending sync failed: $error');
+        remaining.add(item);
+      }
+    }
+    await _writePending(remaining);
+  }
+
+  static Future<int> pendingCount() async => (await _readPending()).length;
+
+  static Future<void> _enqueuePendingInsert(
+    Map<String, dynamic> payload,
+  ) async {
+    final pending = await _readPending();
+    pending.add({
+      'type': 'insert_primary',
+      'queued_at': DateTime.now().toUtc().toIso8601String(),
+      'payload': payload,
+    });
+    await _writePending(pending);
+  }
+
+  static Future<List<Map<String, dynamic>>> _readPending() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_pendingQueueKey);
+    if (raw == null || raw.isEmpty) {
+      return <Map<String, dynamic>>[];
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        return <Map<String, dynamic>>[];
+      }
+      return decoded
+          .whereType<Map>()
+          .map((item) => item.map(
+                (key, value) => MapEntry(key.toString(), value),
+              ))
+          .toList();
+    } catch (error) {
+      debugPrint('[CaCx Supabase] pending queue read failed: $error');
+      return <Map<String, dynamic>>[];
+    }
+  }
+
+  static Future<void> _writePending(
+    List<Map<String, dynamic>> pending,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_pendingQueueKey, jsonEncode(pending));
+  }
+
+  static Map<String, dynamic>? _mapValue(dynamic value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) {
+      return value.map((key, dynamic item) => MapEntry(key.toString(), item));
+    }
+    return null;
   }
 }
 

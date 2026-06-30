@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:rxdart/rxdart.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '/backend/supabase/supabase_config.dart';
+import '/services/offline_auth_cache.dart';
 import '../base_auth_user_provider.dart';
 
 export '../base_auth_user_provider.dart';
@@ -65,18 +68,82 @@ class ClinicianFirebaseUser extends BaseAuthUser {
       ClinicianFirebaseUser(user);
 }
 
-Stream<BaseAuthUser> clinicianSupabaseUserStream() =>
-    supabaseClient.auth.onAuthStateChange
-        .map((state) => state.session?.user)
-        .debounce((user) => user == null && !loggedIn
-            ? TimerStream(true, const Duration(seconds: 1))
-            : Stream.value(user))
-        .map<BaseAuthUser>(
-      (user) {
-        currentUser = ClinicianFirebaseUser(user);
-        return currentUser!;
-      },
-    );
+class ClinicianCachedUser extends BaseAuthUser {
+  ClinicianCachedUser(this.cachedSession);
+
+  final CachedAuthSession cachedSession;
+
+  @override
+  bool get loggedIn => true;
+
+  @override
+  bool get emailVerified => cachedSession.emailVerified;
+
+  @override
+  AuthUserInfo get authUserInfo => cachedSession.authUserInfo;
+
+  @override
+  Future? delete() => Future.value();
+
+  @override
+  Future? updateEmail(String email) => Future.value();
+
+  @override
+  Future? updatePassword(String newPassword) => Future.value();
+
+  @override
+  Future? sendEmailVerification() => Future.value();
+}
+
+final _manualAuthUserController =
+    StreamController<BaseAuthUser>.broadcast(sync: true);
+
+void emitClinicianAuthUser(BaseAuthUser user) {
+  currentUser = user;
+  _manualAuthUserController.add(user);
+}
+
+Stream<BaseAuthUser> clinicianSupabaseUserStream() => Rx.merge<BaseAuthUser>([
+      Stream.fromFuture(_cachedUserForStartup()).whereType<BaseAuthUser>(),
+      supabaseClient.auth.onAuthStateChange
+          .map((state) => state.session?.user)
+          .debounce((user) => user == null && !loggedIn
+              ? TimerStream(true, const Duration(seconds: 1))
+              : Stream.value(user))
+          .asyncMap<BaseAuthUser>(
+        (user) async {
+          if (user != null) {
+            await OfflineAuthCache.saveSupabaseUser(user);
+            currentUser = ClinicianFirebaseUser(user);
+            return currentUser!;
+          }
+
+          final cached = await OfflineAuthCache.readSession();
+          currentUser = cached == null
+              ? ClinicianFirebaseUser(null)
+              : ClinicianCachedUser(cached);
+          return currentUser!;
+        },
+      ),
+      _manualAuthUserController.stream,
+    ]);
 
 Stream<BaseAuthUser> clinicianFirebaseUserStream() =>
     clinicianSupabaseUserStream();
+
+Future<BaseAuthUser?> _cachedUserForStartup() async {
+  final liveUser = supabaseClient.auth.currentUser;
+  if (liveUser != null) {
+    await OfflineAuthCache.saveSupabaseUser(liveUser);
+    currentUser = ClinicianFirebaseUser(liveUser);
+    return currentUser;
+  }
+
+  final cached = await OfflineAuthCache.readSession();
+  if (cached == null) {
+    currentUser = ClinicianFirebaseUser(null);
+    return currentUser;
+  }
+  currentUser = ClinicianCachedUser(cached);
+  return currentUser;
+}

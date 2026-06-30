@@ -5,6 +5,7 @@ import 'package:flutter/material.dart' show Color;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'supabase_config.dart';
+import 'supabase_offline_cache.dart';
 
 /// Compatibility facade for FlutterFlow-generated Firestore code.
 ///
@@ -54,28 +55,23 @@ class DocumentReference<T extends Object?> {
             .eq('id', id)
             .maybeSingle(),
       );
+      final row = response == null ? null : Map<String, dynamic>.from(response);
+      if (row != null) {
+        await SupabaseOfflineCache.saveDocumentRow(collectionName, id, row);
+      }
       return DocumentSnapshot<T>._(
         reference: this,
-        data: response == null
-            ? null
-            : _decodeRow(collectionName, Map<String, dynamic>.from(response)),
+        data:
+            row == null ? <String, dynamic>{} : _decodeRow(collectionName, row),
         exists: response != null,
       );
     } on FormatException catch (e) {
       // Supabase returned non-JSON (e.g. HTML maintenance page). Treat as not found.
       print('FormatException fetching document $path: $e');
-      return DocumentSnapshot<T>._(
-        reference: this,
-        data: null,
-        exists: false,
-      );
+      return _cachedDocumentSnapshot();
     } catch (e) {
       print('Error fetching document $path: $e');
-      return DocumentSnapshot<T>._(
-        reference: this,
-        data: null,
-        exists: false,
-      );
+      return _cachedDocumentSnapshot();
     }
   }
 
@@ -94,6 +90,7 @@ class DocumentReference<T extends Object?> {
             .select()
             .maybeSingle(),
       );
+      await SupabaseOfflineCache.saveDocumentRow(collectionName, id, payload);
     } on FormatException catch (e) {
       print('FormatException setting document $path: $e');
     } catch (e) {
@@ -110,6 +107,7 @@ class DocumentReference<T extends Object?> {
       await runSupabaseRequest(
         () => supabaseClient.from(collectionName).update(payload).eq('id', id),
       );
+      await SupabaseOfflineCache.mergeDocumentRow(collectionName, id, payload);
     } on FormatException catch (e) {
       print('FormatException updating document $path: $e');
     } catch (e) {
@@ -138,6 +136,20 @@ class DocumentReference<T extends Object?> {
 
   @override
   String toString() => path;
+
+  Future<DocumentSnapshot<T>> _cachedDocumentSnapshot() async {
+    final cached = await SupabaseOfflineCache.readDocumentRow(
+      collectionName,
+      id,
+    );
+    return DocumentSnapshot<T>._(
+      reference: this,
+      data: cached == null
+          ? <String, dynamic>{}
+          : _decodeRow(collectionName, cached),
+      exists: cached != null,
+    );
+  }
 }
 
 class Query<T extends Object?> {
@@ -222,8 +234,9 @@ class Query<T extends Object?> {
   AggregateQuery count() => AggregateQuery(this);
 
   Future<QuerySnapshot<T>> get() async {
+    final offset = startAfterOffset ?? 0;
+    final cacheKey = _cacheKey(offset);
     try {
-      final offset = startAfterOffset ?? 0;
       final response = await runSupabaseRequest(() {
         dynamic request = supabaseClient.from(table).select();
         for (final filter in filters) {
@@ -243,6 +256,13 @@ class Query<T extends Object?> {
           .whereType<Map>()
           .map((row) => Map<String, dynamic>.from(row))
           .toList();
+      await SupabaseOfflineCache.saveQueryRows(cacheKey, rows);
+      for (final row in rows) {
+        final id = row['id']?.toString();
+        if (id != null && id.isNotEmpty) {
+          await SupabaseOfflineCache.saveDocumentRow(table, id, row);
+        }
+      }
       final docs = rows.asMap().entries.map((entry) {
         final row = _decodeRow(table, entry.value);
         final id = row['id']?.toString() ?? entry.value['id']?.toString() ?? '';
@@ -256,10 +276,10 @@ class Query<T extends Object?> {
     } on FormatException catch (e) {
       // Supabase returned non-JSON (e.g. HTML maintenance page). Return empty.
       print('FormatException querying table $table: $e');
-      return QuerySnapshot<T>([]);
+      return _cachedQuerySnapshot(cacheKey, offset);
     } catch (e) {
       print('Error querying table $table: $e');
-      return QuerySnapshot<T>([]);
+      return _cachedQuerySnapshot(cacheKey, offset);
     }
   }
 
@@ -278,6 +298,45 @@ class Query<T extends Object?> {
         limitCount: limitCount ?? this.limitCount,
         startAfterOffset: startAfterOffset ?? this.startAfterOffset,
       );
+
+  String _cacheKey(int offset) => SupabaseOfflineCache.queryKey({
+        'table': table,
+        'filters': filters
+            .map((filter) => {
+                  'field': filter.field,
+                  'operator': filter.operator,
+                  'value': _cacheSafeValue(filter.value),
+                })
+            .toList(),
+        'orders': orders
+            .map((order) => {
+                  'field': order.field,
+                  'descending': order.descending,
+                })
+            .toList(),
+        'limit': limitCount,
+        'offset': offset,
+      });
+
+  Future<QuerySnapshot<T>> _cachedQuerySnapshot(
+    String cacheKey,
+    int offset,
+  ) async {
+    final rows = await SupabaseOfflineCache.readQueryRows(cacheKey);
+    if (rows == null) {
+      return QuerySnapshot<T>([]);
+    }
+    final docs = rows.asMap().entries.map((entry) {
+      final row = _decodeRow(table, entry.value);
+      final id = row['id']?.toString() ?? entry.value['id']?.toString() ?? '';
+      return QueryDocumentSnapshot<T>._(
+        reference: DocumentReference<T>(table, id),
+        data: row,
+        rowIndex: offset + entry.key,
+      );
+    }).toList();
+    return QuerySnapshot<T>(docs);
+  }
 }
 
 class QuerySnapshot<T extends Object?> {
@@ -468,6 +527,8 @@ dynamic _encodeValue(Object? value) {
   }
   return value;
 }
+
+dynamic _cacheSafeValue(Object? value) => _encodeValue(value);
 
 List<dynamic> _encodeList(Object? value) {
   if (value is Iterable) {

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../auth_manager.dart';
+import '/services/offline_auth_cache.dart';
+import '/services/offline_connectivity_service.dart';
 
 import '/backend/backend.dart';
 import 'anonymous_auth.dart';
@@ -47,7 +49,16 @@ class FirebaseAuthManager extends AuthManager
   FirebasePhoneAuthManager phoneAuthManager = FirebasePhoneAuthManager();
 
   @override
-  Future signOut() => supabaseClient.auth.signOut();
+  Future signOut() async {
+    await OfflineAuthCache.clear();
+    emitClinicianAuthUser(ClinicianFirebaseUser.fromSupabaseUser(null));
+
+    try {
+      await supabaseClient.auth.signOut().timeout(const Duration(seconds: 6));
+    } catch (error) {
+      debugPrint('[Auth] Supabase sign out failed: $error');
+    }
+  }
 
   @override
   Future deleteUser(BuildContext context) async {
@@ -122,6 +133,7 @@ class FirebaseAuthManager extends AuthManager
       _signInOrCreateAccount(
         context,
         () => emailSignInFunc(email, password),
+        offlineEmail: email,
       );
 
   @override
@@ -223,8 +235,9 @@ class FirebaseAuthManager extends AuthManager
 
   Future<BaseAuthUser?> _signInOrCreateAccount(
     BuildContext context,
-    Future<AuthResponse?> Function() signInFunc,
-  ) async {
+    Future<AuthResponse?> Function() signInFunc, {
+    String? offlineEmail,
+  }) async {
     try {
       final authResponse = await signInFunc();
       final user = authResponse?.user ?? supabaseClient.auth.currentUser;
@@ -246,11 +259,57 @@ class FirebaseAuthManager extends AuthManager
 
       currentUser = ClinicianFirebaseUser.fromSupabaseUser(user);
       await maybeCreateUser(user);
+      await OfflineAuthCache.saveSupabaseUser(user);
+      emitClinicianAuthUser(currentUser!);
       return currentUser;
     } catch (e) {
+      final offlineUser = await _tryOfflineCachedSignIn(
+        context,
+        email: offlineEmail,
+        error: e,
+      );
+      if (offlineUser != null) {
+        return offlineUser;
+      }
       _showError(context, e);
       return null;
     }
+  }
+
+  Future<BaseAuthUser?> _tryOfflineCachedSignIn(
+    BuildContext context, {
+    required String? email,
+    required Object error,
+  }) async {
+    if (email == null || email.trim().isEmpty) {
+      return null;
+    }
+    if (error is AuthException && _isCredentialError(error)) {
+      return null;
+    }
+
+    final supabaseReachable =
+        await OfflineConnectivityService.isSupabaseReachable();
+    if (supabaseReachable) {
+      return null;
+    }
+
+    final cached = await OfflineAuthCache.readSessionForEmail(email);
+    if (cached == null) {
+      _showInfo(
+        context,
+        'Offline mode: this account must log in online once before offline access is available.',
+      );
+      return null;
+    }
+
+    final offlineUser = ClinicianCachedUser(cached);
+    emitClinicianAuthUser(offlineUser);
+    _showInfo(
+      context,
+      'Offline mode: signed in with cached account data.',
+    );
+    return offlineUser;
   }
 
   void _showInfo(BuildContext context, String message) {
@@ -292,5 +351,14 @@ class FirebaseAuthManager extends AuthManager
     }
 
     return message.isEmpty ? error.toString() : message;
+  }
+
+  bool _isCredentialError(AuthException error) {
+    final code = error.code;
+    final lowerMessage = error.message.toLowerCase();
+    return code == 'invalid_credentials' ||
+        lowerMessage.contains('invalid login credentials') ||
+        code == 'email_not_confirmed' ||
+        lowerMessage.contains('email not confirmed');
   }
 }

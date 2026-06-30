@@ -47,8 +47,13 @@ class _ProfileWidgetState extends State<ProfileWidget> {
   Widget build(BuildContext context) {
     context.watch<FFAppState>();
 
+    final doctorRef = FFAppState().doctor;
+    if (doctorRef == null) {
+      return _buildMissingProfileState(context);
+    }
+
     return StreamBuilder<DoctorRecord>(
-      stream: DoctorRecord.getDocument(FFAppState().doctor!),
+      stream: DoctorRecord.getDocument(doctorRef),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return Scaffold(
@@ -106,6 +111,43 @@ class _ProfileWidgetState extends State<ProfileWidget> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildMissingProfileState(BuildContext context) {
+    return Scaffold(
+      backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
+      bottomNavigationBar: const ClinicianBottomNavWidget(
+        currentPage: 'Settings',
+      ),
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.cloud_off_rounded,
+                  color: DawaTokens.statusWarning,
+                  size: 44,
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Profile unavailable offline',
+                  style: DawaTextStyles.cardTitle.copyWith(fontSize: 18),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Log in online once so Dawa can cache your clinician profile for offline use.',
+                  textAlign: TextAlign.center,
+                  style: DawaTextStyles.secondary,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 

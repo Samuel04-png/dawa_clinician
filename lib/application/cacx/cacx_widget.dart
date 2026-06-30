@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'dart:ui' as ui;
 import 'package:image_picker/image_picker.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/services/offline_connectivity_service.dart';
 import 'cacx_upload_service.dart';
 import 'cacx_model.dart';
 import 'dart:convert';
@@ -49,7 +50,8 @@ class HuggingFaceService {
           ),
         );
 
-      final uploadStreamedResponse = await uploadRequest.send();
+      final uploadStreamedResponse =
+          await uploadRequest.send().timeout(const Duration(seconds: 20));
       final uploadBody = await uploadStreamedResponse.stream.bytesToString();
 
       if (uploadStreamedResponse.statusCode != 200) {
@@ -64,19 +66,21 @@ class HuggingFaceService {
 
       // ── Step 2: POST to /gradio_api/call/predict — returns an event_id ─────
       final predictUri = Uri.parse('$_spaceBaseUrl/gradio_api/call/predict');
-      final predictResponse = await http.post(
-        predictUri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'data': [
-            {
-              'path': serverFilePath,
-              'orig_name': 'image.$extension',
-              'meta': {'_type': 'gradio.FileData'},
-            }
-          ],
-        }),
-      );
+      final predictResponse = await http
+          .post(
+            predictUri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'data': [
+                {
+                  'path': serverFilePath,
+                  'orig_name': 'image.$extension',
+                  'meta': {'_type': 'gradio.FileData'},
+                }
+              ],
+            }),
+          )
+          .timeout(const Duration(seconds: 20));
 
       if (predictResponse.statusCode != 200) {
         throw Exception(
@@ -91,7 +95,8 @@ class HuggingFaceService {
       // ── Step 3: GET the result via SSE ─────────────────────────────────────
       final resultUri =
           Uri.parse('$_spaceBaseUrl/gradio_api/call/predict/$eventId');
-      final resultResponse = await http.get(resultUri);
+      final resultResponse =
+          await http.get(resultUri).timeout(const Duration(seconds: 60));
 
       if (resultResponse.statusCode != 200) {
         throw Exception(
@@ -364,6 +369,9 @@ class _CaCxAppState extends State<CaCxApp> {
       _selectedPatient = widget.initialPatient;
       _patientSearchText = widget.initialPatient!.name;
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _trySyncPendingCacx();
+    });
     if (widget.autoStartScreening) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
@@ -542,6 +550,14 @@ class _CaCxAppState extends State<CaCxApp> {
     });
   }
 
+  Future<void> _trySyncPendingCacx() async {
+    final connectivity = await OfflineConnectivityService.refreshStatus();
+    if (connectivity.isOffline) {
+      return;
+    }
+    await CacxScreeningResultsRepository.syncPending();
+  }
+
   void _resetScreeningFlow() {
     _flowWarningMessage = null;
     _screeningRecordId = null;
@@ -609,6 +625,19 @@ class _CaCxAppState extends State<CaCxApp> {
     _currentScanPatientId = patientId;
     _currentScanUserId = userId;
 
+    final connectivity = await OfflineConnectivityService.refreshStatus();
+    if (connectivity.isOffline) {
+      await _analyzeImageOfflineOnly(
+        image: image,
+        patientId: patientId,
+        userId: userId,
+        imagePath: imagePath,
+      );
+      return;
+    }
+
+    await _trySyncPendingCacx();
+
     final primary = await _sendImageToDeviceOnce(image, patientId);
 
     final secondRequired = primary.deviceStatus != 'success';
@@ -667,10 +696,79 @@ class _CaCxAppState extends State<CaCxApp> {
     );
   }
 
+  Future<void> _analyzeImageOfflineOnly({
+    required String image,
+    required String? patientId,
+    required String? userId,
+    required String imagePath,
+  }) async {
+    _setFlowStatus('Offline mode: checking Arduino device...');
+
+    final deviceReachable =
+        await OfflineConnectivityService.isDeviceReachable();
+    if (!deviceReachable) {
+      _showOfflineDeviceUnavailable();
+      return;
+    }
+
+    final primary = await _sendImageToDeviceOnce(
+      image,
+      patientId,
+      allowCloudFallbackMessages: false,
+      skipHealthCheck: true,
+    );
+
+    if (primary.deviceStatus != 'success') {
+      _showOfflineDeviceUnavailable();
+      return;
+    }
+
+    await CacxScreeningResultsRepository.enqueuePrimaryResult(
+      patientId: patientId,
+      userId: userId,
+      imagePath: imagePath,
+      primary: primary,
+      secondOpinionRequired: false,
+      secondOpinionStatus: 'not_required',
+    );
+
+    if (!mounted) return;
+    _setFlowStatus(
+      'Offline mode: device result saved locally',
+      warning: 'Result queued for Supabase sync when internet returns.',
+    );
+    setState(() {
+      _screeningRecordId = null;
+      _primaryDeviceResult = primary;
+      _secondOpinionRequired = false;
+      _secondOpinionStatus = 'not_required';
+      _analysisResult = primary.toAnalysisResult(image);
+      _isAnalyzing = false;
+      _appState = AppState.results;
+    });
+  }
+
+  void _showOfflineDeviceUnavailable() {
+    if (!mounted) return;
+    _setFlowStatus(
+      'Offline mode: Arduino device not connected',
+      warning:
+          'Offline mode: Arduino device not connected. Please connect the device or go online.',
+    );
+    setState(() {
+      _deviceSecondsRemaining = null;
+      _isAnalyzing = false;
+      _secondOpinionStatus = 'failed';
+      _appState = AppState.dashboard;
+    });
+  }
+
   Future<CervicalDeviceInterpretation> _sendImageToDeviceOnce(
     String image,
-    String? patientId,
-  ) async {
+    String? patientId, {
+    bool allowCloudFallbackMessages = true,
+    bool skipHealthCheck = false,
+  }) async {
     if (_deviceUploadInProgress) {
       return CervicalDeviceInterpretation.failure(
         label: 'Device Upload In Progress',
@@ -694,7 +792,9 @@ class _CaCxAppState extends State<CaCxApp> {
     _startDeviceCountdown(deadline);
 
     try {
-      await CervicalDeviceService.checkHealth();
+      if (!skipHealthCheck) {
+        await CervicalDeviceService.checkHealth();
+      }
 
       _setFlowStatus('Sending image to device...');
       debugPrint('[Device] Upload started');
@@ -728,8 +828,12 @@ class _CaCxAppState extends State<CaCxApp> {
       debugPrint(
           '[Device] Timeout after ${CervicalDeviceConfig.timeoutSeconds} seconds');
       _setFlowStatus(
-        'Device timed out. Sending for second opinion...',
-        warning: 'Device did not respond in time. Sending for second opinion.',
+        allowCloudFallbackMessages
+            ? 'Device timed out. Sending for second opinion...'
+            : 'Offline mode: Arduino device not connected',
+        warning: allowCloudFallbackMessages
+            ? 'Device did not respond in time. Sending for second opinion.'
+            : 'Offline mode: Arduino device not connected. Please connect the device or go online.',
       );
       return CervicalDeviceInterpretation.failure(
         label: 'Error',
@@ -745,8 +849,12 @@ class _CaCxAppState extends State<CaCxApp> {
     } on CervicalDeviceHttpException catch (error) {
       debugPrint('[Device] HTTP failure: $error');
       _setFlowStatus(
-        'Device failed. Sending for second opinion...',
-        warning: error.body.isEmpty ? error.toString() : error.body,
+        allowCloudFallbackMessages
+            ? 'Device failed. Sending for second opinion...'
+            : 'Offline mode: Arduino device not connected',
+        warning: allowCloudFallbackMessages
+            ? (error.body.isEmpty ? error.toString() : error.body)
+            : 'Offline mode: Arduino device not connected. Please connect the device or go online.',
       );
       return CervicalDeviceInterpretation.failure(
         label: 'Error',
@@ -762,8 +870,12 @@ class _CaCxAppState extends State<CaCxApp> {
     } catch (error) {
       debugPrint('[Device] Network failure: $error');
       _setFlowStatus(
-        'Device failed. Sending for second opinion...',
-        warning: error.toString(),
+        allowCloudFallbackMessages
+            ? 'Device failed. Sending for second opinion...'
+            : 'Offline mode: Arduino device not connected',
+        warning: allowCloudFallbackMessages
+            ? error.toString()
+            : 'Offline mode: Arduino device not connected. Please connect the device or go online.',
       );
       return CervicalDeviceInterpretation.failure(
         label: 'Error',
@@ -888,6 +1000,21 @@ class _CaCxAppState extends State<CaCxApp> {
   }) async {
     if (_selectedImage == null || _cloudFallbackInProgress) return;
 
+    final connectivity = await OfflineConnectivityService.refreshStatus();
+    if (connectivity.isOffline) {
+      _setFlowStatus(
+        'Offline mode: online scan unavailable',
+        warning:
+            'Server analysis requires internet. Connect to the internet or use the Arduino device.',
+      );
+      if (!mounted) return;
+      setState(() {
+        _isAnalyzing = false;
+        _secondOpinionStatus = 'failed';
+      });
+      return;
+    }
+
     _cloudFallbackRequested = true;
     _cloudFallbackInProgress = true;
     debugPrint('[Device] Routing to Gradio');
@@ -947,6 +1074,16 @@ class _CaCxAppState extends State<CaCxApp> {
 
   Future<void> _runManualSecondOpinion() async {
     if (_selectedImage == null) return;
+
+    final connectivity = await OfflineConnectivityService.refreshStatus();
+    if (connectivity.isOffline) {
+      _setFlowStatus(
+        'Offline mode: online scan unavailable',
+        warning:
+            'Server analysis requires internet. Connect to the internet or use the Arduino device.',
+      );
+      return;
+    }
 
     setState(() {
       _isAnalyzing = true;

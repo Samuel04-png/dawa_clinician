@@ -1,4 +1,5 @@
 import '/backend/backend.dart';
+import '/components/dawa_design_system.dart';
 import '/flutter_flow/flutter_flow_drop_down.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -53,8 +54,13 @@ class _EditProfileWidgetState extends State<EditProfileWidget> {
   Widget build(BuildContext context) {
     context.watch<FFAppState>();
 
+    final doctorRef = FFAppState().doctor;
+    if (doctorRef == null) {
+      return _buildMissingProfileState(context);
+    }
+
     return StreamBuilder<DoctorRecord>(
-      stream: DoctorRecord.getDocument(FFAppState().doctor!),
+      stream: DoctorRecord.getDocument(doctorRef),
       builder: (context, snapshot) {
         // Customize what your widget looks like when it's loading.
         if (!snapshot.hasData) {
@@ -1075,6 +1081,46 @@ class _EditProfileWidgetState extends State<EditProfileWidget> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildMissingProfileState(BuildContext context) {
+    return Scaffold(
+      backgroundColor: FlutterFlowTheme.of(context).secondaryBackground,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.cloud_off_rounded,
+                  color: DawaTokens.statusWarning,
+                  size: 44,
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Profile unavailable offline',
+                  style: FlutterFlowTheme.of(context).titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Log in online once so Dawa can cache your clinician profile for offline use.',
+                  textAlign: TextAlign.center,
+                  style: FlutterFlowTheme.of(context).bodyMedium,
+                ),
+                const SizedBox(height: 16),
+                TextButton.icon(
+                  onPressed: () => context.goNamed(ProfileWidget.routeName),
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  label: const Text('Back to Settings'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

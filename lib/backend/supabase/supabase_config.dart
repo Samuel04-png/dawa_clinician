@@ -14,6 +14,8 @@ const supabaseAnonKey = String.fromEnvironment(
 
 bool _supabaseInitialized = false;
 Future<void>? _sessionRefreshFuture;
+const supabaseRequestTimeout = Duration(seconds: 12);
+const supabaseSessionRefreshTimeout = Duration(seconds: 6);
 
 Future<void> initSupabase() async {
   if (_supabaseInitialized) {
@@ -35,7 +37,14 @@ SupabaseClient get supabaseMigrationClient => supabaseClient;
 Future<T> runSupabaseRequest<T>(FutureOr<T> Function() request) async {
   await ensureFreshSupabaseSession();
   try {
-    return await request();
+    final result = request();
+    if (result is Future<T>) {
+      return await result.timeout(supabaseRequestTimeout);
+    }
+    if (result is Future) {
+      return await result.timeout(supabaseRequestTimeout) as T;
+    }
+    return result;
   } on PostgrestException catch (error) {
     if (!_isExpiredJwtError(error)) {
       rethrow;
@@ -62,8 +71,10 @@ Future<void> ensureFreshSupabaseSession({bool forceRefresh = false}) async {
     return;
   }
 
-  final refreshFuture = _sessionRefreshFuture ??=
-      supabaseClient.auth.refreshSession().then((_) {});
+  final refreshFuture = _sessionRefreshFuture ??= supabaseClient.auth
+      .refreshSession()
+      .timeout(supabaseSessionRefreshTimeout)
+      .then((_) {});
   try {
     await refreshFuture;
   } finally {

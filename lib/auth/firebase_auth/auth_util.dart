@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '/backend/backend.dart';
+import '/services/offline_auth_cache.dart';
 import 'package:stream_transform/stream_transform.dart';
 import 'firebase_auth_manager.dart';
 
@@ -48,6 +49,19 @@ final authenticatedUserStream = supabaseClient.auth.onAuthStateChange
     )
     .map((user) {
   currentUserDocument = user;
+  if (user != null && currentUserUid.isNotEmpty) {
+    OfflineAuthCache.saveSession(
+      CachedAuthSession(
+        uid: currentUserUid,
+        email: user.email.isNotEmpty ? user.email : currentUserEmail,
+        displayName: user.displayName.isNotEmpty ? user.displayName : null,
+        photoUrl: user.photoUrl.isNotEmpty ? user.photoUrl : null,
+        phoneNumber: user.phoneNumber.isNotEmpty ? user.phoneNumber : null,
+        emailVerified: currentUserEmailVerified,
+        cachedAt: DateTime.now().toUtc(),
+      ),
+    );
+  }
 
   return currentUserDocument;
 }).asBroadcastStream();
