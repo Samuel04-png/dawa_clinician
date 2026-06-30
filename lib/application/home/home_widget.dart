@@ -862,6 +862,23 @@ class _HomeWidgetState extends State<HomeWidget> {
                 ),
                 _actionCard(
                   width: itemWidth,
+                  title: 'BP Monitor',
+                  subtitle: 'Blood pressure review',
+                  icon: Icons.monitor_heart_outlined,
+                  color: DawaTokens.brandPrimary,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => quickAccessServiceWidget(
+                          QuickAccessServiceType.bpMonitor,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                _actionCard(
+                  width: itemWidth,
                   title: 'Ultrasound',
                   subtitle: 'Scan workflows',
                   icon: Icons.sensors_rounded,

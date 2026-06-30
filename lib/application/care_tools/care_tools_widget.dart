@@ -1,5 +1,6 @@
 import '/application/cacx/cacx_widget.dart';
 import '/components/appbar_nav/appbar_nav_widget.dart';
+import '/components/clinician_bottom_nav/clinician_bottom_nav_widget.dart';
 import '/components/dawa_design_system.dart';
 import '/components/small_side_nav/small_side_nav_widget.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -60,6 +61,9 @@ class _CareToolsWidgetState extends State<CareToolsWidget> {
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           drawer: showDesktopSidebar ? null : _buildMobileDrawer(),
           appBar: showDesktopSidebar ? null : _buildMobileAppBar(),
+          bottomNavigationBar: showDesktopSidebar
+              ? null
+              : const ClinicianBottomNavWidget(currentPage: 'Care Tools'),
           body: SafeArea(
             top: true,
             child: Row(

@@ -1,4 +1,5 @@
 import '/auth/firebase_auth/auth_util.dart';
+import '/application/bp_monitor/bp_monitor_widget.dart';
 import '/application/ultrasound/ultrasound.dart'
     show UltrasoundApp, UltrasoundLaunchMode;
 import '/reset_password/reset_password_widget.dart';
@@ -289,7 +290,13 @@ Future<String?> showImageSourcePicker(BuildContext context) async {
 // ??? APP MODES ????????????????????????????????????????????????????????????????
 enum ScreeningMode { via, training }
 
-enum QuickAccessServiceType { cervicalCancer, ultrasound, hemonix, ctScan }
+enum QuickAccessServiceType {
+  cervicalCancer,
+  ultrasound,
+  hemonix,
+  ctScan,
+  bpMonitor,
+}
 
 enum QuickAccessDashboardTab { overview, records, results, search }
 
@@ -4520,6 +4527,7 @@ List<QuickAccessToolSummary> getQuickAccessToolSummaries() {
     QuickAccessServiceType.cervicalCancer,
     QuickAccessServiceType.hemonix,
     QuickAccessServiceType.ctScan,
+    QuickAccessServiceType.bpMonitor,
     QuickAccessServiceType.ultrasound,
   ].map((type) {
     final config = _quickAccessConfig(type);
@@ -4539,6 +4547,8 @@ List<QuickAccessToolSummary> getQuickAccessToolSummaries() {
           'Cervical cancer VIA screening',
         QuickAccessServiceType.hemonix => 'Haemoglobin & anaemia tracking',
         QuickAccessServiceType.ctScan => 'CT imaging records & results',
+        QuickAccessServiceType.bpMonitor =>
+          'Blood pressure monitoring & risk review',
         QuickAccessServiceType.ultrasound => 'Scan reports & fetal monitoring',
       },
       icon: config.icon,
@@ -4554,6 +4564,7 @@ List<QuickAccessToolSummary> getQuickAccessToolSummaries() {
         QuickAccessServiceType.ultrasound => 'Scans',
         QuickAccessServiceType.hemonix => 'Records',
         QuickAccessServiceType.ctScan => 'Records',
+        QuickAccessServiceType.bpMonitor => 'Readings',
       },
     );
   }).toList();
@@ -4569,6 +4580,9 @@ Widget quickAccessServiceWidget(QuickAccessServiceType type) {
   }
   if (type == QuickAccessServiceType.ultrasound) {
     return const UltrasoundApp();
+  }
+  if (type == QuickAccessServiceType.bpMonitor) {
+    return const BpMonitorApp();
   }
   return QuickAccessServiceApp(service: type);
 }
@@ -5975,6 +5989,25 @@ _QuickAccessServiceConfig _quickAccessConfig(QuickAccessServiceType type) {
         icon: Icons.desktop_windows_outlined,
         color: DawaTokens.brandPrimary,
       );
+    case QuickAccessServiceType.bpMonitor:
+      return const _QuickAccessServiceConfig(
+        type: QuickAccessServiceType.bpMonitor,
+        key: 'bp-monitor',
+        title: 'BP Monitor',
+        description:
+            'Record blood pressure readings and interpret risk using age and chronic conditions.',
+        recordName: 'BP Reading',
+        resultsLabel: 'BP Results',
+        addDescription: 'Take a new blood pressure reading.',
+        actions: [
+          'Take BP Reading',
+          'View Patient Records',
+          'View BP Results',
+          'Search Results',
+        ],
+        icon: Icons.monitor_heart_outlined,
+        color: DawaTokens.statusDanger,
+      );
   }
 }
 
@@ -6110,6 +6143,41 @@ List<_QuickAccessRecord> _quickAccessRecords(QuickAccessServiceType type) {
           notes: 'Routine scan archived.',
           aiAnalysis: 'No urgent flag; confidence 89%.',
           needsReview: false,
+        ),
+      ];
+    case QuickAccessServiceType.bpMonitor:
+      return [
+        _QuickAccessRecord(
+          patientName: 'Esther Phiri',
+          patientId: 'DM-1031',
+          recordId: 'BP-2201',
+          date: DateTime(2026, 5, 18),
+          result: '128/78 mmHg',
+          notes: 'Age 42, diabetes. Above high-risk target; repeat planned.',
+          aiAnalysis:
+              'BP interpretation: caution due diabetes context; review if repeated.',
+          needsReview: true,
+        ),
+        _QuickAccessRecord(
+          patientName: 'Agnes Banda',
+          patientId: 'DM-1028',
+          recordId: 'BP-2202',
+          date: DateTime(2026, 5, 17),
+          result: '118/72 mmHg',
+          notes: 'Age 29, no chronic disease recorded.',
+          aiAnalysis: 'BP interpretation: normal range for routine monitoring.',
+          needsReview: false,
+        ),
+        _QuickAccessRecord(
+          patientName: 'Rita Mulenga',
+          patientId: 'DM-1044',
+          recordId: 'BP-2203',
+          date: DateTime(2026, 5, 14),
+          result: '146/94 mmHg',
+          notes: 'Age 67 with heart disease; repeat and clinician review.',
+          aiAnalysis:
+              'BP interpretation: hypertension range with older adult cardiovascular risk.',
+          needsReview: true,
         ),
       ];
   }

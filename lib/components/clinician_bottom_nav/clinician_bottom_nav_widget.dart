@@ -64,6 +64,10 @@ class ClinicianBottomNavWidget extends StatelessWidget {
                     label: 'Appointments',
                   ),
                   BottomNavigationBarItem(
+                    icon: Icon(Icons.medical_services_rounded, size: 22),
+                    label: 'Tools',
+                  ),
+                  BottomNavigationBarItem(
                     icon: Icon(Icons.settings_rounded, size: 22),
                     label: 'Settings',
                   ),
@@ -85,9 +89,11 @@ class ClinicianBottomNavWidget extends StatelessWidget {
         return 1;
       case 'Appointments':
         return 2;
+      case 'Care Tools':
+        return 3;
       case 'Settings':
       case 'Profile':
-        return 3;
+        return 4;
       default:
         return 0;
     }
@@ -102,14 +108,16 @@ class ClinicianBottomNavWidget extends StatelessWidget {
       0 => HomeWidget.routeName,
       1 => MomsWidget.routeName,
       2 => ScheduledEncountersWidget.routeName,
-      3 => ProfileWidget.routeName,
+      3 => CareToolsWidget.routeName,
+      4 => ProfileWidget.routeName,
       _ => HomeWidget.routeName,
     };
     final pageName = switch (index) {
       0 => 'Home',
       1 => 'Patients',
       2 => 'Appointments',
-      3 => 'Settings',
+      3 => 'Care Tools',
+      4 => 'Settings',
       _ => 'Home',
     };
 
