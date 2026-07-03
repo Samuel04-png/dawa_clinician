@@ -139,6 +139,24 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
           builder: (context, params) => CareToolsWidget(),
         ),
         FFRoute(
+          name: HemonixApp.routeName,
+          path: HemonixApp.routePath,
+          requireAuth: true,
+          builder: (context, params) => HemonixApp(),
+        ),
+        FFRoute(
+          name: CtScanApp.routeName,
+          path: CtScanApp.routePath,
+          requireAuth: true,
+          builder: (context, params) => CtScanApp(),
+        ),
+        FFRoute(
+          name: BpMonitorApp.routeName,
+          path: BpMonitorApp.routePath,
+          requireAuth: true,
+          builder: (context, params) => BpMonitorApp(),
+        ),
+        FFRoute(
           name: UltrasoundApp.routeName,
           path: UltrasoundApp.routePath,
           requireAuth: true,

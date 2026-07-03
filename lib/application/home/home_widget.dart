@@ -836,9 +836,7 @@ class _HomeWidgetState extends State<HomeWidget> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const QuickAccessServiceApp(
-                          service: QuickAccessServiceType.hemonix,
-                        ),
+                        builder: (context) => const HemonixApp(),
                       ),
                     );
                   },
@@ -853,9 +851,7 @@ class _HomeWidgetState extends State<HomeWidget> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const QuickAccessServiceApp(
-                          service: QuickAccessServiceType.ctScan,
-                        ),
+                        builder: (context) => const CtScanApp(),
                       ),
                     );
                   },
@@ -870,9 +866,7 @@ class _HomeWidgetState extends State<HomeWidget> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => quickAccessServiceWidget(
-                          QuickAccessServiceType.bpMonitor,
-                        ),
+                        builder: (context) => const BpMonitorApp(),
                       ),
                     );
                   },

@@ -5,6 +5,9 @@ import '/components/dawa_design_system.dart';
 class BpMonitorApp extends StatefulWidget {
   const BpMonitorApp({super.key});
 
+  static String routeName = 'BpMonitor';
+  static String routePath = '/bp-monitor';
+
   @override
   State<BpMonitorApp> createState() => _BpMonitorAppState();
 }

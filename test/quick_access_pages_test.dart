@@ -1,4 +1,6 @@
 import 'package:clinician/application/cacx/cacx_widget.dart';
+import 'package:clinician/application/ct_scan/ct_scan_module.dart';
+import 'package:clinician/application/hemonix/hemonix_module.dart';
 import 'package:clinician/backend/supabase/supabase_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -50,34 +52,33 @@ void main() {
     expect(find.textContaining('Coming soon'), findsNothing);
   });
 
-  for (final serviceCase in _serviceCases) {
-    testWidgets('${serviceCase.title} renders a usable dashboard',
+  for (final moduleCase in _moduleCases) {
+    testWidgets('${moduleCase.title} renders a usable dashboard',
         (tester) async {
       await _pumpQuickAccess(
         tester,
-        QuickAccessServiceApp(service: serviceCase.service),
+        moduleCase.widget,
         size: const Size(1180, 860),
       );
 
-      expect(find.text('${serviceCase.title} Dashboard'), findsOneWidget);
+      expect(find.text('${moduleCase.title} Dashboard'), findsOneWidget);
       expect(find.textContaining('Welcome, Clinician'), findsOneWidget);
-      expect(
-          find.byKey(const ValueKey('quick-access-sidebar')), findsOneWidget);
-      for (final action in serviceCase.actions) {
+      expect(find.byKey(ValueKey('${moduleCase.key}-sidebar')), findsOneWidget);
+      for (final action in moduleCase.actions) {
         expect(find.text(action), findsAtLeastNWidgets(1));
       }
       expect(find.textContaining('Coming soon'), findsNothing);
     });
 
-    testWidgets('${serviceCase.title} renders a mobile dashboard',
+    testWidgets('${moduleCase.title} renders a mobile dashboard',
         (tester) async {
       await _pumpQuickAccess(
         tester,
-        QuickAccessServiceApp(service: serviceCase.service),
+        moduleCase.widget,
         size: const Size(390, 820),
       );
 
-      expect(find.text('${serviceCase.title} Dashboard'), findsOneWidget);
+      expect(find.text('${moduleCase.title} Dashboard'), findsOneWidget);
       expect(find.text('Home'), findsOneWidget);
       expect(find.text('Records'), findsOneWidget);
       expect(find.text('Results'), findsOneWidget);
@@ -85,40 +86,40 @@ void main() {
       expect(find.textContaining('Coming soon'), findsNothing);
     });
 
-    testWidgets('${serviceCase.title} renders results page', (tester) async {
+    testWidgets('${moduleCase.title} renders results page', (tester) async {
       await _pumpQuickAccess(
         tester,
-        QuickAccessServiceApp(service: serviceCase.service),
+        moduleCase.widget,
         size: const Size(1180, 860),
       );
 
-      await tester.tap(find.text(serviceCase.resultsLabel).first);
+      await tester.tap(find.text(moduleCase.resultsLabel).first);
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text(serviceCase.resultsLabel), findsWidgets);
+      expect(find.text(moduleCase.resultsLabel), findsWidgets);
       expect(find.text('All results'), findsWidgets);
       expect(find.text('Completed'), findsWidgets);
       expect(find.text('Needs review'), findsWidgets);
       expect(
-        find.byKey(ValueKey('quick-access-results-search-${serviceCase.key}')),
+        find.byKey(ValueKey('${moduleCase.key}-results-search')),
         findsOneWidget,
       );
       expect(find.textContaining('Coming soon'), findsNothing);
     });
   }
 
-  testWidgets('Quick Access results search matches patient and AI text',
+  testWidgets('HemoNix results search matches patient and AI text',
       (tester) async {
     await _pumpQuickAccess(
       tester,
-      const QuickAccessServiceApp(service: QuickAccessServiceType.hemonix),
+      const HemonixApp(),
       size: const Size(1180, 860),
     );
 
     await tester.tap(find.text('Hb Results').first);
     await tester.pump(const Duration(milliseconds: 100));
     await tester.enterText(
-      find.byKey(const ValueKey('quick-access-results-search-hemonix')),
+      find.byKey(const ValueKey('hemonix-results-search')),
       'Grace',
     );
     await tester.pump(const Duration(milliseconds: 100));
@@ -127,7 +128,7 @@ void main() {
     expect(find.text('Beatrice Zulu'), findsNothing);
 
     await tester.enterText(
-      find.byKey(const ValueKey('quick-access-results-search-hemonix')),
+      find.byKey(const ValueKey('hemonix-results-search')),
       'confidence 90',
     );
     await tester.pump(const Duration(milliseconds: 100));
@@ -135,33 +136,32 @@ void main() {
     expect(find.text('Grace Mwape'), findsOneWidget);
   });
 
-  testWidgets('Quick Access needs review filter narrows results',
-      (tester) async {
+  testWidgets('HemoNix needs review filter narrows results', (tester) async {
     await _pumpQuickAccess(
       tester,
-      const QuickAccessServiceApp(service: QuickAccessServiceType.ultrasound),
+      const HemonixApp(),
       size: const Size(1180, 860),
     );
 
-    await tester.tap(find.text('Scan Reports').first);
+    await tester.tap(find.text('Hb Results').first);
     await tester.pump(const Duration(milliseconds: 100));
     await tester.tap(
       find.byKey(
-        const ValueKey('quick-access-filter-ultrasound-needsReview'),
+        const ValueKey('hemonix-filter-needsReview'),
       ),
     );
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text('Sarah Mbewe'), findsOneWidget);
-    expect(find.text('Lillian Chama'), findsNothing);
-    expect(find.text('Nancy Kaira'), findsNothing);
+    expect(find.text('Grace Mwape'), findsOneWidget);
+    expect(find.text('Beatrice Zulu'), findsNothing);
+    expect(find.text('Mary Soko'), findsNothing);
   });
 
-  testWidgets('Quick Access open patient navigates to the records tab',
+  testWidgets('HemoNix open patient navigates to the records tab',
       (tester) async {
     await _pumpQuickAccess(
       tester,
-      const QuickAccessServiceApp(service: QuickAccessServiceType.hemonix),
+      const HemonixApp(),
       size: const Size(1180, 860),
     );
 
@@ -221,37 +221,25 @@ Future<void> _pumpQuickAccess(
   await tester.pump(const Duration(milliseconds: 100));
 }
 
-class _ServiceCase {
-  const _ServiceCase({
-    required this.service,
+class _ModuleCase {
+  const _ModuleCase({
+    required this.widget,
     required this.key,
     required this.title,
     required this.resultsLabel,
     required this.actions,
   });
 
-  final QuickAccessServiceType service;
+  final Widget widget;
   final String key;
   final String title;
   final String resultsLabel;
   final List<String> actions;
 }
 
-const _serviceCases = [
-  _ServiceCase(
-    service: QuickAccessServiceType.ultrasound,
-    key: 'ultrasound',
-    title: 'Ultrasound',
-    resultsLabel: 'Scan Reports',
-    actions: [
-      'Add Scan Record',
-      'AI-Guided Scan',
-      'View Patient Records',
-      'View Scan History',
-    ],
-  ),
-  _ServiceCase(
-    service: QuickAccessServiceType.hemonix,
+const _moduleCases = [
+  _ModuleCase(
+    widget: HemonixApp(),
     key: 'hemonix',
     title: 'HemoNix',
     resultsLabel: 'Hb Results',
@@ -262,8 +250,8 @@ const _serviceCases = [
       'Search Results',
     ],
   ),
-  _ServiceCase(
-    service: QuickAccessServiceType.ctScan,
+  _ModuleCase(
+    widget: CtScanApp(),
     key: 'ct-scan',
     title: 'CT Scan',
     resultsLabel: 'CT Results',
@@ -271,18 +259,6 @@ const _serviceCases = [
       'Add CT Record',
       'View Patient Records',
       'View CT Results',
-      'Search Results',
-    ],
-  ),
-  _ServiceCase(
-    service: QuickAccessServiceType.cervicalCancer,
-    key: 'cervical-cancer',
-    title: 'Cervical Cancer',
-    resultsLabel: 'Screening Results',
-    actions: [
-      'Add Screening Record',
-      'View Patient Records',
-      'View Screening Results',
       'Search Results',
     ],
   ),

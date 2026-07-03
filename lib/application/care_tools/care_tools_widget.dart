@@ -1,4 +1,4 @@
-import '/application/cacx/cacx_widget.dart';
+import '/application/shared/clinical_tools/clinical_tool_models.dart';
 import '/components/appbar_nav/appbar_nav_widget.dart';
 import '/components/clinician_bottom_nav/clinician_bottom_nav_widget.dart';
 import '/components/dawa_design_system.dart';
@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
+import 'care_tool_registry.dart';
 
 class CareToolsWidget extends StatefulWidget {
   const CareToolsWidget({super.key});
@@ -118,7 +119,7 @@ class _CareToolsWidgetState extends State<CareToolsWidget> {
   }
 
   Widget _buildContent(BuildContext context) {
-    final tools = getQuickAccessToolSummaries();
+    final tools = getCareToolSummaries();
     final urgentTotal =
         tools.fold<int>(0, (sum, tool) => sum + tool.needsReview);
 
@@ -183,10 +184,10 @@ class _CareToolsWidgetState extends State<CareToolsWidget> {
     );
   }
 
-  void _openTool(BuildContext context, QuickAccessToolSummary summary) {
+  void _openTool(BuildContext context, ClinicalToolSummary summary) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => quickAccessServiceWidget(summary.type),
+        builder: summary.builder,
       ),
     );
   }
@@ -256,7 +257,7 @@ class _ToolStatusCard extends StatelessWidget {
     required this.onOpen,
   });
 
-  final QuickAccessToolSummary summary;
+  final ClinicalToolSummary summary;
   final VoidCallback onOpen;
 
   @override
@@ -363,7 +364,7 @@ class _ToolStatusCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  '${summary.recentPatient} - ${summary.recentResult} - ${quickAccessFormatDate(summary.recentDate)}',
+                  '${summary.recentPatient} - ${summary.recentResult} - ${clinicalToolFormatDate(summary.recentDate)}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: DawaTextStyles.secondary.copyWith(
@@ -403,7 +404,7 @@ class _ToolStatusCard extends StatelessWidget {
     );
   }
 
-  _ToolBadgeSpec _badgeSpec(QuickAccessToolSummary summary) {
+  _ToolBadgeSpec _badgeSpec(ClinicalToolSummary summary) {
     if (summary.needsReview == 0) {
       return const _ToolBadgeSpec(
         label: 'All reviewed',
@@ -411,7 +412,7 @@ class _ToolStatusCard extends StatelessWidget {
         foreground: DawaTokens.statusSuccessText,
       );
     }
-    if (summary.type == QuickAccessServiceType.cervicalCancer) {
+    if (summary.key == 'cervical-cancer') {
       return _ToolBadgeSpec(
         label: '${summary.needsReview} urgent',
         background: DawaTokens.statusDangerBg,

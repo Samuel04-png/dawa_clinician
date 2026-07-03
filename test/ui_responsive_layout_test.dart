@@ -1,5 +1,8 @@
 import 'package:clinician/application/cacx/cacx_widget.dart';
 import 'package:clinician/application/care_tools/care_tools_widget.dart';
+import 'package:clinician/application/ct_scan/ct_scan_module.dart';
+import 'package:clinician/application/hemonix/hemonix_module.dart';
+import 'package:clinician/application/ultrasound/ultrasound.dart';
 import 'package:clinician/app_state.dart';
 import 'package:clinician/backend/supabase/supabase_config.dart';
 import 'package:clinician/flutter_flow/flutter_flow_theme.dart';
@@ -43,21 +46,21 @@ void main() {
 
     await _pumpPlain(
       tester,
-      const QuickAccessServiceApp(service: QuickAccessServiceType.hemonix),
+      const HemonixApp(),
       const Size(820, 900),
     );
     expect(find.text('HemoNix Dashboard'), findsOneWidget);
 
     await _pumpPlain(
       tester,
-      const QuickAccessServiceApp(service: QuickAccessServiceType.ctScan),
+      const CtScanApp(),
       const Size(820, 900),
     );
     expect(find.text('CT Scan Dashboard'), findsOneWidget);
 
     await _pumpPlain(
       tester,
-      const QuickAccessServiceApp(service: QuickAccessServiceType.ultrasound),
+      const UltrasoundApp(),
       const Size(820, 900),
     );
     expect(find.text('Ultrasound Dashboard'), findsOneWidget);

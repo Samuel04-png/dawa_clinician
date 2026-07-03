@@ -141,6 +141,19 @@ class _SmallSideNavWidgetState extends State<SmallSideNavWidget> {
                         _goTo(context, CareToolsWidget.routeName, 'Care Tools'),
                   ),
                   _SidebarItem(
+                    label: 'HemoNix',
+                    icon: Icons.bloodtype_outlined,
+                    active: selectedPage == 'HemoNix',
+                    onTap: () =>
+                        _goTo(context, HemonixApp.routeName, 'HemoNix'),
+                  ),
+                  _SidebarItem(
+                    label: 'CT Scan',
+                    icon: Icons.desktop_windows_outlined,
+                    active: selectedPage == 'CT Scan',
+                    onTap: () => _goTo(context, CtScanApp.routeName, 'CT Scan'),
+                  ),
+                  _SidebarItem(
                     label: 'Settings',
                     icon: Icons.settings_rounded,
                     active: selectedPage == 'Settings',
@@ -244,6 +257,8 @@ class _SmallSideNavWidgetState extends State<SmallSideNavWidget> {
     if (path.contains('profile') || path.contains('editprofile')) {
       return 'Settings';
     }
+    if (path.contains('hemonix')) return 'HemoNix';
+    if (path.contains('ct-scan')) return 'CT Scan';
     if (path.contains('care-tools')) return 'Care Tools';
     if (path.contains('home')) return 'Home';
     if (selected == 'Mothers') return 'Patients';

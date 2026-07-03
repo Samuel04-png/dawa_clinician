@@ -7,6 +7,9 @@ export '/auth/admin_create_account/admin_create_account_widget.dart'
 export '/application/create_mom/create_mom_widget.dart' show CreateMomWidget;
 export '/application/home/home_widget.dart' show HomeWidget;
 export '/application/care_tools/care_tools_widget.dart' show CareToolsWidget;
+export '/application/ct_scan/ct_scan_module.dart' show CtScanApp;
+export '/application/hemonix/hemonix_module.dart' show HemonixApp;
+export '/application/bp_monitor/bp_monitor_widget.dart' show BpMonitorApp;
 export '/application/ultrasound/ultrasound.dart' show UltrasoundApp;
 export '/application/moms/moms_widget.dart' show MomsWidget;
 export '/application/mom_details/mom_details_widget.dart' show MomDetailsWidget;
