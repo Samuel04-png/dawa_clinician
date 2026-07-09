@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "lib": [
+      "deno.window",
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "strict": true
+  },
+  "imports": {
+    "@std/http/server": "jsr:@std/http@0.224.0/server",
+    "@supabase/supabase-js": "jsr:@supabase/supabase-js@2",
+    "npm:@supabase/supabase-js@2": "npm:@supabase/supabase-js@2"
+  }
+}

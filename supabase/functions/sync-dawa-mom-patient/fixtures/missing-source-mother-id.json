@@ -1,0 +1,10 @@
+{
+  "type": "INSERT",
+  "schema": "public",
+  "table": "mothers",
+  "record": {
+    "user_id": "auth-user-missing-id",
+    "full_name": "Missing Id Patient"
+  },
+  "old_record": null
+}

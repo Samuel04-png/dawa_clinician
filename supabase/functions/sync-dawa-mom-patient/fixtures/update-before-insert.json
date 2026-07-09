@@ -1,0 +1,17 @@
+{
+  "type": "UPDATE",
+  "schema": "public",
+  "table": "mothers",
+  "record": {
+    "id": "mom-test-update-before-insert",
+    "user_id": "auth-user-test-002",
+    "name": "Update Before Insert",
+    "phone": "+260970000003",
+    "dob": "1993-05-20",
+    "address": "Test Address 2",
+    "occupation": "Trader"
+  },
+  "old_record": {
+    "id": "mom-test-update-before-insert"
+  }
+}

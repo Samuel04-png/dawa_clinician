@@ -1,0 +1,17 @@
+{
+  "type": "INSERT",
+  "schema": "public",
+  "table": "mothers",
+  "record": {
+    "id": "mom-test-001",
+    "user_id": "auth-user-test-001",
+    "full_name": "Test Patient One",
+    "mobile_number": "+260970000001",
+    "date_of_birth": "1995-01-15",
+    "address": "Test Address 1",
+    "occupation": "Teacher",
+    "created_at": "2026-07-08T08:00:00.000Z",
+    "updated_at": "2026-07-08T08:00:00.000Z"
+  },
+  "old_record": null
+}

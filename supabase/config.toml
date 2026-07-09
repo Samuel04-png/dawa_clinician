@@ -1,0 +1,4 @@
+project_id = "eatliepvwrviogsnqavu"
+
+[functions.sync-dawa-mom-patient]
+verify_jwt = false

@@ -258,7 +258,8 @@ class _MomsWidgetState extends State<MomsWidget> {
                     child:
                         PagedListView<DocumentSnapshot<Object?>?, MotherRecord>(
                       pagingController: _model.setListViewController(
-                        MotherRecord.collection.orderBy('mother_id'),
+                        _activePatientsQuery(MotherRecord.collection)
+                            .orderBy('mother_id'),
                       ),
                       padding: EdgeInsetsDirectional.fromSTEB(
                         0.0,
@@ -326,10 +327,11 @@ class _MomsWidgetState extends State<MomsWidget> {
 
   Widget _buildPatientSummaryStrip(BuildContext context) {
     return StreamBuilder<List<MotherRecord>>(
-      stream: queryMotherRecord(),
+      stream: queryMotherRecord(queryBuilder: _activePatientsQuery),
       builder: (context, snapshot) {
-        final patients =
-            snapshot.data ?? _model.listViewPagingController?.itemList ?? [];
+        final patients = _visiblePatients(
+          snapshot.data ?? _model.listViewPagingController?.itemList ?? [],
+        );
         final missing = patients
             .where((patient) => patient.firstEncounterId == null)
             .length;
@@ -553,18 +555,20 @@ class _MomsWidgetState extends State<MomsWidget> {
 
   Widget _buildFilterChips(BuildContext context) {
     return StreamBuilder<List<MotherRecord>>(
-      stream: queryMotherRecord(),
+      stream: queryMotherRecord(queryBuilder: _activePatientsQuery),
       builder: (context, snapshot) {
-        final loadedPatients =
-            snapshot.data ?? _model.listViewPagingController?.itemList ?? [];
+        final loadedPatients = _visiblePatients(
+          snapshot.data ?? _model.listViewPagingController?.itemList ?? [],
+        );
         final missingData = loadedPatients
             .where((mother) => mother.firstEncounterId == null)
             .length;
+        final newImported = loadedPatients.where(_isNewImported).length;
         final counts = <String, int>{
           'All': loadedPatients.length,
           'Missing Data': missingData,
           'Active': loadedPatients.length - missingData,
-          'New': missingData,
+          'New': newImported,
         };
         final filters = ['All', 'Missing Data', 'Active', 'New'];
 
@@ -723,6 +727,12 @@ class _MomsWidgetState extends State<MomsWidget> {
                                   mother.motherId.isNotEmpty
                                       ? mother.motherId
                                       : 'No patient ID'),
+                              if (mother.isImportedFromDawaMom)
+                                _patientInfoPill(
+                                  context,
+                                  Icons.sync_alt_rounded,
+                                  'Registered through Dawa Mom',
+                                ),
                               _buildStatusBadge(mother),
                             ],
                           ),
@@ -762,6 +772,12 @@ class _MomsWidgetState extends State<MomsWidget> {
                                           ? mother.occupation
                                           : 'No occupation',
                                     ),
+                                    if (mother.isImportedFromDawaMom)
+                                      _patientInfoPill(
+                                        context,
+                                        Icons.sync_alt_rounded,
+                                        'Registered through Dawa Mom',
+                                      ),
                                   ],
                                 ),
                               ],
@@ -928,6 +944,10 @@ class _MomsWidgetState extends State<MomsWidget> {
   }
 
   Widget _buildStatusBadge(MotherRecord mother) {
+    if (_isNewImported(mother)) {
+      return DawaStatusBadge(status: 'new');
+    }
+
     final missingData = mother.firstEncounterId == null;
     return DawaStatusBadge(
       status: missingData ? 'missing_data' : 'had_first_encounter',
@@ -969,11 +989,16 @@ class _MomsWidgetState extends State<MomsWidget> {
   }
 
   bool _matchesVisibleFilters(MotherRecord mother) {
+    if (mother.sourceDeletedAt != null) {
+      return false;
+    }
+
     final text = _searchText;
     final matchesSearch = text.isEmpty ||
         mother.name.toLowerCase().contains(text) ||
         mother.phoneNumber.toLowerCase().contains(text) ||
-        mother.address.toLowerCase().contains(text);
+        mother.address.toLowerCase().contains(text) ||
+        mother.sourceMotherId.toLowerCase().contains(text);
 
     if (!matchesSearch) {
       return false;
@@ -981,8 +1006,9 @@ class _MomsWidgetState extends State<MomsWidget> {
 
     switch (_selectedFilter) {
       case 'Missing Data':
-      case 'New':
         return mother.firstEncounterId == null;
+      case 'New':
+        return _isNewImported(mother);
       case 'Active':
         return mother.firstEncounterId != null;
       case 'All':
@@ -990,6 +1016,15 @@ class _MomsWidgetState extends State<MomsWidget> {
         return true;
     }
   }
+
+  Query _activePatientsQuery(Query motherRecord) =>
+      motherRecord.where('source_deleted_at', isNull: true);
+
+  List<MotherRecord> _visiblePatients(List<MotherRecord> patients) =>
+      patients.where((patient) => patient.sourceDeletedAt == null).toList();
+
+  bool _isNewImported(MotherRecord mother) =>
+      mother.isImportedFromDawaMom && mother.firstEncounterId == null;
 
   void _navigateToDetails(
     MotherRecord mother,

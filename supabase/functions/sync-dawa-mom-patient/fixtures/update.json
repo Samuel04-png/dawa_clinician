@@ -1,0 +1,18 @@
+{
+  "type": "UPDATE",
+  "schema": "public",
+  "table": "mothers",
+  "record": {
+    "id": "mom-test-001",
+    "user_id": "auth-user-test-001",
+    "full_name": "Test Patient One Updated",
+    "mobile_number": "+260970000002",
+    "date_of_birth": "1995-01-15",
+    "address": "Updated Test Address",
+    "occupation": "Nurse",
+    "updated_at": "2026-07-08T09:00:00.000Z"
+  },
+  "old_record": {
+    "id": "mom-test-001"
+  }
+}
