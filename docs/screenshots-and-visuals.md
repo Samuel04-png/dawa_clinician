@@ -1,14 +1,14 @@
-# Screenshots And Visuals
+# Screenshots and Visuals
 
 I found app visual assets in the repository, but I did not find real captured UI screenshots already committed. I copied only confirmed local assets into this GitBook folder and added diagram coverage with Mermaid.
 
 ## Confirmed Visual Assets
 
-![Dawa Health logo](assets/screenshots/dawa-health-logo.png)
+![Dawa Health logo](.gitbook/assets/dawa-health-logo.png)
 
 Caption: Existing Dawa Health logo asset copied from `assets/images/Logos-06.png`.
 
-![Clinician team asset](assets/screenshots/clinician-team-asset.png)
+![Clinician team asset](.gitbook/assets/clinician-team-asset.png)
 
 Caption: Existing clinician illustration copied from `assets/images/doctor_graphic.png`.
 
@@ -16,20 +16,20 @@ Caption: Existing clinician illustration copied from `assets/images/doctor_graph
 
 Real screenshots still need to be captured for:
 
-- Login screen.
-- Home/dashboard.
-- Patient list.
-- Patient details.
-- Add screening flow.
-- CaCx image source modal.
-- CaCx analysis progress.
-- CaCx results page.
-- Clinical recommendations card.
-- Screening history detail modal.
-- Offline banner.
-- Device unavailable state.
-- Ultrasound dashboard.
-- BP Monitor interpretation screen.
+* Login screen.
+* Home/dashboard.
+* Patient list.
+* Patient details.
+* Add screening flow.
+* CaCx image source modal.
+* CaCx analysis progress.
+* CaCx results page.
+* Clinical recommendations card.
+* Screening history detail modal.
+* Offline banner.
+* Device unavailable state.
+* Ultrasound dashboard.
+* BP Monitor interpretation screen.
 
 ## App Architecture Diagram
 

@@ -1,6 +1,6 @@
-# Dawa Clinician Documentation
+# Home
 
-![Dawa Health logo](assets/screenshots/dawa-health-logo.png)
+![Dawa Health logo](.gitbook/assets/dawa-health-logo.png)
 
 Dawa Clinician is the clinician-facing app in the Dawa Health ecosystem. I built it to support patient management, maternal health workflows, cervical cancer screening, AI-assisted clinical review, and device-assisted screening workflows from one place.
 
@@ -8,15 +8,15 @@ This documentation is written as a GitBook-ready project handbook. It explains w
 
 ## What The App Does
 
-- Manages patient records through the `mother`, `first_encounter`, `encounter`, `doctor`, `clinic`, `parity`, and `appointments` data model.
-- Supports a newer patient details view where I can open a patient, start a CaCx screening, and review previous CaCx results.
-- Runs a CaCx image workflow that can send an image to a local Raspberry Pi or Arduino-style device service.
-- Saves CaCx screening results to Supabase through the `cacx_screening_results` table when online, and queues the result locally when the app cannot reach Supabase.
-- Supports an online Hugging Face/Gradio second-opinion path for CaCx when the primary device path fails or needs review.
-- Includes offline session and cached data support so a previously logged-in user can continue using cached parts of the app when Supabase is unavailable.
-- Includes quick-access clinical modules for CaCx, ultrasound, HemoNix, CT Scan, and BP Monitor.
-- Includes an ultrasound module with image upload/capture and a Supabase Edge Function for Gemini-backed image review when configured.
-- Includes a BP Monitor screen that interprets systolic/diastolic readings with age, pregnancy, and chronic-risk context.
+* Manages patient records through the `mother`, `first_encounter`, `encounter`, `doctor`, `clinic`, `parity`, and `appointments` data model.
+* Supports a newer patient details view where I can open a patient, start a CaCx screening, and review previous CaCx results.
+* Runs a CaCx image workflow that can send an image to a local Raspberry Pi or Arduino-style device service.
+* Saves CaCx screening results to Supabase through the `cacx_screening_results` table when online, and queues the result locally when the app cannot reach Supabase.
+* Supports an online Hugging Face/Gradio second-opinion path for CaCx when the primary device path fails or needs review.
+* Includes offline session and cached data support so a previously logged-in user can continue using cached parts of the app when Supabase is unavailable.
+* Includes quick-access clinical modules for CaCx, ultrasound, HemoNix, CT Scan, and BP Monitor.
+* Includes an ultrasound module with image upload/capture and a Supabase Edge Function for Gemini-backed image review when configured.
+* Includes a BP Monitor screen that interprets systolic/diastolic readings with age, pregnancy, and chronic-risk context.
 
 ## Current Status
 
@@ -26,13 +26,13 @@ The most important production areas still needing review are Supabase RLS/securi
 
 ## Quick Links
 
-- [Firebase to Supabase](firebase-to-supabase.md)
-- [Supabase Migration](supabase-migration.md)
-- [CaCx Analysis](cacx-analysis.md)
-- [Arduino Device Connection](arduino-device-connection.md)
-- [Offline Mode](offline-mode.md)
-- [Completed Tasks](completed-tasks.md)
-- [Known Issues](known-issues.md)
+* [Firebase to Supabase](firebase-to-supabase.md)
+* [Supabase Migration](supabase-migration.md)
+* [CaCx Analysis](cacx-analysis.md)
+* [Arduino Device Connection](arduino-device-connection.md)
+* [Offline Mode](offline-mode.md)
+* [Completed Tasks](completed-tasks.md)
+* [Known Issues](known-issues.md)
 
 ## Note From Samuel
 
