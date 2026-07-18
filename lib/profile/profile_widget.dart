@@ -214,7 +214,6 @@ class _ProfileWidgetState extends State<ProfileWidget> {
                       );
                     },
                   ),
-                  _switchRow(context),
                 ],
               ),
               SizedBox(height: 20.0),
@@ -523,56 +522,6 @@ class _ProfileWidgetState extends State<ProfileWidget> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _switchRow(BuildContext context) {
-    return Container(
-      constraints: BoxConstraints(minHeight: 62.0),
-      padding: EdgeInsetsDirectional.fromSTEB(16.0, 12.0, 14.0, 12.0),
-      child: Row(
-        children: [
-          Container(
-            width: 34.0,
-            height: 34.0,
-            decoration: BoxDecoration(
-              color: DawaTokens.brandPrimaryPale,
-              borderRadius: BorderRadius.circular(8.0),
-            ),
-            child: Icon(
-              Icons.dark_mode_outlined,
-              color: DawaTokens.brandPrimary,
-              size: 18.0,
-            ),
-          ),
-          SizedBox(width: 14.0),
-          Expanded(
-            child: Text(
-              'Dark Mode',
-              style: GoogleFonts.dmSans(
-                color: DawaTokens.textPrimary,
-                fontSize: 15.0,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          Switch.adaptive(
-            value: Theme.of(context).brightness == Brightness.dark,
-            onChanged: (newValue) async {
-              if (newValue) {
-                setDarkModeSetting(context, ThemeMode.dark);
-              } else {
-                setDarkModeSetting(context, ThemeMode.light);
-              }
-            },
-            activeColor: FlutterFlowTheme.of(context).secondaryBackground,
-            activeTrackColor: FlutterFlowTheme.of(context).primary,
-            inactiveThumbColor:
-                FlutterFlowTheme.of(context).secondaryBackground,
-            inactiveTrackColor: FlutterFlowTheme.of(context).secondaryText,
-          ),
-        ],
       ),
     );
   }

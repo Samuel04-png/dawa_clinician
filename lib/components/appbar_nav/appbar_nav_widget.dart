@@ -139,10 +139,10 @@ class _BrandMark extends StatelessWidget {
         ClipRRect(
           borderRadius: BorderRadius.circular(8.0),
           child: Image.asset(
-            'assets/images/Logos-06.png',
+            'assets/images/trasnsparent assets/Logos-06-removebg-preview.png',
             width: 40.0,
             height: 40.0,
-            fit: BoxFit.cover,
+            fit: BoxFit.contain,
           ),
         ),
         if (!isCompact) ...[

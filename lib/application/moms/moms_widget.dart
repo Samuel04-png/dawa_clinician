@@ -274,7 +274,11 @@ class _MomsWidgetState extends State<MomsWidget> {
                             ShimmerAnimationWidget(),
                         noItemsFoundIndicatorBuilder: (_) => Center(
                           child: NoDataCompWidget(
-                            message: 'No mother data found',
+                            message: 'No patients found.',
+                            subtitle:
+                                'Register your first patient to begin a clinical record.',
+                            actionLabel: 'Add Patient',
+                            onAction: () => _showCreatePatientModal(context),
                           ),
                         ),
                         itemBuilder: (context, _, listViewIndex) {
@@ -397,9 +401,7 @@ class _MomsWidgetState extends State<MomsWidget> {
         color: _surfaceColor(context),
         borderRadius: BorderRadius.circular(DawaTokens.radiusLg),
         border: Border.all(color: _borderColor(context)),
-        boxShadow: Theme.of(context).brightness == Brightness.dark
-            ? []
-            : DawaTokens.shadowSm,
+        boxShadow: DawaTokens.shadowSm,
       ),
       child: Row(
         children: [
@@ -481,13 +483,30 @@ class _MomsWidgetState extends State<MomsWidget> {
   }
 
   Future<void> _showCreatePatientModal(BuildContext context) async {
-    final created = await showDialog<bool>(
+    final result = await showDialog<CreatePatientModalResult>(
       context: context,
       builder: (modalContext) => const CreatePatientModalWidget(),
     );
 
-    if (created == true) {
+    if (!mounted) return;
+
+    if (result?.created == true) {
       _model.listViewPagingController?.refresh();
+      safeSetState(() {});
+      return;
+    }
+
+    final existingReference = result?.existingPatientReference;
+    if (existingReference != null) {
+      context.pushNamed(
+        PatientDetailsWidget.routeName,
+        queryParameters: {
+          'momDetails': serializeParam(
+            existingReference,
+            ParamType.DocumentReference,
+          ),
+        }.withoutNulls,
+      );
     }
   }
 
@@ -500,9 +519,7 @@ class _MomsWidgetState extends State<MomsWidget> {
         border: Border.all(
           color: _borderColor(context),
         ),
-        boxShadow: Theme.of(context).brightness == Brightness.dark
-            ? []
-            : DawaTokens.shadowSm,
+        boxShadow: DawaTokens.shadowSm,
       ),
       child: TextFormField(
         controller: _searchController,
@@ -512,7 +529,7 @@ class _MomsWidgetState extends State<MomsWidget> {
           });
         },
         decoration: InputDecoration(
-          hintText: 'Search patients',
+          hintText: 'Search name, phone, patient ID, NRC, village, clinic',
           hintStyle: FlutterFlowTheme.of(context).bodyMedium.override(
                 font: GoogleFonts.dmSans(),
                 color: FlutterFlowTheme.of(context).secondaryText,
@@ -688,9 +705,7 @@ class _MomsWidgetState extends State<MomsWidget> {
                   color: _surfaceColor(context),
                   borderRadius: BorderRadius.circular(DawaTokens.radiusLg),
                   border: Border.all(color: _borderColor(context)),
-                  boxShadow: Theme.of(context).brightness == Brightness.dark
-                      ? []
-                      : DawaTokens.shadowSm,
+                  boxShadow: DawaTokens.shadowSm,
                 ),
                 child: compact
                     ? Column(
@@ -965,27 +980,19 @@ class _MomsWidgetState extends State<MomsWidget> {
   }
 
   Color _surfaceColor(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.dark
-        ? const Color(0xFF181D26)
-        : DawaTokens.surface;
+    return DawaTokens.surface;
   }
 
   Color _mutedSurfaceColor(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.dark
-        ? const Color(0xFF232B38)
-        : DawaTokens.surfaceTertiary;
+    return DawaTokens.surfaceTertiary;
   }
 
   Color _borderColor(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.dark
-        ? const Color(0xFF303746)
-        : DawaTokens.border;
+    return DawaTokens.border;
   }
 
   Color _secondaryTextColor(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.dark
-        ? const Color(0xFFB6C2D3)
-        : DawaTokens.textSecondary;
+    return DawaTokens.textSecondary;
   }
 
   bool _matchesVisibleFilters(MotherRecord mother) {
@@ -994,11 +1001,22 @@ class _MomsWidgetState extends State<MomsWidget> {
     }
 
     final text = _searchText;
+    final numericText = text.replaceAll(RegExp(r'\D'), '');
+    final patientPhoneDigits =
+        mother.phoneNumber.toLowerCase().replaceAll(RegExp(r'\D'), '');
     final matchesSearch = text.isEmpty ||
         mother.name.toLowerCase().contains(text) ||
         mother.phoneNumber.toLowerCase().contains(text) ||
+        (numericText.isNotEmpty && patientPhoneDigits.contains(numericText)) ||
         mother.address.toLowerCase().contains(text) ||
-        mother.sourceMotherId.toLowerCase().contains(text);
+        mother.occupation.toLowerCase().contains(text) ||
+        mother.motherId.toLowerCase().contains(text) ||
+        mother.nrc.toLowerCase().contains(text) ||
+        mother.village.toLowerCase().contains(text) ||
+        mother.clinicName.toLowerCase().contains(text) ||
+        mother.sourceMotherId.toLowerCase().contains(text) ||
+        mother.sourceUserId.toLowerCase().contains(text) ||
+        mother.reference.id.toLowerCase().contains(text);
 
     if (!matchesSearch) {
       return false;

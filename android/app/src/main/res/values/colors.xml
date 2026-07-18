@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#FFFFFF</color>
+    <color name="dawa_splash_background">#1E3A8A</color>
+    <color name="dawa_light_surface">#F8FAFC</color>
 </resources>

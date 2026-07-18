@@ -2,3 +2,12 @@ project_id = "eatliepvwrviogsnqavu"
 
 [functions.sync-dawa-mom-patient]
 verify_jwt = false
+
+[functions.list-bookable-clinicians]
+verify_jwt = false
+
+[functions.receive-dawa-mom-appointment]
+verify_jwt = false
+
+[functions.process-dawa-mom-status-outbox]
+verify_jwt = false

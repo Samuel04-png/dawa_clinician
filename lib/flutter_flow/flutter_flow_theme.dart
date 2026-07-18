@@ -4,34 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '/components/dawa_design_system.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-const kThemeModeKey = '__theme_mode__';
-
-SharedPreferences? _prefs;
 
 abstract class FlutterFlowTheme {
-  static Future initialize() async =>
-      _prefs = await SharedPreferences.getInstance();
+  static Future<void> initialize() async {}
 
-  static ThemeMode get themeMode {
-    final darkMode = _prefs?.getBool(kThemeModeKey);
-    return darkMode == null
-        ? ThemeMode.system
-        : darkMode
-            ? ThemeMode.dark
-            : ThemeMode.light;
-  }
+  static ThemeMode get themeMode => ThemeMode.light;
 
-  static void saveThemeMode(ThemeMode mode) => mode == ThemeMode.system
-      ? _prefs?.remove(kThemeModeKey)
-      : _prefs?.setBool(kThemeModeKey, mode == ThemeMode.dark);
+  static void saveThemeMode(ThemeMode mode) {}
 
-  static FlutterFlowTheme of(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.dark
-        ? DarkModeTheme()
-        : LightModeTheme();
-  }
+  static FlutterFlowTheme of(BuildContext context) => LightModeTheme();
 
   @Deprecated('Use primary instead')
   Color get primaryColor => primary;
@@ -327,36 +308,6 @@ class ThemeTypography extends Typography {
         fontWeight: FontWeight.normal,
         fontSize: 11.0,
       );
-}
-
-class DarkModeTheme extends FlutterFlowTheme {
-  @Deprecated('Use primary instead')
-  Color get primaryColor => primary;
-  @Deprecated('Use secondary instead')
-  Color get secondaryColor => secondary;
-  @Deprecated('Use tertiary instead')
-  Color get tertiaryColor => tertiary;
-
-  late Color primary = const Color(0xFF93B4FF);
-  late Color secondary = const Color(0xFF34D399);
-  late Color tertiary = const Color(0xFF60A5FA);
-  late Color alternate = const Color(0xFF2B3443);
-  late Color primaryText = const Color(0xFFF8FAFC);
-  late Color secondaryText = const Color(0xFFC5D0E0);
-  late Color primaryBackground = const Color(0xFF0B1120);
-  late Color secondaryBackground = const Color(0xFF151B2A);
-  late Color accent1 = const Color(0xFF93B4FF);
-  late Color accent2 = const Color(0xFF67E8F9);
-  late Color accent3 = const Color(0xFFFBBF24);
-  late Color accent4 = const Color(0xFF94A3B8);
-  late Color success = const Color(0xFF34D399);
-  late Color warning = const Color(0xFFFBBF24);
-  late Color error = const Color(0xFFF87171);
-  late Color info = const Color(0xFF93C5FD);
-
-  late Color primaryBtnText = const Color(0xFF0F131A);
-  late Color lineColor = const Color(0xFF2B3443);
-  late Color backgroundComponents = const Color(0xFF1B2433);
 }
 
 extension TextStyleHelper on TextStyle {

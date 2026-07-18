@@ -131,20 +131,15 @@ class DawaCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surface = isDark ? const Color(0xFF151B2A) : DawaTokens.surface;
-    final border = isDark ? const Color(0xFF2B3443) : DawaTokens.border;
-    final shadow = isDark ? <BoxShadow>[] : DawaTokens.shadowSm;
-
     final content = AnimatedContainer(
       duration: const Duration(milliseconds: 150),
       margin: margin,
       padding: padding,
       decoration: BoxDecoration(
-        color: surface,
+        color: DawaTokens.surface,
         borderRadius: BorderRadius.circular(DawaTokens.radiusLg),
-        border: Border.all(color: border),
-        boxShadow: shadow,
+        border: Border.all(color: DawaTokens.border),
+        boxShadow: DawaTokens.shadowSm,
       ),
       child: child,
     );

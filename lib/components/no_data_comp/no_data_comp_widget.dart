@@ -59,10 +59,10 @@ class _NoDataCompWidgetState extends State<NoDataCompWidget> {
           ClipRRect(
             borderRadius: BorderRadius.circular(8.0),
             child: Image.asset(
-              'assets/images/no_data.png',
+              'assets/images/trasnsparent assets/no_data-removebg-preview.png',
               width: 140.0,
               height: 140.0,
-              fit: BoxFit.cover,
+              fit: BoxFit.contain,
             ),
           ),
           Text(

@@ -489,7 +489,7 @@ class FFRoute {
               ? Container(
                   color: Colors.transparent,
                   child: Image.asset(
-                    'assets/images/Logos-06.png',
+                    'assets/images/trasnsparent assets/Logos-06-removebg-preview.png',
                     fit: BoxFit.fitWidth,
                   ),
                 )

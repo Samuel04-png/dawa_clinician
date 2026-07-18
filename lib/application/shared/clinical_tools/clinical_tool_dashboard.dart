@@ -388,10 +388,13 @@ class _ClinicalToolDashboardState extends State<ClinicalToolDashboard> {
                 },
               ),
               const SizedBox(height: 24),
-              Row(
+              Wrap(
+                spacing: 12,
+                runSpacing: 4,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Text('Recent activity', style: DawaTextStyles.cardTitle),
-                  const Spacer(),
                   TextButton(
                     onPressed: () =>
                         controller.setTab(ClinicalToolDashboardTab.results),

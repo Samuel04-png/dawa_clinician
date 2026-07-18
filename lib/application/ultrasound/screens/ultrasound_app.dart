@@ -651,22 +651,28 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Dawa Ultrasound',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                          color: Colors.black87),
-                    ),
-                    Text(
-                      'Obstetrics Module',
-                      style: TextStyle(
-                          fontSize: 10, color: Colors.grey, letterSpacing: 1),
-                    ),
-                  ],
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Dawa Ultrasound',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                            color: Colors.black87),
+                      ),
+                      Text(
+                        'Obstetrics Module',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 10, color: Colors.grey, letterSpacing: 1),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -740,23 +746,25 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
     final isActive = _activeTab == tab;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
+      child: Material(
         color: isActive ? DawaTokens.brandPrimary : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
-      ),
-      child: ListTile(
-        leading: Icon(
-          icon,
-          color: isActive ? DawaTokens.textInverse : DawaTokens.textMuted,
+        child: ListTile(
+          leading: Icon(
+            icon,
+            color: isActive ? DawaTokens.textInverse : DawaTokens.textMuted,
+          ),
+          title: Text(label,
+              style: TextStyle(
+                color: isActive
+                    ? DawaTokens.textInverse
+                    : DawaTokens.textSecondary,
+                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+              )),
+          onTap: () => setState(() => _activeTab = tab),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
-        title: Text(label,
-            style: TextStyle(
-              color:
-                  isActive ? DawaTokens.textInverse : DawaTokens.textSecondary,
-              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-            )),
-        onTap: () => setState(() => _activeTab = tab),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }

@@ -202,9 +202,7 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
       constraints: const BoxConstraints(maxWidth: 260),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Theme.of(context).brightness == Brightness.dark
-            ? const Color(0xFF232B38)
-            : DawaTokens.surfaceTertiary,
+        color: DawaTokens.surfaceTertiary,
         borderRadius: BorderRadius.circular(99),
       ),
       child: Row(
@@ -231,9 +229,7 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
       width: 140,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Theme.of(context).brightness == Brightness.dark
-            ? const Color(0xFF232B38)
-            : DawaTokens.surfaceTertiary,
+        color: DawaTokens.surfaceTertiary,
         borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
         border: Border.all(color: FlutterFlowTheme.of(context).alternate),
       ),

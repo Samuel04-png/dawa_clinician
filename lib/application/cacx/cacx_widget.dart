@@ -1582,24 +1582,26 @@ class _CaCxAppState extends State<CaCxApp> {
     final isActive = _activeTab == tab;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
+      child: Material(
         color: isActive ? DawaTokens.brandPrimary : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
-      ),
-      child: ListTile(
-        leading: Icon(
-          icon,
-          color: isActive ? DawaTokens.textInverse : DawaTokens.textMuted,
-        ),
-        title: Text(
-          label,
-          style: TextStyle(
-            color: isActive ? DawaTokens.textInverse : DawaTokens.textSecondary,
-            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+        child: ListTile(
+          leading: Icon(
+            icon,
+            color: isActive ? DawaTokens.textInverse : DawaTokens.textMuted,
           ),
+          title: Text(
+            label,
+            style: TextStyle(
+              color:
+                  isActive ? DawaTokens.textInverse : DawaTokens.textSecondary,
+              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+          onTap: () => _handleTabChange(tab),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
-        onTap: () => _handleTabChange(tab),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }

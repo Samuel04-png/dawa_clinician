@@ -106,8 +106,8 @@ class _TopNavWidgetState extends State<TopNavWidget> {
                     shape: BoxShape.circle,
                   ),
                   child: Image.asset(
-                    'assets/images/doctor_dp.png',
-                    fit: BoxFit.cover,
+                    'assets/images/trasnsparent assets/doctor_dp-removebg-preview.png',
+                    fit: BoxFit.contain,
                   ),
                 ),
                 AlignedTooltip(

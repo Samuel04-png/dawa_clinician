@@ -55,6 +55,21 @@ class MotherRecord extends FirestoreRecord {
   DocumentReference? get firstEncounterId => _firstEncounterId;
   bool hasFirstEncounterId() => _firstEncounterId != null;
 
+  // "nrc" field.
+  String? _nrc;
+  String get nrc => _nrc ?? '';
+  bool hasNrc() => _nrc != null;
+
+  // "village" field.
+  String? _village;
+  String get village => _village ?? '';
+  bool hasVillage() => _village != null;
+
+  // "clinic_name" field.
+  String? _clinicName;
+  String get clinicName => _clinicName ?? '';
+  bool hasClinicName() => _clinicName != null;
+
   // "source_project" field.
   String? _sourceProject;
   String get sourceProject => _sourceProject ?? '';
@@ -98,6 +113,9 @@ class MotherRecord extends FirestoreRecord {
     _motherId = snapshotData['mother_id'] as String?;
     _firstEncounterId =
         snapshotData['first_encounter_id'] as DocumentReference?;
+    _nrc = snapshotData['nrc'] as String?;
+    _village = snapshotData['village'] as String?;
+    _clinicName = snapshotData['clinic_name'] as String?;
     _sourceProject = snapshotData['source_project'] as String?;
     _sourceMotherId = snapshotData['source_mother_id'] as String?;
     _sourceUserId = snapshotData['source_user_id'] as String?;
@@ -148,6 +166,9 @@ Map<String, dynamic> createMotherRecordData({
   String? phoneNumber,
   String? motherId,
   DocumentReference? firstEncounterId,
+  String? nrc,
+  String? village,
+  String? clinicName,
   String? sourceProject,
   String? sourceMotherId,
   String? sourceUserId,
@@ -165,6 +186,9 @@ Map<String, dynamic> createMotherRecordData({
       'phone_number': phoneNumber,
       'mother_id': motherId,
       'first_encounter_id': firstEncounterId,
+      'nrc': nrc,
+      'village': village,
+      'clinic_name': clinicName,
       'source_project': sourceProject,
       'source_mother_id': sourceMotherId,
       'source_user_id': sourceUserId,
@@ -190,6 +214,9 @@ class MotherRecordDocumentEquality implements Equality<MotherRecord> {
         e1?.phoneNumber == e2?.phoneNumber &&
         e1?.motherId == e2?.motherId &&
         e1?.firstEncounterId == e2?.firstEncounterId &&
+        e1?.nrc == e2?.nrc &&
+        e1?.village == e2?.village &&
+        e1?.clinicName == e2?.clinicName &&
         e1?.sourceProject == e2?.sourceProject &&
         e1?.sourceMotherId == e2?.sourceMotherId &&
         e1?.sourceUserId == e2?.sourceUserId &&
@@ -208,6 +235,9 @@ class MotherRecordDocumentEquality implements Equality<MotherRecord> {
         e?.phoneNumber,
         e?.motherId,
         e?.firstEncounterId,
+        e?.nrc,
+        e?.village,
+        e?.clinicName,
         e?.sourceProject,
         e?.sourceMotherId,
         e?.sourceUserId,

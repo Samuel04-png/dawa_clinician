@@ -148,33 +148,11 @@ class _LoginCopyWidgetState extends State<LoginCopyWidget>
                                   context.pushNamed(
                                       AdminCreateAccountWidget.routeName);
                                 },
-                                child: Stack(
-                                  children: [
-                                    if (Theme.of(context).brightness ==
-                                        Brightness.light)
-                                      ClipRRect(
-                                        borderRadius:
-                                            BorderRadius.circular(8.0),
-                                        child: Image.asset(
-                                          'assets/images/Logos-06.png',
-                                          width: 200.0,
-                                          height: 100.0,
-                                          fit: BoxFit.cover,
-                                        ),
-                                      ),
-                                    if (Theme.of(context).brightness ==
-                                        Brightness.dark)
-                                      ClipRRect(
-                                        borderRadius:
-                                            BorderRadius.circular(8.0),
-                                        child: Image.asset(
-                                          'assets/images/Group_1_dark.png',
-                                          width: 200.0,
-                                          height: 100.0,
-                                          fit: BoxFit.scaleDown,
-                                        ),
-                                      ),
-                                  ],
+                                child: Image.asset(
+                                  'assets/images/trasnsparent assets/Logos-06-removebg-preview.png',
+                                  width: 200.0,
+                                  height: 100.0,
+                                  fit: BoxFit.contain,
                                 ),
                               ),
                               Padding(

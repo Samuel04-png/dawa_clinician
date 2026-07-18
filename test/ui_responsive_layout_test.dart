@@ -63,6 +63,7 @@ void main() {
       const UltrasoundApp(),
       const Size(820, 900),
     );
+    await tester.pump(const Duration(milliseconds: 600));
     expect(find.text('Ultrasound Dashboard'), findsOneWidget);
   });
 }

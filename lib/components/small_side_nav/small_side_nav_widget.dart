@@ -69,7 +69,7 @@ class _SmallSideNavWidgetState extends State<SmallSideNavWidget> {
               child: Row(
                 children: [
                   Image.asset(
-                    'assets/images/Logos-06.png',
+                    'assets/images/trasnsparent assets/Logos-06-removebg-preview.png',
                     width: 42,
                     height: 42,
                     fit: BoxFit.contain,

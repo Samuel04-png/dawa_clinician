@@ -1,6 +1,7 @@
 import 'package:provider/provider.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -53,8 +54,6 @@ class MyAppScrollBehavior extends MaterialScrollBehavior {
 }
 
 class _MyAppState extends State<MyApp> {
-  ThemeMode _themeMode = FlutterFlowTheme.themeMode;
-
   late AppStateNotifier _appStateNotifier;
   late GoRouter _router;
 
@@ -104,11 +103,6 @@ class _MyAppState extends State<MyApp> {
     super.dispose();
   }
 
-  void setThemeMode(ThemeMode mode) => safeSetState(() {
-        _themeMode = mode;
-        FlutterFlowTheme.saveThemeMode(mode);
-      });
-
   void _onSplashComplete() {
     setState(() {
       _showCustomSplash = false;
@@ -152,6 +146,7 @@ class _MyAppState extends State<MyApp> {
           elevation: 0.0,
           iconTheme: IconThemeData(color: DawaTokens.brandPrimary),
           actionsIconTheme: IconThemeData(color: DawaTokens.brandPrimary),
+          systemOverlayStyle: SystemUiOverlayStyle.dark,
         ),
         bottomNavigationBarTheme: const BottomNavigationBarThemeData(
           backgroundColor: DawaTokens.surface,
@@ -262,92 +257,7 @@ class _MyAppState extends State<MyApp> {
         ),
         useMaterial3: false,
       ),
-      darkTheme: ThemeData(
-        brightness: Brightness.dark,
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFF93B4FF),
-          secondary: Color(0xFF34D399),
-          surface: Color(0xFF151B2A),
-          error: Color(0xFFF87171),
-          onPrimary: Color(0xFF0B1120),
-          onSecondary: Color(0xFF0B1120),
-          onSurface: Color(0xFFF8FAFC),
-          onError: Color(0xFF0B1120),
-        ),
-        scaffoldBackgroundColor: const Color(0xFF0B1120),
-        canvasColor: const Color(0xFF0B1120),
-        cardColor: const Color(0xFF151B2A),
-        dividerColor: const Color(0xFF2B3443),
-        visualDensity: VisualDensity.standard,
-        textTheme: GoogleFonts.dmSansTextTheme(
-          ThemeData.dark().textTheme,
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF151B2A),
-          foregroundColor: Color(0xFFF8FAFC),
-          elevation: 0.0,
-          iconTheme: IconThemeData(color: Color(0xFFF8FAFC)),
-          actionsIconTheme: IconThemeData(color: Color(0xFFF8FAFC)),
-        ),
-        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: Color(0xFF151B2A),
-          selectedItemColor: Color(0xFF93B4FF),
-          unselectedItemColor: Color(0xFFC5D0E0),
-          selectedLabelStyle: TextStyle(
-            fontSize: 12.0,
-            fontWeight: FontWeight.w600,
-          ),
-          unselectedLabelStyle: TextStyle(
-            fontSize: 12.0,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: const Color(0xFF151B2A),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8.0),
-            borderSide: const BorderSide(color: Color(0xFF2B3443)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8.0),
-            borderSide: const BorderSide(color: Color(0xFF2B3443)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8.0),
-            borderSide: const BorderSide(color: Color(0xFF93B4FF), width: 1.5),
-          ),
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            elevation: 0.0,
-            minimumSize: const Size(48.0, 48.0),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8.0),
-            ),
-          ),
-        ),
-        dialogTheme: DialogThemeData(
-          backgroundColor: const Color(0xFF151B2A),
-          elevation: 12.0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16.0),
-          ),
-          alignment: Alignment.center,
-        ),
-        outlinedButtonTheme: OutlinedButtonThemeData(
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size(48.0, 48.0),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8.0),
-            ),
-          ),
-        ),
-        useMaterial3: false,
-      ),
-      themeMode: _themeMode,
+      themeMode: ThemeMode.light,
       // We use the builder to stack the Splash Screen ON TOP of the Router
       builder: (context, child) {
         return OfflineStatusScope(

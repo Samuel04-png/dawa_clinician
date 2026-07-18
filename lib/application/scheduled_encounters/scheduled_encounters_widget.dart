@@ -6,6 +6,7 @@ import '/components/dawa_design_system.dart';
 import '/components/no_data_comp/no_data_comp_widget.dart';
 import '/components/shimmer_animation/shimmer_animation_widget.dart';
 import '/components/small_side_nav/small_side_nav_widget.dart';
+import '/features/appointments/presentation/dawa_mom_appointment_requests.dart';
 import '/flutter_flow/flutter_flow_button_tabbar.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -33,6 +34,7 @@ class ScheduledEncountersWidget extends StatefulWidget {
 class _ScheduledEncountersWidgetState extends State<ScheduledEncountersWidget>
     with TickerProviderStateMixin {
   late ScheduledEncountersModel _model;
+  String? _focusedDawaMomAppointmentId;
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
@@ -44,7 +46,7 @@ class _ScheduledEncountersWidgetState extends State<ScheduledEncountersWidget>
 
     _model.tabBarController = TabController(
       vsync: this,
-      length: 2,
+      length: 3,
       initialIndex: 0,
     )..addListener(() => safeSetState(() {}));
 
@@ -147,7 +149,12 @@ class _ScheduledEncountersWidgetState extends State<ScheduledEncountersWidget>
         updateCallback: () => safeSetState(() {}),
         child: AppbarNavWidget(),
       ),
-      actions: [],
+      actions: [
+        DawaMomNotificationButton(
+          onOpenAppointment: _openDawaMomAppointment,
+        ),
+        const SizedBox(width: 4),
+      ],
       centerTitle: false,
       elevation: 0.0,
       titleSpacing: 0.0,
@@ -224,6 +231,12 @@ class _ScheduledEncountersWidgetState extends State<ScheduledEncountersWidget>
                       ],
                     ),
                   ),
+                  if (!isSmallScreen) ...[
+                    DawaMomNotificationButton(
+                      onOpenAppointment: _openDawaMomAppointment,
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   if (!isSmallScreen)
                     ElevatedButton.icon(
                       onPressed: () => _showScheduleAppointmentDialog(context),
@@ -242,7 +255,7 @@ class _ScheduledEncountersWidgetState extends State<ScheduledEncountersWidget>
               ),
               SizedBox(height: 18.0),
               Container(
-                width: isSmallScreen ? double.infinity : 380.0,
+                width: isSmallScreen ? double.infinity : 560.0,
                 padding: EdgeInsets.all(4.0),
                 decoration: BoxDecoration(
                   color: DawaTokens.surfaceTertiary,
@@ -270,13 +283,14 @@ class _ScheduledEncountersWidgetState extends State<ScheduledEncountersWidget>
                   padding: EdgeInsets.zero,
                   tabs: [
                     Tab(
-                      text: isSmallScreen ? 'Pending' : 'Pending (0)',
+                      text: isSmallScreen ? 'Dawa Mom' : 'Dawa Mom requests',
                     ),
+                    Tab(text: isSmallScreen ? 'Other' : 'Other pending'),
                     Tab(text: 'Past'),
                   ],
                   controller: _model.tabBarController,
                   onTap: (i) async {
-                    [() async {}, () async {}][i]();
+                    [() async {}, () async {}, () async {}][i]();
                   },
                 ),
               ),
@@ -297,6 +311,9 @@ class _ScheduledEncountersWidgetState extends State<ScheduledEncountersWidget>
                 child: TabBarView(
                   controller: _model.tabBarController,
                   children: [
+                    DawaMomAppointmentRequests(
+                      focusedAppointmentId: _focusedDawaMomAppointmentId,
+                    ),
                     _buildPendingEncounters(context, true),
                     _buildPastEncounters(context, true),
                   ],
@@ -307,6 +324,12 @@ class _ScheduledEncountersWidgetState extends State<ScheduledEncountersWidget>
         );
       },
     );
+  }
+
+  void _openDawaMomAppointment(String appointmentId) {
+    if (!mounted) return;
+    setState(() => _focusedDawaMomAppointmentId = appointmentId);
+    _model.tabBarController?.animateTo(0);
   }
 
   Future<void> _showScheduleAppointmentDialog(BuildContext context) async {

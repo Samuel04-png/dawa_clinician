@@ -182,7 +182,7 @@ class _AdminCreateAccountWidgetState extends State<AdminCreateAccountWidget>
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(8.0),
                                   child: Image.asset(
-                                    'assets/images/Logos-06.png',
+                                    'assets/images/trasnsparent assets/Logos-06-removebg-preview.png',
                                     width: 120.0,
                                     height: 120.0,
                                     fit: BoxFit.contain,
