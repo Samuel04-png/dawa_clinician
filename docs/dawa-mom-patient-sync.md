@@ -1,5 +1,7 @@
 # Dawa Mom to Dawa Clinician Patient Sync
 
+> This page describes the original direct-webhook receiver. The current production design uses a durable Dawa Mom outbox, stable event IDs, replay ledger, directory/appointment integration and status callbacks. Use [Dawa Platform Integration](dawa-platform-integration.md) as the authoritative current runbook. Legacy `DAWA_SYNC_SECRET` remains only a rolling-deploy compatibility fallback; new configuration uses `DAWA_CLINICIAN_SYNC_SECRET`.
+
 ## Phase 1 Findings
 
 - Clinician Supabase project ref: `eatliepvwrviogsnqavu`.

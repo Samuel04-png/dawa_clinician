@@ -30,6 +30,18 @@ CERVICAL_DEVICE_RETRY_INTERVAL_SECONDS=5
 
 ## Supabase Edge Function Secrets
 
+### Dawa platform integration
+
+| Variable | Purpose |
+| --- | --- |
+| `DAWA_CLINICIAN_SYNC_SECRET` | Validates patient and appointment delivery from Dawa Mom. |
+| `DAWA_CLINICIAN_DIRECTORY_SECRET` | Validates authoritative directory requests. |
+| `DAWA_MOM_STATUS_CALLBACK_URL` | Dawa Mom status receiver URL. |
+| `DAWA_MOM_SYNC_SECRET` | Authenticates status callbacks. |
+| `DAWA_CLINICIAN_WORKER_SECRET` | Optional direct worker invocation credential; the schedule reads its value from Vault. |
+
+Store values in Supabase secrets/Vault. Never add them to Flutter, GitBook examples, logs or source control.
+
 | Variable | Used By | Purpose |
 | --- | --- | --- |
 | `SUPABASE_URL` | `delete-user` | Supabase project URL for function runtime. |

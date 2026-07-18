@@ -2,6 +2,8 @@
 
 Patient management currently uses both the original maternal-record screens and a newer patient details page optimized for screening history.
 
+Imported Dawa Mom patients are keyed by stable source metadata and updated only in approved demographic fields. Clinician encounters, notes, assignments and screening results remain Clinician-owned. See [Dawa Platform Integration](dawa-platform-integration.md).
+
 ## Patient List
 
 The patient list lives in `lib/application/moms/moms_widget.dart`.
@@ -22,7 +24,8 @@ Confirmed behavior:
 
 - Creates or updates `UserRecord` and `MotherRecord` data.
 - Can generate a mother account email when email/password fields are left blank.
-- Writes patient details such as name, date of birth, occupation, phone, and address.
+- Writes patient details such as name, patient ID, NRC, date of birth, occupation, phone, address, village and clinic.
+- Validates required fields and identifies likely duplicate records for review before creation.
 
 Needs review:
 

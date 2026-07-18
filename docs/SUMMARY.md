@@ -19,6 +19,7 @@
 
 ## Backend and Data
 
+- [Dawa Platform Integration](dawa-platform-integration.md)
 - [Database and Backend](database-and-backend.md)
 - [Firebase to Supabase](firebase-to-supabase.md)
 - [Supabase Migration](supabase-migration.md)
@@ -27,6 +28,7 @@
 
 ## App Features
 
+- [Current UI and Appointment Workflow](current-ui-and-appointments.md)
 - [Patient Management](patient-management.md)
 - [Screening Workflows](screening-workflows.md)
 - [CaCx Analysis](cacx-analysis.md)

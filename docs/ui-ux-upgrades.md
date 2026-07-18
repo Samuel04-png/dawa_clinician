@@ -39,6 +39,8 @@ The app theme now uses Dawa tokens for:
 - Elevated buttons.
 - Outlined buttons.
 
+The runtime theme is light-only. Dark/system theme persistence and profile theme controls were removed. Startup uses the transparent `dawa_intro.gif` on Clinician blue, and verified logo/avatar/no-data assets use transparent variants.
+
 ## Responsive Layouts
 
 Confirmed responsive work:
@@ -52,6 +54,7 @@ Tests:
 
 - `test/ui_responsive_layout_test.dart`
 - `test/quick_access_pages_test.dart`
+- `test/light_theme_and_transparent_assets_test.dart`
 
 ## Patient Details UI
 

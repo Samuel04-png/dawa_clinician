@@ -2,6 +2,8 @@
 
 | Severity | Issue | Evidence | Status / Recommendation |
 | --- | --- | --- | --- |
+| High | Native release builds are not yet verified in this environment. | Android dependency downloads failed; full Xcode is absent. | Complete Android and iOS release compilation/signing before publication. |
+| High | The July 13 patient identifier migration was not part of the verified live integration rollout. | Live rollout applied the integration migrations separately. | Review and apply it as an independent change; do not run a blind `supabase db push`. |
 | Critical | Core table RLS policies are broad for authenticated users. | `supabase/migrations/20260507111000_clinician_supabase_schema.sql` uses `using (true)` and `with check (true)`. | Tighten policies by clinic, role, and ownership before production. |
 | High | Supabase Storage buckets for CaCx images are not confirmed. | `cacx_screening_results` has image fields, but no storage migration was found. | Add private bucket migration and signed URL flow if images should be stored. |
 | High | External CaCx online AI endpoint is hardcoded in client code. | `lib/application/cacx/cacx_widget.dart` points to a Hugging Face Space. | Move production AI calls behind an Edge Function with audit and versioning. |

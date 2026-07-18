@@ -1,5 +1,11 @@
 # Testing And Verification
 
+## Current verified gate
+
+On 18 July 2026, `flutter analyze` passed, all 33 Flutter tests passed and the release web build completed with a successful Wasm dry run. Deno type checks passed for all four integration Edge Functions. Integration architecture tests cover stable mappings, idempotent receivers, guarded appointment transitions and absence of cross-project server credentials in Flutter.
+
+Android resource XML is valid, but a complete APK compile remains pending because Gradle could not reach required Google/Maven artifacts. Full Xcode is not installed, so iOS compilation/signing remains pending. A designated non-production end-to-end UI appointment flow is still required before client publication.
+
 ## Automated Tests
 
 Run:
@@ -14,6 +20,9 @@ Confirmed test files:
 | --- | --- |
 | `test/widget_test.dart` | App smoke test with Supabase init, app state, and mocked video player platform. |
 | `test/ui_responsive_layout_test.dart` | Care Tools, CaCx, and quick-access responsive layouts. |
+| `test/dawa_platform_sync_architecture_test.dart` | Integration mappings, receiver idempotency, guarded status writes and client credential boundary. |
+| `test/clinician_appointment_model_test.dart` | Imported appointment parsing and transition behavior. |
+| `test/light_theme_and_transparent_assets_test.dart` | Light-only theme, responsive splash and transparent assets. |
 | `test/quick_access_pages_test.dart` | CaCx and quick-access dashboards, mobile views, results search/filter, and no "Coming soon" states. |
 | `test/cacx_upload_routing_test.dart` | CaCx risk routing and device URL defaults. |
 | `test/cacx_prediction_breakdown_test.dart` | CaCx confidence normalization and duplicate label merging. |

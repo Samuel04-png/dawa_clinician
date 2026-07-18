@@ -1,5 +1,11 @@
 # Deployment Notes
 
+## Current Dawa platform status
+
+The cross-project Supabase backend rollout completed on 18 July 2026. See [Dawa Platform Integration](dawa-platform-integration.md) for the verified order, functions, RLS boundaries and remaining client checks. The rollout does not publish a Flutter web/mobile release.
+
+The Clinician integration uses migration `202607170001_add_dawa_platform_sync.sql`, functions `sync-dawa-mom-patient`, `list-bookable-clinicians`, `receive-dawa-mom-appointment` and `process-dawa-mom-status-outbox`, and a Vault-backed one-minute callback worker. Migration `202607130001_add_patient_registration_identifiers.sql` was not included in the live integration rollout and must be separately reviewed before application.
+
 ## Flutter Web Build
 
 The repository has git history for prior Flutter web build and GitHub Pages setup. To build the current app:
@@ -63,6 +69,8 @@ Apply migrations in order:
 20260507111000_clinician_supabase_schema.sql
 20260507155500_add_firebase_uid_to_users.sql
 20260602120000_add_cacx_screening_results.sql
+202607080001_add_dawa_mom_patient_sync_fields.sql
+202607170001_add_dawa_platform_sync.sql
 ```
 
 After applying migrations, verify:
