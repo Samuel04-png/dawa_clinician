@@ -104,6 +104,9 @@ class _MyAppState extends State<MyApp> {
   }
 
   void _onSplashComplete() {
+    if (!_showCustomSplash || !mounted) return;
+    debugPrint(
+        '[Splash] Removing the splash overlay and revealing the router.');
     setState(() {
       _showCustomSplash = false;
     });

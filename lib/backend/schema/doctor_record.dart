@@ -30,6 +30,11 @@ class DoctorRecord extends FirestoreRecord {
   String get clinicName => _clinicName ?? '';
   bool hasClinicName() => _clinicName != null;
 
+  // "clinic_id" field.
+  String? _clinicId;
+  String get clinicId => _clinicId ?? '';
+  bool hasClinicId() => _clinicId != null;
+
   // "start_time" field.
   String? _startTime;
   String get startTime => _startTime ?? '';
@@ -59,6 +64,7 @@ class DoctorRecord extends FirestoreRecord {
     _speciality = snapshotData['speciality'] as String?;
     _userId = snapshotData['user_Id'] as DocumentReference?;
     _clinicName = snapshotData['clinic_name'] as String?;
+    _clinicId = snapshotData['clinic_id'] as String?;
     _startTime = snapshotData['start_time'] as String?;
     _endTime = snapshotData['end_time'] as String?;
     _name = snapshotData['name'] as String?;
@@ -103,6 +109,7 @@ Map<String, dynamic> createDoctorRecordData({
   String? speciality,
   DocumentReference? userId,
   String? clinicName,
+  String? clinicId,
   String? startTime,
   String? endTime,
   String? name,
@@ -114,6 +121,7 @@ Map<String, dynamic> createDoctorRecordData({
       'speciality': speciality,
       'user_Id': userId,
       'clinic_name': clinicName,
+      'clinic_id': clinicId,
       'start_time': startTime,
       'end_time': endTime,
       'name': name,
@@ -133,6 +141,7 @@ class DoctorRecordDocumentEquality implements Equality<DoctorRecord> {
     return e1?.speciality == e2?.speciality &&
         e1?.userId == e2?.userId &&
         e1?.clinicName == e2?.clinicName &&
+        e1?.clinicId == e2?.clinicId &&
         e1?.startTime == e2?.startTime &&
         e1?.endTime == e2?.endTime &&
         e1?.name == e2?.name &&
@@ -145,6 +154,7 @@ class DoctorRecordDocumentEquality implements Equality<DoctorRecord> {
         e?.speciality,
         e?.userId,
         e?.clinicName,
+        e?.clinicId,
         e?.startTime,
         e?.endTime,
         e?.name,

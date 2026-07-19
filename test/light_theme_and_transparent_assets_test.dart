@@ -37,8 +37,7 @@ void main() {
     expect(resolvedTheme.primaryBackground, DawaTokens.surfaceSecondary);
   });
 
-  testWidgets('transparent splash is responsive and completes once',
-      (tester) async {
+  testWidgets('GIF splash is responsive and completes once', (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     for (final size in const [
@@ -59,14 +58,17 @@ void main() {
 
       final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
       final image = tester.widget<Image>(find.byType(Image));
-      final renderedSize = tester.getSize(find.byType(Image));
 
-      expect(scaffold.backgroundColor, DawaTokens.brandPrimary);
-      expect((image.image as AssetImage).assetName, DawaSplashScreen.assetPath);
-      expect(image.fit, BoxFit.contain);
+      expect(
+        scaffold.backgroundColor,
+        DawaSplashScreen.splashBackgroundColor,
+      );
+      expect(
+        (image.image as AssetImage).assetName,
+        DawaSplashScreen.assetPath,
+      );
+      expect(image.fit, BoxFit.cover);
       expect(image.gaplessPlayback, isTrue);
-      expect(renderedSize.width, lessThanOrEqualTo(560));
-      expect(renderedSize.width, lessThanOrEqualTo(size.width * 0.75));
 
       await tester.pumpWidget(const SizedBox());
     }
@@ -110,7 +112,7 @@ void main() {
 
   test('registered transparent assets exist', () {
     final pubspec = File('pubspec.yaml').readAsStringSync();
-    expect(pubspec, contains('assets/dawa_intro.gif'));
+    expect(pubspec, contains(DawaSplashScreen.assetPath));
     expect(pubspec, contains('assets/images/trasnsparent assets/'));
 
     for (final path in [

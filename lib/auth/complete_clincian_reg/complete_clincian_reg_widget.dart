@@ -1,23 +1,30 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
-import '/flutter_flow/flutter_flow_drop_down.dart';
-import '/flutter_flow/flutter_flow_theme.dart';
-import '/flutter_flow/flutter_flow_util.dart';
-import '/flutter_flow/flutter_flow_widgets.dart';
-import '/flutter_flow/form_field_controller.dart';
+import '/components/dawa_design_system.dart';
 import '/flutter_flow/custom_functions.dart' as functions;
+import '/flutter_flow/flutter_flow_util.dart';
 import '/index.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'complete_clincian_reg_model.dart';
-export 'complete_clincian_reg_model.dart';
+
+import 'clinician_registration_repository.dart';
+
+export 'clinician_registration_repository.dart';
 
 class CompleteClincianRegWidget extends StatefulWidget {
-  const CompleteClincianRegWidget({super.key});
+  const CompleteClincianRegWidget({
+    super.key,
+    this.repository,
+    this.onBack,
+    this.onCompleted,
+  });
 
   static String routeName = 'CompleteClincianReg';
   static String routePath = '/completeClincianReg';
+
+  final ClinicianRegistrationRepository? repository;
+  final Future<void> Function()? onBack;
+  final void Function(ClinicianRegistrationProfile profile)? onCompleted;
 
   @override
   State<CompleteClincianRegWidget> createState() =>
@@ -25,1095 +32,688 @@ class CompleteClincianRegWidget extends StatefulWidget {
 }
 
 class _CompleteClincianRegWidgetState extends State<CompleteClincianRegWidget> {
-  late CompleteClincianRegModel _model;
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController(text: '+260');
+  final _specialityController = TextEditingController();
 
-  final scaffoldKey = GlobalKey<ScaffoldState>();
+  late final ClinicianRegistrationRepository _repository;
+
+  ClinicianRegistrationProfile? _profile;
+  List<ClinicOption> _clinics = const [];
+  String? _selectedClinicId;
+  String? _selectedStartTime;
+  String? _selectedEndTime;
+  String? _profileError;
+  String? _clinicError;
+  String? _submissionError;
+  bool _isInitialLoading = true;
+  bool _isLoadingClinics = false;
+  bool _isSubmitting = false;
+  bool _hasNavigated = false;
+
+  List<String> get _startTimes => functions
+      .getTimes()
+      .where((time) => _endTimesFor(time).isNotEmpty)
+      .toList(growable: false);
+
+  List<String> get _endTimes =>
+      _selectedStartTime == null ? const [] : _endTimesFor(_selectedStartTime!);
 
   @override
   void initState() {
     super.initState();
-    _model = createModel(context, () => CompleteClincianRegModel());
-
-    _model.textController1 ??= TextEditingController();
-    _model.textFieldFocusNode1 ??= FocusNode();
-
-    _model.textController2 ??= TextEditingController();
-    _model.textFieldFocusNode2 ??= FocusNode();
-
-    _model.textController3 ??= TextEditingController();
-    _model.textFieldFocusNode3 ??= FocusNode();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
+    _repository =
+        widget.repository ?? SupabaseClinicianRegistrationRepository();
+    _loadRegistration();
   }
 
   @override
   void dispose() {
-    _model.dispose();
-
+    _nameController.dispose();
+    _phoneController.dispose();
+    _specialityController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadRegistration() async {
+    debugPrint('[Registration] Opening Complete registration.');
+    ClinicianRegistrationProfile? profile;
+    String? profileError;
+    List<ClinicOption> clinics = const [];
+    String? clinicError;
+
+    try {
+      profile = await _repository.loadProfile();
+    } catch (error) {
+      profileError = _messageFor(error);
+    }
+
+    try {
+      clinics = await _repository.loadClinics();
+      if (clinics.isEmpty) {
+        clinicError =
+            'No clinics are available yet. Please retry or contact an administrator.';
+      }
+    } catch (error) {
+      clinicError = _messageFor(error);
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _profile = profile;
+      _profileError = profileError;
+      _clinics = clinics;
+      _clinicError = clinicError;
+      _isInitialLoading = false;
+      if (profile != null) {
+        _nameController.text = profile.name;
+        _phoneController.text =
+            profile.phoneNumber.isEmpty ? '+260' : profile.phoneNumber;
+        _specialityController.text = profile.speciality;
+        _selectedClinicId = clinics.any((item) => item.id == profile!.clinicId)
+            ? profile.clinicId
+            : null;
+        _selectedStartTime =
+            _startTimes.contains(profile.startTime) ? profile.startTime : null;
+        _selectedEndTime =
+            _endTimes.contains(profile.endTime) ? profile.endTime : null;
+      }
+    });
+
+    if (profile?.isComplete ?? false) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _finishRegistration(profile!, showConfirmation: false);
+      });
+    }
+  }
+
+  Future<void> _retryProfile() async {
+    setState(() {
+      _isInitialLoading = true;
+      _profileError = null;
+    });
+    await _loadRegistration();
+  }
+
+  Future<void> _retryClinics() async {
+    setState(() {
+      _isLoadingClinics = true;
+      _clinicError = null;
+    });
+    try {
+      final clinics = await _repository.loadClinics();
+      if (!mounted) return;
+      setState(() {
+        _clinics = clinics;
+        _clinicError = clinics.isEmpty
+            ? 'No clinics are available yet. Please retry or contact an administrator.'
+            : null;
+        _isLoadingClinics = false;
+        if (!_clinics.any((item) => item.id == _selectedClinicId)) {
+          _selectedClinicId = null;
+        }
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _clinicError = _messageFor(error);
+        _isLoadingClinics = false;
+      });
+    }
+  }
+
+  Future<void> _submit() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _submissionError = null);
+
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      debugPrint('[Registration] Validation stopped registration submission.');
+      return;
+    }
+
+    final clinic = _clinics.cast<ClinicOption?>().firstWhere(
+          (item) => item?.id == _selectedClinicId,
+          orElse: () => null,
+        );
+    if (clinic == null ||
+        _selectedStartTime == null ||
+        _selectedEndTime == null ||
+        _isSubmitting) {
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+    try {
+      final profile = await _repository.completeRegistration(
+        ClinicianRegistrationInput(
+          name: _nameController.text,
+          phoneNumber: _phoneController.text,
+          speciality: _specialityController.text,
+          clinic: clinic,
+          startTime: _selectedStartTime!,
+          endTime: _selectedEndTime!,
+        ),
+      );
+      if (!mounted) return;
+      await _finishRegistration(profile, showConfirmation: true);
+    } catch (error) {
+      if (!mounted) return;
+      final message = _messageFor(error);
+      debugPrint('[Registration] Submission remained on page: $message');
+      setState(() {
+        _submissionError = message;
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  Future<void> _finishRegistration(
+    ClinicianRegistrationProfile profile, {
+    required bool showConfirmation,
+  }) async {
+    if (_hasNavigated || !mounted) return;
+    _hasNavigated = true;
+    FFAppState().doctor = DoctorRecord.collection.doc(profile.id);
+    debugPrint('[Registration] Clinician session profile refreshed.');
+
+    if (showConfirmation) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Registration complete. Opening your dashboard…'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    }
+
+    if (widget.onCompleted != null) {
+      widget.onCompleted!(profile);
+      return;
+    }
+
+    debugPrint('[Registration] Navigating to the clinician dashboard.');
+    context.goNamed(
+      HomeWidget.routeName,
+      extra: <String, dynamic>{
+        kTransitionInfoKey: const TransitionInfo(
+          hasTransition: true,
+          transitionType: PageTransitionType.fade,
+          duration: Duration(milliseconds: 180),
+        ),
+      },
+    );
+  }
+
+  Future<void> _goBack() async {
+    if (_isSubmitting) return;
+    debugPrint('[Registration] Leaving Complete registration.');
+    if (widget.onBack != null) {
+      await widget.onBack!();
+      return;
+    }
+    await authManager.signOut();
+    if (!mounted) return;
+    context.goNamed(LoginWidget.routeName);
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<DoctorRecord>>(
-      stream: queryDoctorRecord(
-        queryBuilder: (doctorRecord) => doctorRecord.where(
-          'user_Id',
-          isEqualTo: currentUserReference,
-        ),
-        singleRecord: true,
-      ),
-      builder: (context, snapshot) {
-        // Customize what your widget looks like when it's loading.
-        if (!snapshot.hasData) {
-          return Scaffold(
-            backgroundColor: FlutterFlowTheme.of(context).secondaryBackground,
-            body: Center(
-              child: SizedBox(
-                width: 50.0,
-                height: 50.0,
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    FlutterFlowTheme.of(context).primary,
-                  ),
+    return Scaffold(
+      backgroundColor: DawaTokens.surfaceSecondary,
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final showArtwork = constraints.maxWidth >= 960;
+            return Row(
+              children: [
+                Expanded(
+                  flex: showArtwork ? 7 : 1,
+                  child: _buildFormPane(context),
                 ),
-              ),
-            ),
-          );
-        }
-        List<DoctorRecord> completeClincianRegDoctorRecordList = snapshot.data!;
-        final completeClincianRegDoctorRecord =
-            completeClincianRegDoctorRecordList.isNotEmpty
-                ? completeClincianRegDoctorRecordList.first
-                : null;
-
-        return GestureDetector(
-          onTap: () {
-            FocusScope.of(context).unfocus();
-            FocusManager.instance.primaryFocus?.unfocus();
-          },
-          child: Scaffold(
-            key: scaffoldKey,
-            backgroundColor: FlutterFlowTheme.of(context).secondaryBackground,
-            body: SafeArea(
-              top: true,
-              child: Visibility(
-                visible: responsiveVisibility(
-                  context: context,
-                  phone: false,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.max,
-                  children: [
-                    Expanded(
-                      flex: 8,
+                if (showArtwork)
+                  Expanded(
+                    flex: 5,
+                    child: Semantics(
+                      label: 'Dawa Clinician registration artwork',
+                      image: true,
                       child: Container(
-                        width: 100.0,
-                        height: double.infinity,
-                        decoration: BoxDecoration(
-                          color:
-                              FlutterFlowTheme.of(context).secondaryBackground,
-                        ),
-                        alignment: AlignmentDirectional(0.0, -1.0),
-                        child: SingleChildScrollView(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.max,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Container(
-                                width: double.infinity,
-                                height: 140.0,
-                                decoration: BoxDecoration(
-                                  color: FlutterFlowTheme.of(context)
-                                      .secondaryBackground,
-                                  borderRadius: BorderRadius.only(
-                                    bottomLeft: Radius.circular(16.0),
-                                    bottomRight: Radius.circular(16.0),
-                                    topLeft: Radius.circular(0.0),
-                                    topRight: Radius.circular(0.0),
-                                  ),
-                                ),
-                                alignment: AlignmentDirectional(-1.0, 0.0),
-                                child: Padding(
-                                  padding: EdgeInsetsDirectional.fromSTEB(
-                                      30.0, 0.0, 0.0, 0.0),
-                                  child: Image.asset(
-                                    'assets/images/trasnsparent assets/Logos-06-removebg-preview.png',
-                                    width: 200.0,
-                                    height: 100.0,
-                                    fit: BoxFit.contain,
-                                  ),
-                                ),
-                              ),
-                              Align(
-                                alignment: AlignmentDirectional(0.0, 0.0),
-                                child: Container(
-                                  width: 600.0,
-                                  decoration: BoxDecoration(
-                                    color: FlutterFlowTheme.of(context)
-                                        .secondaryBackground,
-                                  ),
-                                  child: Padding(
-                                    padding: EdgeInsets.all(32.0),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.max,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Complete registration',
-                                          style: FlutterFlowTheme.of(context)
-                                              .displaySmall
-                                              .override(
-                                                font: GoogleFonts.dmSans(
-                                                  fontWeight:
-                                                      FlutterFlowTheme.of(
-                                                              context)
-                                                          .displaySmall
-                                                          .fontWeight,
-                                                  fontStyle:
-                                                      FlutterFlowTheme.of(
-                                                              context)
-                                                          .displaySmall
-                                                          .fontStyle,
-                                                ),
-                                                letterSpacing: 0.0,
-                                                fontWeight:
-                                                    FlutterFlowTheme.of(context)
-                                                        .displaySmall
-                                                        .fontWeight,
-                                                fontStyle:
-                                                    FlutterFlowTheme.of(context)
-                                                        .displaySmall
-                                                        .fontStyle,
-                                              ),
-                                        ),
-                                        Padding(
-                                          padding:
-                                              EdgeInsetsDirectional.fromSTEB(
-                                                  0.0, 0.0, 0.0, 20.0),
-                                          child: Text(
-                                            'Fill in  the form below to create a clinician',
-                                            style: FlutterFlowTheme.of(context)
-                                                .displaySmall
-                                                .override(
-                                                  font: GoogleFonts.dmSans(
-                                                    fontWeight: FontWeight.w500,
-                                                    fontStyle:
-                                                        FlutterFlowTheme.of(
-                                                                context)
-                                                            .displaySmall
-                                                            .fontStyle,
-                                                  ),
-                                                  color: FlutterFlowTheme.of(
-                                                          context)
-                                                      .secondaryText,
-                                                  fontSize: 16.0,
-                                                  letterSpacing: 0.0,
-                                                  fontWeight: FontWeight.w500,
-                                                  fontStyle:
-                                                      FlutterFlowTheme.of(
-                                                              context)
-                                                          .displaySmall
-                                                          .fontStyle,
-                                                ),
-                                          ),
-                                        ),
-                                        Column(
-                                          mainAxisSize: MainAxisSize.max,
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Container(
-                                              width: 400.0,
-                                              child: TextFormField(
-                                                controller:
-                                                    _model.textController1,
-                                                focusNode:
-                                                    _model.textFieldFocusNode1,
-                                                autofocus: false,
-                                                obscureText: false,
-                                                decoration: InputDecoration(
-                                                  labelText: 'Name',
-                                                  labelStyle: FlutterFlowTheme
-                                                          .of(context)
-                                                      .labelMedium
-                                                      .override(
-                                                        font:
-                                                            GoogleFonts.dmSans(
-                                                          fontWeight:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .labelMedium
-                                                                  .fontWeight,
-                                                          fontStyle:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .labelMedium
-                                                                  .fontStyle,
-                                                        ),
-                                                        letterSpacing: 0.0,
-                                                        fontWeight:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .labelMedium
-                                                                .fontWeight,
-                                                        fontStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .labelMedium
-                                                                .fontStyle,
-                                                      ),
-                                                  hintText: 'Timothy Phiri',
-                                                  hintStyle: FlutterFlowTheme
-                                                          .of(context)
-                                                      .labelMedium
-                                                      .override(
-                                                        font:
-                                                            GoogleFonts.dmSans(
-                                                          fontWeight:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .labelMedium
-                                                                  .fontWeight,
-                                                          fontStyle:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .labelMedium
-                                                                  .fontStyle,
-                                                        ),
-                                                        letterSpacing: 0.0,
-                                                        fontWeight:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .labelMedium
-                                                                .fontWeight,
-                                                        fontStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .labelMedium
-                                                                .fontStyle,
-                                                      ),
-                                                  enabledBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color: FlutterFlowTheme
-                                                              .of(context)
-                                                          .primaryBackground,
-                                                      width: 2.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8.0),
-                                                  ),
-                                                  focusedBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .primary,
-                                                      width: 2.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8.0),
-                                                  ),
-                                                  errorBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .error,
-                                                      width: 2.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8.0),
-                                                  ),
-                                                  focusedErrorBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .error,
-                                                      width: 2.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8.0),
-                                                  ),
-                                                  filled: true,
-                                                  fillColor:
-                                                      FlutterFlowTheme.of(
-                                                              context)
-                                                          .primaryBackground,
-                                                ),
-                                                style: FlutterFlowTheme.of(
-                                                        context)
-                                                    .bodyMedium
-                                                    .override(
-                                                      font: GoogleFonts.dmSans(
-                                                        fontWeight:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontWeight,
-                                                        fontStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontStyle,
-                                                      ),
-                                                      letterSpacing: 0.0,
-                                                      fontWeight:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .bodyMedium
-                                                              .fontWeight,
-                                                      fontStyle:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .bodyMedium
-                                                              .fontStyle,
-                                                    ),
-                                                validator: _model
-                                                    .textController1Validator
-                                                    .asValidator(context),
-                                              ),
-                                            ),
-                                            Container(
-                                              width: 400.0,
-                                              child: TextFormField(
-                                                controller:
-                                                    _model.textController2,
-                                                focusNode:
-                                                    _model.textFieldFocusNode2,
-                                                autofocus: false,
-                                                obscureText: false,
-                                                decoration: InputDecoration(
-                                                  labelText: 'Number',
-                                                  labelStyle: FlutterFlowTheme
-                                                          .of(context)
-                                                      .labelMedium
-                                                      .override(
-                                                        font:
-                                                            GoogleFonts.dmSans(
-                                                          fontWeight:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .labelMedium
-                                                                  .fontWeight,
-                                                          fontStyle:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .labelMedium
-                                                                  .fontStyle,
-                                                        ),
-                                                        letterSpacing: 0.0,
-                                                        fontWeight:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .labelMedium
-                                                                .fontWeight,
-                                                        fontStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .labelMedium
-                                                                .fontStyle,
-                                                      ),
-                                                  hintText: '0977123456',
-                                                  hintStyle: FlutterFlowTheme
-                                                          .of(context)
-                                                      .labelMedium
-                                                      .override(
-                                                        font:
-                                                            GoogleFonts.dmSans(
-                                                          fontWeight:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .labelMedium
-                                                                  .fontWeight,
-                                                          fontStyle:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .labelMedium
-                                                                  .fontStyle,
-                                                        ),
-                                                        letterSpacing: 0.0,
-                                                        fontWeight:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .labelMedium
-                                                                .fontWeight,
-                                                        fontStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .labelMedium
-                                                                .fontStyle,
-                                                      ),
-                                                  enabledBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color: FlutterFlowTheme
-                                                              .of(context)
-                                                          .primaryBackground,
-                                                      width: 2.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8.0),
-                                                  ),
-                                                  focusedBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .primary,
-                                                      width: 2.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8.0),
-                                                  ),
-                                                  errorBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .error,
-                                                      width: 2.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8.0),
-                                                  ),
-                                                  focusedErrorBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .error,
-                                                      width: 2.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8.0),
-                                                  ),
-                                                  filled: true,
-                                                  fillColor:
-                                                      FlutterFlowTheme.of(
-                                                              context)
-                                                          .primaryBackground,
-                                                ),
-                                                style: FlutterFlowTheme.of(
-                                                        context)
-                                                    .bodyMedium
-                                                    .override(
-                                                      font: GoogleFonts.dmSans(
-                                                        fontWeight:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontWeight,
-                                                        fontStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontStyle,
-                                                      ),
-                                                      letterSpacing: 0.0,
-                                                      fontWeight:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .bodyMedium
-                                                              .fontWeight,
-                                                      fontStyle:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .bodyMedium
-                                                              .fontStyle,
-                                                    ),
-                                                maxLength: 10,
-                                                buildCounter: (context,
-                                                        {required currentLength,
-                                                        required isFocused,
-                                                        maxLength}) =>
-                                                    null,
-                                                keyboardType:
-                                                    TextInputType.phone,
-                                                validator: _model
-                                                    .textController2Validator
-                                                    .asValidator(context),
-                                                inputFormatters: [
-                                                  FilteringTextInputFormatter
-                                                      .allow(RegExp('[0-9]'))
-                                                ],
-                                              ),
-                                            ),
-                                            Container(
-                                              width: 400.0,
-                                              child: TextFormField(
-                                                controller:
-                                                    _model.textController3,
-                                                focusNode:
-                                                    _model.textFieldFocusNode3,
-                                                autofocus: false,
-                                                obscureText: false,
-                                                decoration: InputDecoration(
-                                                  labelText: 'Speciality',
-                                                  labelStyle: FlutterFlowTheme
-                                                          .of(context)
-                                                      .labelMedium
-                                                      .override(
-                                                        font:
-                                                            GoogleFonts.dmSans(
-                                                          fontWeight:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .labelMedium
-                                                                  .fontWeight,
-                                                          fontStyle:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .labelMedium
-                                                                  .fontStyle,
-                                                        ),
-                                                        letterSpacing: 0.0,
-                                                        fontWeight:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .labelMedium
-                                                                .fontWeight,
-                                                        fontStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .labelMedium
-                                                                .fontStyle,
-                                                      ),
-                                                  hintText: 'Speciality',
-                                                  hintStyle: FlutterFlowTheme
-                                                          .of(context)
-                                                      .labelMedium
-                                                      .override(
-                                                        font:
-                                                            GoogleFonts.dmSans(
-                                                          fontWeight:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .labelMedium
-                                                                  .fontWeight,
-                                                          fontStyle:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .labelMedium
-                                                                  .fontStyle,
-                                                        ),
-                                                        letterSpacing: 0.0,
-                                                        fontWeight:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .labelMedium
-                                                                .fontWeight,
-                                                        fontStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .labelMedium
-                                                                .fontStyle,
-                                                      ),
-                                                  enabledBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color: FlutterFlowTheme
-                                                              .of(context)
-                                                          .primaryBackground,
-                                                      width: 2.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8.0),
-                                                  ),
-                                                  focusedBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .primary,
-                                                      width: 2.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8.0),
-                                                  ),
-                                                  errorBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .error,
-                                                      width: 2.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8.0),
-                                                  ),
-                                                  focusedErrorBorder:
-                                                      OutlineInputBorder(
-                                                    borderSide: BorderSide(
-                                                      color:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .error,
-                                                      width: 2.0,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8.0),
-                                                  ),
-                                                  filled: true,
-                                                  fillColor:
-                                                      FlutterFlowTheme.of(
-                                                              context)
-                                                          .primaryBackground,
-                                                ),
-                                                style: FlutterFlowTheme.of(
-                                                        context)
-                                                    .bodyMedium
-                                                    .override(
-                                                      font: GoogleFonts.dmSans(
-                                                        fontWeight:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontWeight,
-                                                        fontStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontStyle,
-                                                      ),
-                                                      letterSpacing: 0.0,
-                                                      fontWeight:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .bodyMedium
-                                                              .fontWeight,
-                                                      fontStyle:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .bodyMedium
-                                                              .fontStyle,
-                                                    ),
-                                                validator: _model
-                                                    .textController3Validator
-                                                    .asValidator(context),
-                                              ),
-                                            ),
-                                            StreamBuilder<List<ClinicRecord>>(
-                                              stream: queryClinicRecord(),
-                                              builder: (context, snapshot) {
-                                                // Customize what your widget looks like when it's loading.
-                                                if (!snapshot.hasData) {
-                                                  return Center(
-                                                    child: SizedBox(
-                                                      width: 50.0,
-                                                      height: 50.0,
-                                                      child:
-                                                          CircularProgressIndicator(
-                                                        valueColor:
-                                                            AlwaysStoppedAnimation<
-                                                                Color>(
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .primary,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  );
-                                                }
-                                                List<ClinicRecord>
-                                                    dropDownClinicRecordList =
-                                                    snapshot.data!;
-
-                                                return FlutterFlowDropDown<
-                                                    String>(
-                                                  controller: _model
-                                                          .dropDownValueController1 ??=
-                                                      FormFieldController<
-                                                          String>(null),
-                                                  options:
-                                                      dropDownClinicRecordList
-                                                          .map((e) => e.name)
-                                                          .toList(),
-                                                  onChanged: (val) =>
-                                                      safeSetState(() => _model
-                                                              .dropDownValue1 =
-                                                          val),
-                                                  width: 400.0,
-                                                  height: 50.0,
-                                                  textStyle: FlutterFlowTheme
-                                                          .of(context)
-                                                      .bodyMedium
-                                                      .override(
-                                                        font:
-                                                            GoogleFonts.dmSans(
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                          fontStyle:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .bodyMedium
-                                                                  .fontStyle,
-                                                        ),
-                                                        letterSpacing: 0.0,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                        fontStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontStyle,
-                                                      ),
-                                                  hintText: 'Select a clinic',
-                                                  icon: Icon(
-                                                    Icons
-                                                        .keyboard_arrow_down_rounded,
-                                                    color: FlutterFlowTheme.of(
-                                                            context)
-                                                        .secondaryText,
-                                                    size: 24.0,
-                                                  ),
-                                                  fillColor:
-                                                      FlutterFlowTheme.of(
-                                                              context)
-                                                          .secondaryBackground,
-                                                  elevation: 2.0,
-                                                  borderColor:
-                                                      FlutterFlowTheme.of(
-                                                              context)
-                                                          .primaryBackground,
-                                                  borderWidth: 2.0,
-                                                  borderRadius: 8.0,
-                                                  margin: EdgeInsetsDirectional
-                                                      .fromSTEB(
-                                                          16.0, 4.0, 16.0, 4.0),
-                                                  hidesUnderline: true,
-                                                  isSearchable: false,
-                                                  isMultiSelect: false,
-                                                );
-                                              },
-                                            ),
-                                            FlutterFlowDropDown<String>(
-                                              controller: _model
-                                                      .dropDownValueController2 ??=
-                                                  FormFieldController<String>(
-                                                      null),
-                                              options: functions.getTimes(),
-                                              onChanged: (val) => safeSetState(
-                                                  () => _model.dropDownValue2 =
-                                                      val),
-                                              width: 400.0,
-                                              height: 50.0,
-                                              textStyle: FlutterFlowTheme.of(
-                                                      context)
-                                                  .bodyMedium
-                                                  .override(
-                                                    font: GoogleFonts.dmSans(
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      fontStyle:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .bodyMedium
-                                                              .fontStyle,
-                                                    ),
-                                                    letterSpacing: 0.0,
-                                                    fontWeight: FontWeight.w600,
-                                                    fontStyle:
-                                                        FlutterFlowTheme.of(
-                                                                context)
-                                                            .bodyMedium
-                                                            .fontStyle,
-                                                  ),
-                                              hintText: 'Select a start time',
-                                              icon: Icon(
-                                                Icons
-                                                    .keyboard_arrow_down_rounded,
-                                                color:
-                                                    FlutterFlowTheme.of(context)
-                                                        .secondaryText,
-                                                size: 24.0,
-                                              ),
-                                              fillColor:
-                                                  FlutterFlowTheme.of(context)
-                                                      .secondaryBackground,
-                                              elevation: 2.0,
-                                              borderColor:
-                                                  FlutterFlowTheme.of(context)
-                                                      .primaryBackground,
-                                              borderWidth: 2.0,
-                                              borderRadius: 8.0,
-                                              margin: EdgeInsetsDirectional
-                                                  .fromSTEB(
-                                                      16.0, 4.0, 16.0, 4.0),
-                                              hidesUnderline: true,
-                                              isSearchable: false,
-                                              isMultiSelect: false,
-                                            ),
-                                            if (_model.dropDownValue2 != null &&
-                                                _model.dropDownValue2 != '')
-                                              FlutterFlowDropDown<String>(
-                                                controller: _model
-                                                        .dropDownValueController3 ??=
-                                                    FormFieldController<String>(
-                                                        null),
-                                                options: functions.getEndTimes(
-                                                    _model.dropDownValue2!)!,
-                                                onChanged: (val) =>
-                                                    safeSetState(() => _model
-                                                        .dropDownValue3 = val),
-                                                width: 400.0,
-                                                height: 50.0,
-                                                textStyle: FlutterFlowTheme.of(
-                                                        context)
-                                                    .bodyMedium
-                                                    .override(
-                                                      font: GoogleFonts.dmSans(
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                        fontStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .bodyMedium
-                                                                .fontStyle,
-                                                      ),
-                                                      letterSpacing: 0.0,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      fontStyle:
-                                                          FlutterFlowTheme.of(
-                                                                  context)
-                                                              .bodyMedium
-                                                              .fontStyle,
-                                                    ),
-                                                hintText: 'Select a end time',
-                                                icon: Icon(
-                                                  Icons
-                                                      .keyboard_arrow_down_rounded,
-                                                  color: FlutterFlowTheme.of(
-                                                          context)
-                                                      .secondaryText,
-                                                  size: 24.0,
-                                                ),
-                                                fillColor:
-                                                    FlutterFlowTheme.of(context)
-                                                        .secondaryBackground,
-                                                elevation: 2.0,
-                                                borderColor:
-                                                    FlutterFlowTheme.of(context)
-                                                        .primaryBackground,
-                                                borderWidth: 2.0,
-                                                borderRadius: 8.0,
-                                                margin: EdgeInsetsDirectional
-                                                    .fromSTEB(
-                                                        16.0, 4.0, 16.0, 4.0),
-                                                hidesUnderline: true,
-                                                isSearchable: false,
-                                                isMultiSelect: false,
-                                              ),
-                                          ]
-                                              .divide(SizedBox(height: 15.0))
-                                              .addToEnd(SizedBox(height: 20.0)),
-                                        ),
-                                        Padding(
-                                          padding:
-                                              EdgeInsetsDirectional.fromSTEB(
-                                                  0.0, 0.0, 0.0, 16.0),
-                                          child: FFButtonWidget(
-                                            onPressed: () async {
-                                              final name = _model
-                                                  .textController1.text
-                                                  .trim();
-                                              final phoneNumber = _model
-                                                  .textController2.text
-                                                  .trim();
-                                              final speciality = _model
-                                                  .textController3.text
-                                                  .trim();
-                                              final clinicName =
-                                                  _model.dropDownValue1;
-                                              final startTime =
-                                                  _model.dropDownValue2;
-                                              final endTime =
-                                                  _model.dropDownValue3;
-
-                                              if (name.isEmpty ||
-                                                  phoneNumber.isEmpty ||
-                                                  speciality.isEmpty ||
-                                                  clinicName == null ||
-                                                  clinicName.isEmpty ||
-                                                  startTime == null ||
-                                                  startTime.isEmpty ||
-                                                  endTime == null ||
-                                                  endTime.isEmpty) {
-                                                ScaffoldMessenger.of(context)
-                                                    .showSnackBar(
-                                                  SnackBar(
-                                                    content: Text(
-                                                      'Please complete all fields before continuing.',
-                                                    ),
-                                                  ),
-                                                );
-                                                return;
-                                              }
-
-                                              final doctorReference =
-                                                  completeClincianRegDoctorRecord
-                                                          ?.reference ??
-                                                      DoctorRecord.collection
-                                                          .doc();
-
-                                              try {
-                                                await doctorReference.set(
-                                                  createDoctorRecordData(
-                                                    speciality: speciality,
-                                                    userId:
-                                                        currentUserReference,
-                                                    clinicName: clinicName,
-                                                    startTime: startTime,
-                                                    endTime: endTime,
-                                                    name: name,
-                                                    phoneNumber: phoneNumber,
-                                                    doctorId:
-                                                        doctorReference.id,
-                                                  ),
-                                                  SetOptions(merge: true),
-                                                );
-                                              } catch (e) {
-                                                ScaffoldMessenger.of(context)
-                                                    .showSnackBar(
-                                                  SnackBar(
-                                                    content: Text(
-                                                      'Could not save your profile. Please try again.',
-                                                    ),
-                                                  ),
-                                                );
-                                                return;
-                                              }
-
-                                              FFAppState().doctor =
-                                                  doctorReference;
-
-                                              if (!context.mounted) {
-                                                return;
-                                              }
-
-                                              context.goNamed(
-                                                HomeWidget.routeName,
-                                                extra: <String, dynamic>{
-                                                  kTransitionInfoKey:
-                                                      TransitionInfo(
-                                                    hasTransition: true,
-                                                    transitionType:
-                                                        PageTransitionType.fade,
-                                                    duration: Duration(
-                                                        milliseconds: 0),
-                                                  ),
-                                                },
-                                              );
-                                            },
-                                            text: 'Continue',
-                                            options: FFButtonOptions(
-                                              width: 400.0,
-                                              height: 44.0,
-                                              padding: EdgeInsetsDirectional
-                                                  .fromSTEB(0.0, 0.0, 0.0, 0.0),
-                                              iconPadding: EdgeInsetsDirectional
-                                                  .fromSTEB(0.0, 0.0, 0.0, 0.0),
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .primary,
-                                              textStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .titleSmall
-                                                      .override(
-                                                        font:
-                                                            GoogleFonts.dmSans(
-                                                          fontWeight:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .titleSmall
-                                                                  .fontWeight,
-                                                          fontStyle:
-                                                              FlutterFlowTheme.of(
-                                                                      context)
-                                                                  .titleSmall
-                                                                  .fontStyle,
-                                                        ),
-                                                        color: Colors.white,
-                                                        letterSpacing: 0.0,
-                                                        fontWeight:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .titleSmall
-                                                                .fontWeight,
-                                                        fontStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .titleSmall
-                                                                .fontStyle,
-                                                      ),
-                                              elevation: 0.0,
-                                              borderSide: BorderSide(
-                                                color: Colors.transparent,
-                                                width: 1.0,
-                                              ),
-                                              borderRadius:
-                                                  BorderRadius.circular(12.0),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 6,
-                      child: Container(
-                        width: 100.0,
-                        height: double.infinity,
-                        decoration: BoxDecoration(
-                          color:
-                              FlutterFlowTheme.of(context).secondaryBackground,
+                        decoration: const BoxDecoration(
                           image: DecorationImage(
+                            image: AssetImage('assets/images/bg.png'),
                             fit: BoxFit.cover,
-                            image: Image.asset(
-                              'assets/images/bg.png',
-                            ).image,
                           ),
                         ),
                       ),
                     ),
-                  ],
-                ),
-              ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFormPane(BuildContext context) {
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 180),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 620),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildHeader(),
+                const SizedBox(height: 24),
+                if (_isInitialLoading)
+                  const _RegistrationLoadingCard()
+                else if (_profileError != null)
+                  _ErrorCard(
+                    key: const Key('profile-load-error'),
+                    title: 'Could not load your clinician profile',
+                    message: _profileError!,
+                    onRetry: _retryProfile,
+                  )
+                else
+                  _buildForm(),
+              ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 400;
+        return Row(
+          children: [
+            TextButton.icon(
+              key: const Key('registration-back-button'),
+              onPressed: _isSubmitting ? null : _goBack,
+              icon: const Icon(Icons.arrow_back_rounded),
+              label: Text(compact ? 'Back' : 'Back to sign in'),
+            ),
+            const Spacer(),
+            Image.asset(
+              'assets/images/trasnsparent assets/Logos-06-removebg-preview.png',
+              width: compact ? 88 : 112,
+              height: 64,
+              fit: BoxFit.contain,
+              semanticLabel: 'Dawa Health',
+            ),
+          ],
         );
       },
     );
   }
+
+  Widget _buildForm() {
+    return Material(
+      color: DawaTokens.surface,
+      elevation: 1,
+      shadowColor: Colors.black12,
+      borderRadius: BorderRadius.circular(DawaTokens.radiusXl),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Complete registration',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: DawaTokens.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Add your clinical details to finish setting up your account. Fields marked * are required.',
+                style: TextStyle(color: DawaTokens.textSecondary, height: 1.4),
+              ),
+              const SizedBox(height: 24),
+              TextFormField(
+                key: const Key('registration-name-field'),
+                controller: _nameController,
+                textCapitalization: TextCapitalization.words,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.name],
+                decoration: _fieldDecoration('Name *', 'e.g. Timothy Phiri'),
+                validator: (value) => _required(value, 'Enter your full name.'),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                key: const Key('registration-phone-field'),
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.telephoneNumber],
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[+0-9]')),
+                  LengthLimitingTextInputFormatter(13),
+                ],
+                decoration: _fieldDecoration(
+                  'Phone number *',
+                  '+260971234567',
+                  helperText: 'Use Zambia’s +260 format followed by 9 digits.',
+                ),
+                validator: (value) {
+                  final requiredMessage =
+                      _required(value, 'Enter your phone number.');
+                  if (requiredMessage != null) return requiredMessage;
+                  if (!RegExp(r'^\+260\d{9}$').hasMatch(value!.trim())) {
+                    return 'Enter a valid Zambia number, for example +260971234567.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                key: const Key('registration-speciality-field'),
+                controller: _specialityController,
+                textCapitalization: TextCapitalization.words,
+                textInputAction: TextInputAction.next,
+                decoration:
+                    _fieldDecoration('Specialty *', 'e.g. General Practice'),
+                validator: (value) =>
+                    _required(value, 'Enter your clinical specialty.'),
+              ),
+              const SizedBox(height: 16),
+              _buildClinicField(),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                key: const Key('registration-start-time-field'),
+                value: _selectedStartTime,
+                isExpanded: true,
+                decoration:
+                    _fieldDecoration('Start time *', 'Select a start time'),
+                items: _startTimes
+                    .map((time) =>
+                        DropdownMenuItem(value: time, child: Text(time)))
+                    .toList(growable: false),
+                onChanged: _isSubmitting
+                    ? null
+                    : (value) {
+                        setState(() {
+                          _selectedStartTime = value;
+                          if (!_endTimes.contains(_selectedEndTime)) {
+                            _selectedEndTime = null;
+                          }
+                        });
+                      },
+                validator: (value) =>
+                    value == null ? 'Select your clinic start time.' : null,
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                key: const Key('registration-end-time-field'),
+                value: _selectedEndTime,
+                isExpanded: true,
+                decoration:
+                    _fieldDecoration('End time *', 'Select an end time'),
+                items: _endTimes
+                    .map((time) =>
+                        DropdownMenuItem(value: time, child: Text(time)))
+                    .toList(growable: false),
+                onChanged: _isSubmitting || _selectedStartTime == null
+                    ? null
+                    : (value) => setState(() => _selectedEndTime = value),
+                validator: (value) =>
+                    value == null ? 'Select your clinic end time.' : null,
+              ),
+              if (_submissionError != null) ...[
+                const SizedBox(height: 16),
+                _InlineError(
+                  key: const Key('registration-submit-error'),
+                  message: _submissionError!,
+                ),
+              ],
+              const SizedBox(height: 24),
+              SizedBox(
+                height: 50,
+                child: FilledButton(
+                  key: const Key('registration-continue-button'),
+                  onPressed: _isSubmitting ? null : _submit,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: DawaTokens.brandPrimary,
+                    foregroundColor: DawaTokens.textInverse,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
+                    ),
+                  ),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          'Continue',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildClinicField() {
+    if (_isLoadingClinics) {
+      return const _ClinicLoadingField();
+    }
+    if (_clinicError != null) {
+      return _ErrorCard(
+        key: const Key('clinic-load-error'),
+        title: 'Clinics could not be loaded',
+        message: _clinicError!,
+        onRetry: _retryClinics,
+        compact: true,
+      );
+    }
+    return DropdownButtonFormField<String>(
+      key: const Key('registration-clinic-field'),
+      value: _selectedClinicId,
+      isExpanded: true,
+      decoration: _fieldDecoration('Clinic *', 'Select a clinic'),
+      items: _clinics
+          .map(
+            (clinic) => DropdownMenuItem(
+              value: clinic.id,
+              child: Text(
+                clinic.address == null
+                    ? clinic.name
+                    : '${clinic.name} — ${clinic.address}',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          )
+          .toList(growable: false),
+      onChanged: _isSubmitting
+          ? null
+          : (value) => setState(() => _selectedClinicId = value),
+      validator: (value) => value == null ? 'Select your clinic.' : null,
+    );
+  }
+
+  InputDecoration _fieldDecoration(
+    String label,
+    String hint, {
+    String? helperText,
+  }) =>
+      InputDecoration(
+        labelText: label,
+        hintText: hint,
+        helperText: helperText,
+        helperMaxLines: 2,
+        filled: true,
+        fillColor: DawaTokens.surfaceSecondary,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
+        ),
+      );
+
+  List<String> _endTimesFor(String startTime) {
+    final startMinutes = _timeInMinutes(startTime);
+    return (functions.getEndTimes(startTime) ?? const <String>[])
+        .where((time) => _timeInMinutes(time) > startMinutes)
+        .toList(growable: false);
+  }
+
+  int _timeInMinutes(String value) {
+    final parts = value.split(':');
+    return int.parse(parts.first) * 60 + int.parse(parts.last);
+  }
+
+  String? _required(String? value, String message) =>
+      value == null || value.trim().isEmpty ? message : null;
+
+  String _messageFor(Object error) => error is ClinicianRegistrationException
+      ? error.message
+      : 'Something went wrong. Please try again.';
+}
+
+class _RegistrationLoadingCard extends StatelessWidget {
+  const _RegistrationLoadingCard();
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: DawaTokens.surface,
+        borderRadius: BorderRadius.circular(DawaTokens.radiusXl),
+        child: const Padding(
+          padding: EdgeInsets.all(32),
+          child: Column(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Loading your registration details…'),
+            ],
+          ),
+        ),
+      );
+}
+
+class _ClinicLoadingField extends StatelessWidget {
+  const _ClinicLoadingField();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        key: const Key('clinic-loading-indicator'),
+        height: 58,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: DawaTokens.surfaceSecondary,
+          border: Border.all(color: DawaTokens.border),
+          borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
+        ),
+        child: const Row(
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 12),
+            Text('Loading clinics…'),
+          ],
+        ),
+      );
+}
+
+class _InlineError extends StatelessWidget {
+  const _InlineError({super.key, required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: DawaTokens.statusDanger.withValues(alpha: 0.08),
+          border: Border.all(
+            color: DawaTokens.statusDanger.withValues(alpha: 0.35),
+          ),
+          borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.error_outline_rounded,
+              color: DawaTokens.statusDanger,
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(color: DawaTokens.statusDanger),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _ErrorCard extends StatelessWidget {
+  const _ErrorCard({
+    super.key,
+    required this.title,
+    required this.message,
+    required this.onRetry,
+    this.compact = false,
+  });
+
+  final String title;
+  final String message;
+  final Future<void> Function() onRetry;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: DawaTokens.surface,
+        borderRadius: BorderRadius.circular(DawaTokens.radiusLg),
+        child: Padding(
+          padding: EdgeInsets.all(compact ? 16 : 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: DawaTokens.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                message,
+                style: const TextStyle(color: DawaTokens.textSecondary),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                key: const Key('registration-retry-button'),
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
 }

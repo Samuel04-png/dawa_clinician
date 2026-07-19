@@ -49,6 +49,7 @@ class _HomeWidgetState extends State<HomeWidget> {
     FFAppState().selectedPage = 'Home';
 
     SchedulerBinding.instance.addPostFrameCallback((_) async {
+      debugPrint('[Registration] Checking clinician profile completion.');
       _model.docFound = await queryDoctorRecordOnce(
         queryBuilder: (doctorRecord) => doctorRecord.where(
           'user_Id',
@@ -56,7 +57,9 @@ class _HomeWidgetState extends State<HomeWidget> {
         ),
         singleRecord: true,
       ).then((s) => s.firstOrNull);
-      if ((_model.docFound?.clinicName != null &&
+      if ((_model.docFound?.clinicId != null &&
+              _model.docFound?.clinicId != '') &&
+          (_model.docFound?.clinicName != null &&
               _model.docFound?.clinicName != '') &&
           (_model.docFound?.startTime != null &&
               _model.docFound?.startTime != '') &&
@@ -66,8 +69,10 @@ class _HomeWidgetState extends State<HomeWidget> {
           (_model.docFound?.phoneNumber != null &&
               _model.docFound?.phoneNumber != '')) {
         FFAppState().doctor = _model.docFound?.reference;
+        debugPrint('[Registration] Existing clinician profile is complete.');
         safeSetState(() {});
       } else {
+        debugPrint('[Registration] Clinician profile needs completion.');
         context.goNamed(CompleteClincianRegWidget.routeName);
       }
     });

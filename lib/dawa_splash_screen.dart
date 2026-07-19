@@ -3,8 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '/components/dawa_design_system.dart';
-
 class DawaSplashScreen extends StatefulWidget {
   const DawaSplashScreen({
     super.key,
@@ -12,10 +10,8 @@ class DawaSplashScreen extends StatefulWidget {
   });
 
   static const assetPath = 'assets/dawa_intro.gif';
-
-  // The GIF contains one 8.3-second animation cycle, closely matching the
-  // previous video splash sequence without adding an unrelated startup delay.
-  static const splashDuration = Duration(milliseconds: 8300);
+  static const splashBackgroundColor = Color(0xFF102490);
+  static const splashDuration = Duration(seconds: 2);
 
   final VoidCallback onAnimationComplete;
 
@@ -24,14 +20,15 @@ class DawaSplashScreen extends StatefulWidget {
 }
 
 class _DawaSplashScreenState extends State<DawaSplashScreen> {
+  Timer? _timer;
   bool _hasCompleted = false;
   bool _didPrecache = false;
-  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer(DawaSplashScreen.splashDuration, _completeSplash);
+    debugPrint('[Splash] Showing ${DawaSplashScreen.assetPath}.');
+    _timer = Timer(DawaSplashScreen.splashDuration, _completeAnimation);
   }
 
   @override
@@ -42,14 +39,17 @@ class _DawaSplashScreenState extends State<DawaSplashScreen> {
     precacheImage(
       const AssetImage(DawaSplashScreen.assetPath),
       context,
-    );
+    ).catchError((Object error) {
+      debugPrint('[Splash] Failed to precache the intro GIF: $error');
+    });
   }
 
-  void _completeSplash() {
-    if (!mounted || _hasCompleted) return;
+  void _completeAnimation() {
+    if (_hasCompleted) return;
     _hasCompleted = true;
     _timer?.cancel();
-    widget.onAnimationComplete();
+    debugPrint('[Splash] Intro GIF display completed.');
+    if (mounted) widget.onAnimationComplete();
   }
 
   @override
@@ -63,39 +63,22 @@ class _DawaSplashScreenState extends State<DawaSplashScreen> {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light.copyWith(
         statusBarColor: Colors.transparent,
-        systemNavigationBarColor: DawaTokens.brandPrimary,
+        systemNavigationBarColor: DawaSplashScreen.splashBackgroundColor,
         systemNavigationBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
-        backgroundColor: DawaTokens.brandPrimary,
-        body: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final widthFactor = constraints.maxWidth < 600
-                  ? 0.68
-                  : constraints.maxWidth < 1024
-                      ? 0.50
-                      : 0.38;
-              final animationWidth = (constraints.maxWidth * widthFactor)
-                  .clamp(180.0, 560.0)
-                  .toDouble();
-
-              return Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: animationWidth,
-                    maxHeight: constraints.maxHeight * 0.60,
-                  ),
-                  child: Image.asset(
-                    DawaSplashScreen.assetPath,
-                    width: animationWidth,
-                    fit: BoxFit.contain,
-                    gaplessPlayback: true,
-                    filterQuality: FilterQuality.high,
-                  ),
-                ),
-              );
-            },
+        backgroundColor: DawaSplashScreen.splashBackgroundColor,
+        body: Semantics(
+          label: 'Dawa introduction animation',
+          image: true,
+          child: SizedBox.expand(
+            child: Image.asset(
+              DawaSplashScreen.assetPath,
+              fit: BoxFit.cover,
+              alignment: Alignment.center,
+              gaplessPlayback: true,
+              filterQuality: FilterQuality.high,
+            ),
           ),
         ),
       ),
