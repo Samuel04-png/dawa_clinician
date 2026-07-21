@@ -15,6 +15,7 @@ import 'package:clinician/app_state.dart';
 import 'package:clinician/backend/supabase/supabase_config.dart';
 import 'package:clinician/flutter_flow/flutter_flow_theme.dart';
 import 'package:clinician/main.dart';
+import 'package:clinician/services/offline_connectivity_service.dart';
 
 class TestVideoPlayerPlatform extends VideoPlayerPlatform {
   int _nextPlayerId = 1;
@@ -114,5 +115,37 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(MaterialApp), findsOneWidget);
+  });
+
+  testWidgets('offline banner tooltip has a Navigator Overlay',
+      (WidgetTester tester) async {
+    await FlutterFlowTheme.initialize();
+    final appState = FFAppState();
+    await appState.initializePersistedState();
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider(
+        create: (_) => appState,
+        child: MyApp(),
+      ),
+    );
+    await tester.pump();
+
+    OfflineConnectivityService.statusNotifier.value =
+        OfflineConnectivitySnapshot(
+      internetAvailable: false,
+      supabaseReachable: false,
+      deviceReachable: false,
+      checkedAt: DateTime(2026, 7, 21),
+    );
+    await tester.pump();
+
+    final dismissButton = find.byTooltip('Dismiss offline status');
+    expect(dismissButton, findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
 }

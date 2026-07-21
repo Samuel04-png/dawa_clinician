@@ -100,6 +100,29 @@ class MotherRecord extends FirestoreRecord {
   DateTime? get sourceDeletedAt => _sourceDeletedAt;
   bool hasSourceDeletedAt() => _sourceDeletedAt != null;
 
+  // Patient-provided pregnancy state from the separate Dawa Mom project.
+  String? _sourcePregnancyStatus;
+  String get sourcePregnancyStatus => _sourcePregnancyStatus ?? '';
+  bool hasSourcePregnancyStatus() => _sourcePregnancyStatus != null;
+
+  DateTime? _sourcePregnancyLnmp;
+  DateTime? get sourcePregnancyLnmp => _sourcePregnancyLnmp;
+  bool hasSourcePregnancyLnmp() => _sourcePregnancyLnmp != null;
+
+  DateTime? _sourcePregnancyEstimatedDueDate;
+  DateTime? get sourcePregnancyEstimatedDueDate =>
+      _sourcePregnancyEstimatedDueDate;
+  bool hasSourcePregnancyEstimatedDueDate() =>
+      _sourcePregnancyEstimatedDueDate != null;
+
+  DateTime? _sourcePregnancyUpdatedAt;
+  DateTime? get sourcePregnancyUpdatedAt => _sourcePregnancyUpdatedAt;
+  bool hasSourcePregnancyUpdatedAt() => _sourcePregnancyUpdatedAt != null;
+
+  String? _sourcePregnancyProvenance;
+  String get sourcePregnancyProvenance => _sourcePregnancyProvenance ?? '';
+  bool hasSourcePregnancyProvenance() => _sourcePregnancyProvenance != null;
+
   bool get isImportedFromDawaMom =>
       sourceProject == 'dawa_mom' || registrationSource == 'dawa_mom';
 
@@ -122,6 +145,14 @@ class MotherRecord extends FirestoreRecord {
     _registrationSource = snapshotData['registration_source'] as String?;
     _syncedAt = snapshotData['synced_at'] as DateTime?;
     _sourceDeletedAt = snapshotData['source_deleted_at'] as DateTime?;
+    _sourcePregnancyStatus = snapshotData['source_pregnancy_status'] as String?;
+    _sourcePregnancyLnmp = snapshotData['source_pregnancy_lnmp'] as DateTime?;
+    _sourcePregnancyEstimatedDueDate =
+        snapshotData['source_pregnancy_estimated_due_date'] as DateTime?;
+    _sourcePregnancyUpdatedAt =
+        snapshotData['source_pregnancy_updated_at'] as DateTime?;
+    _sourcePregnancyProvenance =
+        snapshotData['source_pregnancy_provenance'] as String?;
   }
 
   static CollectionReference get collection =>
@@ -175,6 +206,11 @@ Map<String, dynamic> createMotherRecordData({
   String? registrationSource,
   DateTime? syncedAt,
   DateTime? sourceDeletedAt,
+  String? sourcePregnancyStatus,
+  DateTime? sourcePregnancyLnmp,
+  DateTime? sourcePregnancyEstimatedDueDate,
+  DateTime? sourcePregnancyUpdatedAt,
+  String? sourcePregnancyProvenance,
 }) {
   final firestoreData = mapToFirestore(
     <String, dynamic>{
@@ -195,6 +231,11 @@ Map<String, dynamic> createMotherRecordData({
       'registration_source': registrationSource,
       'synced_at': syncedAt,
       'source_deleted_at': sourceDeletedAt,
+      'source_pregnancy_status': sourcePregnancyStatus,
+      'source_pregnancy_lnmp': sourcePregnancyLnmp,
+      'source_pregnancy_estimated_due_date': sourcePregnancyEstimatedDueDate,
+      'source_pregnancy_updated_at': sourcePregnancyUpdatedAt,
+      'source_pregnancy_provenance': sourcePregnancyProvenance,
     }.withoutNulls,
   );
 
@@ -222,7 +263,13 @@ class MotherRecordDocumentEquality implements Equality<MotherRecord> {
         e1?.sourceUserId == e2?.sourceUserId &&
         e1?.registrationSource == e2?.registrationSource &&
         e1?.syncedAt == e2?.syncedAt &&
-        e1?.sourceDeletedAt == e2?.sourceDeletedAt;
+        e1?.sourceDeletedAt == e2?.sourceDeletedAt &&
+        e1?.sourcePregnancyStatus == e2?.sourcePregnancyStatus &&
+        e1?.sourcePregnancyLnmp == e2?.sourcePregnancyLnmp &&
+        e1?.sourcePregnancyEstimatedDueDate ==
+            e2?.sourcePregnancyEstimatedDueDate &&
+        e1?.sourcePregnancyUpdatedAt == e2?.sourcePregnancyUpdatedAt &&
+        e1?.sourcePregnancyProvenance == e2?.sourcePregnancyProvenance;
   }
 
   @override
@@ -243,7 +290,12 @@ class MotherRecordDocumentEquality implements Equality<MotherRecord> {
         e?.sourceUserId,
         e?.registrationSource,
         e?.syncedAt,
-        e?.sourceDeletedAt
+        e?.sourceDeletedAt,
+        e?.sourcePregnancyStatus,
+        e?.sourcePregnancyLnmp,
+        e?.sourcePregnancyEstimatedDueDate,
+        e?.sourcePregnancyUpdatedAt,
+        e?.sourcePregnancyProvenance,
       ]);
 
   @override

@@ -6,6 +6,8 @@ import 'package:intl/intl.dart';
 import '/components/dawa_design_system.dart';
 import '../data/clinician_appointment_repository.dart';
 import '../domain/clinician_appointment.dart';
+import 'appointment_assessment_page.dart';
+import 'clinician_appointment_details_page.dart';
 
 class DawaMomAppointmentRequests extends StatefulWidget {
   const DawaMomAppointmentRequests({
@@ -80,7 +82,8 @@ class _DawaMomAppointmentRequestsState
               busy: _busyAppointmentIds.contains(appointment.id),
               highlighted: appointment.id == focusedId,
               onStatus: (status) => _setStatus(appointment, status),
-              onReschedule: () => _reschedule(appointment),
+              onAssess: () => _openAssessment(appointment),
+              onViewDetails: () => _openDetails(appointment),
             );
           },
         );
@@ -88,12 +91,39 @@ class _DawaMomAppointmentRequestsState
     );
   }
 
-  Future<void> _setStatus(
+  Future<void> _openAssessment(ClinicianAppointment appointment) async {
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => AppointmentAssessmentPage(appointment: appointment),
+        settings: RouteSettings(
+          name: 'appointment-assessment/${appointment.id}',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openDetails(ClinicianAppointment appointment) async {
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ClinicianAppointmentDetailsPage(
+          appointment: appointment,
+          onStatus: (status) => _setStatus(appointment, status),
+          onReschedule: () => _reschedule(appointment),
+          onAssess: () => _openAssessment(appointment),
+        ),
+        settings: RouteSettings(
+          name: 'appointment-details/${appointment.id}',
+        ),
+      ),
+    );
+  }
+
+  Future<bool> _setStatus(
     ClinicianAppointment appointment,
     String status,
   ) async {
     final confirmed = await _confirmStatusChange(appointment, status);
-    if (!confirmed || !mounted) return;
+    if (!confirmed || !mounted) return false;
 
     setState(() => _busyAppointmentIds.add(appointment.id));
     try {
@@ -102,23 +132,26 @@ class _DawaMomAppointmentRequestsState
         status: status,
         patientSafeMessage: _patientMessageFor(status),
       );
-      if (!mounted) return;
+      if (!mounted) return true;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Appointment marked ${_statusLabel(status)}.'),
           backgroundColor: DawaTokens.statusSuccess,
         ),
       );
+      return true;
     } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'The appointment could not be updated. Check the slot and try again.',
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'The appointment could not be updated. Check the slot and try again.',
+            ),
+            backgroundColor: DawaTokens.statusDanger,
           ),
-          backgroundColor: DawaTokens.statusDanger,
-        ),
-      );
+        );
+      }
+      return false;
     } finally {
       if (mounted) {
         setState(() => _busyAppointmentIds.remove(appointment.id));
@@ -130,7 +163,7 @@ class _DawaMomAppointmentRequestsState
     ClinicianAppointment appointment,
     String status,
   ) async {
-    if (status == 'confirmed' || status == 'completed') return true;
+    if (status == 'confirmed') return true;
     final label = _statusLabel(status);
     return await showDialog<bool>(
           context: context,
@@ -156,20 +189,20 @@ class _DawaMomAppointmentRequestsState
         false;
   }
 
-  Future<void> _reschedule(ClinicianAppointment appointment) async {
+  Future<bool> _reschedule(ClinicianAppointment appointment) async {
     final now = DateTime.now();
     var selectedDate = appointment.scheduledStart.isAfter(now)
         ? appointment.scheduledStart
         : now.add(const Duration(days: 1));
     var selectedTime = TimeOfDay.fromDateTime(selectedDate);
-    final originalDuration = appointment.scheduledEnd
-        .difference(appointment.scheduledStart);
+    final originalDuration =
+        appointment.scheduledEnd.difference(appointment.scheduledStart);
     final duration = originalDuration.inMinutes > 0
         ? originalDuration
         : const Duration(minutes: 30);
     var saving = false;
 
-    await showDialog<void>(
+    final updated = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) {
@@ -205,7 +238,8 @@ class _DawaMomAppointmentRequestsState
                                 final picked = await showDatePicker(
                                   context: dialogContext,
                                   initialDate: selectedDate,
-                                  firstDate: DateTime(now.year, now.month, now.day),
+                                  firstDate:
+                                      DateTime(now.year, now.month, now.day),
                                   lastDate: now.add(const Duration(days: 365)),
                                 );
                                 if (picked != null) {
@@ -270,7 +304,7 @@ class _DawaMomAppointmentRequestsState
                                 'The clinic proposed a new appointment time.',
                           );
                           if (dialogContext.mounted) {
-                            Navigator.pop(dialogContext);
+                            Navigator.pop(dialogContext, true);
                           }
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -307,6 +341,7 @@ class _DawaMomAppointmentRequestsState
         },
       ),
     );
+    return updated ?? false;
   }
 
   static String _patientMessageFor(String status) {
@@ -426,8 +461,8 @@ class _DawaMomNotificationButtonState extends State<DawaMomNotificationButton> {
                             onTap: () async {
                               if (!notification.isRead) {
                                 try {
-                                    await _repository
-                                        .markNotificationRead(notification.id);
+                                  await _repository
+                                      .markNotificationRead(notification.id);
                                 } catch (_) {
                                   // Opening the linked appointment remains
                                   // useful if mark-read is temporarily offline.
@@ -459,18 +494,26 @@ class _AppointmentCard extends StatelessWidget {
     required this.busy,
     required this.highlighted,
     required this.onStatus,
-    required this.onReschedule,
+    required this.onAssess,
+    required this.onViewDetails,
   });
 
   final ClinicianAppointment appointment;
   final bool busy;
   final bool highlighted;
   final ValueChanged<String> onStatus;
-  final VoidCallback onReschedule;
+  final VoidCallback onAssess;
+  final VoidCallback onViewDetails;
 
   @override
   Widget build(BuildContext context) {
     final statusColor = _statusColor(appointment.status);
+    final pregnancyLabel = switch (appointment.pregnancyStatus) {
+      'pregnant' => 'Pregnant',
+      'not_pregnant' => 'Not currently pregnant',
+      'prefer_not_to_say' => 'Preferred not to say',
+      _ => 'Pregnancy status not provided',
+    };
     return DawaCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -494,56 +537,127 @@ class _AppointmentCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
           ],
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              CircleAvatar(
-                backgroundColor: DawaTokens.brandPrimaryPale,
-                foregroundColor: DawaTokens.brandPrimary,
-                child: const Icon(Icons.person_rounded),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(appointment.patientName, style: DawaTextStyles.cardTitle),
-                    const SizedBox(height: 3),
-                    Text(
-                      '${DateFormat('EEE, d MMM y').format(appointment.scheduledStart)} · '
-                      '${DateFormat('HH:mm').format(appointment.scheduledStart)}–'
-                      '${DateFormat('HH:mm').format(appointment.scheduledEnd)}',
-                      style: DawaTextStyles.secondary,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 520;
+              final patient = Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  DawaAvatarCircle(
+                    name: appointment.patientName,
+                    moduleColor: DawaTokens.brandPrimary,
+                    size: 48,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          appointment.patientName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: DawaTextStyles.cardTitle.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          appointment.reason.isEmpty
+                              ? _humanizeAppointmentType(
+                                  appointment.appointmentType,
+                                )
+                              : appointment.reason,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: DawaTextStyles.secondary,
+                        ),
+                      ],
                     ),
-                    if (appointment.clinicName.isNotEmpty)
-                      Text(appointment.clinicName, style: DawaTextStyles.secondary),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  ),
+                ],
+              );
+              final status = Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.12),
+                  color: statusColor.withValues(alpha: 0.11),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
                   _statusLabel(appointment.status),
-                  style: DawaTextStyles.label.copyWith(color: statusColor),
+                  style: DawaTextStyles.label.copyWith(
+                    color: statusColor,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
+              );
+              if (compact) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [patient, const SizedBox(height: 10), status],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [Expanded(child: patient), status],
+              );
+            },
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _AppointmentMetaChip(
+                icon: Icons.calendar_month_outlined,
+                label: DateFormat('EEE, d MMM y')
+                    .format(appointment.scheduledStart),
+              ),
+              _AppointmentMetaChip(
+                icon: Icons.schedule_rounded,
+                label:
+                    '${DateFormat('HH:mm').format(appointment.scheduledStart)}–'
+                    '${DateFormat('HH:mm').format(appointment.scheduledEnd)}',
+              ),
+              if (appointment.clinicName.isNotEmpty)
+                _AppointmentMetaChip(
+                  icon: Icons.local_hospital_outlined,
+                  label: appointment.clinicName,
+                ),
+              _AppointmentMetaChip(
+                icon: Icons.pregnant_woman_rounded,
+                label: pregnancyLabel,
               ),
             ],
           ),
-          if (appointment.reason.isNotEmpty) ...[
+          if (appointment.hasAssessmentDraft) ...[
             const SizedBox(height: 12),
-            Text('Reason', style: DawaTextStyles.label),
-            const SizedBox(height: 4),
-            Text(appointment.reason, style: DawaTextStyles.body),
-          ],
-          if (appointment.notes.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text('Booking note', style: DawaTextStyles.label),
-            const SizedBox(height: 4),
-            Text(appointment.notes, style: DawaTextStyles.body),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: DawaTokens.brandPrimaryPale,
+                borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.edit_note_rounded,
+                    size: 18,
+                    color: DawaTokens.brandPrimary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Assessment draft saved',
+                    style: DawaTextStyles.label.copyWith(
+                      color: DawaTokens.brandPrimary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
           if (appointment.integrationStatus == 'failed') ...[
             const SizedBox(height: 12),
@@ -574,51 +688,94 @@ class _AppointmentCard extends StatelessWidget {
               ),
             ),
           ],
-          if (appointment.isPending ||
-              appointment.canReschedule ||
-              appointment.canComplete) ...[
+          if (appointment.isPending || appointment.canComplete) ...[
             const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+            Row(
               children: [
-                if (appointment.isPending)
-                  FilledButton.icon(
-                    onPressed: busy ? null : () => onStatus('confirmed'),
-                    icon: const Icon(Icons.check_rounded, size: 18),
-                    label: const Text('Confirm'),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: busy ? null : onViewDetails,
+                    icon: const Icon(Icons.visibility_outlined, size: 18),
+                    label: const Text('View details'),
                   ),
-                if (appointment.isPending)
-                  OutlinedButton(
-                    onPressed: busy ? null : () => onStatus('declined'),
-                    child: const Text('Decline'),
-                  ),
-                if (appointment.canReschedule)
-                  OutlinedButton.icon(
-                    onPressed: busy ? null : onReschedule,
-                    icon: const Icon(Icons.event_repeat_rounded, size: 18),
-                    label: const Text('Reschedule'),
-                  ),
-                if (appointment.canComplete)
-                  FilledButton.tonalIcon(
-                    onPressed: busy ? null : () => onStatus('completed'),
-                    icon: const Icon(Icons.task_alt_rounded, size: 18),
-                    label: const Text('Complete'),
-                  ),
-                if (appointment.canCancel)
-                  TextButton(
-                    onPressed: busy ? null : () => onStatus('cancelled'),
-                    child: const Text('Cancel appointment'),
-                  ),
-                if (busy)
-                  const SizedBox(
-                    width: 20,
-                    height: 20,
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: appointment.isPending
+                      ? FilledButton.icon(
+                          onPressed: busy ? null : () => onStatus('confirmed'),
+                          icon: const Icon(Icons.check_rounded, size: 18),
+                          label: const Text('Confirm'),
+                        )
+                      : FilledButton.tonalIcon(
+                          onPressed: busy ? null : onAssess,
+                          icon: Icon(
+                            appointment.hasAssessmentDraft
+                                ? Icons.edit_note_rounded
+                                : Icons.playlist_add_rounded,
+                            size: 18,
+                          ),
+                          label: Text(
+                            appointment.hasAssessmentDraft
+                                ? 'Continue'
+                                : 'Start consultation',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                ),
+                if (busy) ...[
+                  const SizedBox(width: 10),
+                  const SizedBox.square(
+                    dimension: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
+                ],
               ],
             ),
+          ] else ...[
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: busy ? null : onViewDetails,
+                icon: const Icon(Icons.visibility_outlined, size: 18),
+                label: const Text('View appointment details'),
+              ),
+            ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AppointmentMetaChip extends StatelessWidget {
+  const _AppointmentMetaChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: DawaTokens.surfaceSecondary,
+        borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
+        border: Border.all(color: DawaTokens.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: DawaTokens.textSecondary),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: DawaTextStyles.label.copyWith(
+              color: DawaTokens.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -684,3 +841,9 @@ Color _statusColor(String status) {
     _ => DawaTokens.statusWarning,
   };
 }
+
+String _humanizeAppointmentType(String value) => value
+    .split('_')
+    .where((part) => part.isNotEmpty)
+    .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+    .join(' ');

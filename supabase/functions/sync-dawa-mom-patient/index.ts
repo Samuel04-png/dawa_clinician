@@ -122,6 +122,7 @@ export async function handleRequest(req: Request): Promise<Response> {
       const demographicPayload = {
         ...metadataPayload(sourceRecord, sourceMotherId, eventId, now),
         ...demographicFields(sourceRecord),
+        ...pregnancyFields(sourceRecord),
         source_deleted_at: null,
       };
 
@@ -300,6 +301,43 @@ function demographicFields(sourceRecord: JsonRecord): JsonRecord {
     fields,
     'mother_id',
     textField(sourceRecord, ['mother_id', 'patient_id']),
+  );
+  return fields;
+}
+
+function pregnancyFields(sourceRecord: JsonRecord): JsonRecord {
+  const pregnancy = sourceRecord.pregnancy;
+  if (!isRecord(pregnancy)) return {};
+
+  const allowedStatuses = new Set([
+    'pregnant',
+    'not_pregnant',
+    'not_provided',
+    'prefer_not_to_say',
+  ]);
+  const incomingStatus = optionalText(pregnancy.status);
+  const status = incomingStatus && allowedStatuses.has(incomingStatus)
+    ? incomingStatus
+    : 'not_provided';
+  const fields: JsonRecord = {
+    source_pregnancy_status: status,
+    source_pregnancy_provenance: 'patient',
+  };
+
+  assignIfPresent(
+    fields,
+    'source_pregnancy_lnmp',
+    dateField(pregnancy, ['lnmp']),
+  );
+  assignIfPresent(
+    fields,
+    'source_pregnancy_estimated_due_date',
+    dateField(pregnancy, ['estimated_due_date']),
+  );
+  assignIfPresent(
+    fields,
+    'source_pregnancy_updated_at',
+    dateField(pregnancy, ['updated_at']),
   );
   return fields;
 }

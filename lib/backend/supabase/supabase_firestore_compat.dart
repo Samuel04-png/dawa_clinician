@@ -599,7 +599,14 @@ String _generateDocumentId() {
 
 const _dateFields = <String, Set<String>>{
   'user': {'created_time'},
-  'mother': {'dateOfBirth', 'synced_at', 'source_deleted_at'},
+  'mother': {
+    'dateOfBirth',
+    'synced_at',
+    'source_deleted_at',
+    'source_pregnancy_lnmp',
+    'source_pregnancy_estimated_due_date',
+    'source_pregnancy_updated_at',
+  },
   'first_encounter': {
     'estimated_due_date',
     'lnmp',

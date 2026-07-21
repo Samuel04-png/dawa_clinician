@@ -11,7 +11,6 @@ import 'auth/firebase_auth/auth_util.dart';
 
 import 'backend/supabase/supabase_config.dart';
 import 'components/dawa_design_system.dart';
-import 'components/offline_status_banner.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import 'flutter_flow/flutter_flow_util.dart';
 
@@ -116,7 +115,7 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'Clinician',
       scrollBehavior: MyAppScrollBehavior(),
@@ -261,26 +260,20 @@ class _MyAppState extends State<MyApp> {
         useMaterial3: false,
       ),
       themeMode: ThemeMode.light,
-      // We use the builder to stack the Splash Screen ON TOP of the Router
+      routerConfig: _router,
+      // Keep the splash visual above the routed application. Global app UI
+      // that needs a Navigator/Overlay belongs in the GoRouter shell instead.
       builder: (context, child) {
-        return OfflineStatusScope(
-          child: Stack(
-            children: [
-              // The actual App Router
-              Router(
-                routerDelegate: _router.routerDelegate,
-                routeInformationParser: _router.routeInformationParser,
-                routeInformationProvider: _router.routeInformationProvider,
-              ),
-              // The Custom Splash Screen Overlay
-              if (_showCustomSplash)
-                Positioned.fill(
-                  child: DawaSplashScreen(
-                    onAnimationComplete: _onSplashComplete,
-                  ),
+        return Stack(
+          children: [
+            if (child != null) child,
+            if (_showCustomSplash)
+              Positioned.fill(
+                child: DawaSplashScreen(
+                  onAnimationComplete: _onSplashComplete,
                 ),
-            ],
-          ),
+              ),
+          ],
         );
       },
     );

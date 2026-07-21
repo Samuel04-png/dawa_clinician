@@ -44,9 +44,8 @@ class ClinicianAppointmentRepository {
         params: {
           'p_appointment_id': appointmentId,
           'p_status': status,
-          'p_appointment_date': appointmentDate == null
-              ? null
-              : _dateOnly(appointmentDate),
+          'p_appointment_date':
+              appointmentDate == null ? null : _dateOnly(appointmentDate),
           'p_start_time': startTime,
           'p_end_time': endTime,
           'p_patient_safe_message': patientSafeMessage,
@@ -55,16 +54,68 @@ class ClinicianAppointmentRepository {
     );
   }
 
+  Future<AppointmentAssessmentDraft?> getAssessmentDraft(
+    String appointmentId,
+  ) async {
+    final row = await runSupabaseRequest(
+      () => supabaseClient
+          .from('encounter')
+          .select(
+            'id,appointment_id,assessment_status,assessment_version,'
+            'assessment_payload,last_edited_at',
+          )
+          .eq('appointment_id', appointmentId)
+          .maybeSingle(),
+    );
+    if (row == null) return null;
+    return AppointmentAssessmentDraft.fromRow(
+      Map<String, dynamic>.from(row as Map),
+    );
+  }
+
+  Future<Map<String, dynamic>> saveAssessmentDraft({
+    required String appointmentId,
+    required Map<String, dynamic> assessment,
+  }) async {
+    final result = await runSupabaseRequest(
+      () => supabaseClient.rpc(
+        'save_dawa_mom_appointment_assessment_draft',
+        params: {
+          'p_appointment_id': appointmentId,
+          'p_assessment': assessment,
+        },
+      ),
+    );
+    return result is Map
+        ? Map<String, dynamic>.from(result)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> completeAssessment({
+    required String appointmentId,
+    required Map<String, dynamic> assessment,
+  }) async {
+    final result = await runSupabaseRequest(
+      () => supabaseClient.rpc(
+        'complete_dawa_mom_appointment_with_assessment',
+        params: {
+          'p_appointment_id': appointmentId,
+          'p_assessment': assessment,
+        },
+      ),
+    );
+    return result is Map
+        ? Map<String, dynamic>.from(result)
+        : <String, dynamic>{};
+  }
+
   Future<void> markNotificationRead(String notificationId) async {
     if (notificationId.isEmpty) return;
     await runSupabaseRequest(
-      () => supabaseClient
-          .from('notifications')
-          .update({
-            'is_read': true,
-            'read_at': DateTime.now().toUtc().toIso8601String(),
-          })
-          .eq('id', notificationId),
+      () => supabaseClient.from('notifications').update({
+        'is_read': true,
+        'read_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', notificationId),
     );
   }
 
@@ -84,20 +135,29 @@ class ClinicianAppointmentRepository {
         .toSet()
         .toList(growable: false);
 
-    final patientNames = <String, String>{};
+    final appointmentIds = rows
+        .map((row) => row['id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
+
+    final patientDetails = <String, Map<String, dynamic>>{};
     final clinicNames = <String, String>{};
+    final assessmentStatuses = <String, String>{};
 
     if (patientIds.isNotEmpty) {
       final patientRows = await runSupabaseRequest(
         () => supabaseClient
             .from('mother')
-            .select('id,name')
+            .select(
+              'id,name,source_pregnancy_status,source_pregnancy_lnmp,'
+              'source_pregnancy_estimated_due_date,'
+              'source_pregnancy_provenance',
+            )
             .inFilter('id', patientIds),
       );
       for (final dynamic rawRow in patientRows) {
         final row = Map<String, dynamic>.from(rawRow as Map);
-        patientNames[row['id']?.toString() ?? ''] =
-            row['name']?.toString() ?? '';
+        patientDetails[row['id']?.toString() ?? ''] = row;
       }
     }
 
@@ -115,14 +175,50 @@ class ClinicianAppointmentRepository {
       }
     }
 
+    if (appointmentIds.isNotEmpty) {
+      final assessmentRows = await runSupabaseRequest(
+        () => supabaseClient
+            .from('encounter')
+            .select('appointment_id,assessment_status')
+            .inFilter('appointment_id', appointmentIds),
+      );
+      for (final dynamic rawRow in assessmentRows) {
+        final row = Map<String, dynamic>.from(rawRow as Map);
+        assessmentStatuses[row['appointment_id']?.toString() ?? ''] =
+            row['assessment_status']?.toString() ?? 'not_started';
+      }
+    }
+
     final appointments = rows.map((rawRow) {
       final row = Map<String, dynamic>.from(rawRow);
       final patientId = row['patient_record_id']?.toString() ?? '';
       final clinicId = row['clinic_record_id']?.toString() ?? '';
+      final patient = patientDetails[patientId] ?? const <String, dynamic>{};
+      final rawPregnancyStatus =
+          patient['source_pregnancy_status']?.toString() ?? 'not_provided';
+      final pregnancyStatus = {
+        'pregnant',
+        'not_pregnant',
+        'not_provided',
+        'prefer_not_to_say',
+      }.contains(rawPregnancyStatus)
+          ? rawPregnancyStatus
+          : 'not_provided';
       return ClinicianAppointment.fromRow(
         row,
-        patientName: _displayName(patientNames[patientId], 'Patient'),
+        patientName: _displayName(patient['name']?.toString(), 'Patient'),
         clinicName: _displayName(clinicNames[clinicId], 'Clinic'),
+        assessmentStatus:
+            assessmentStatuses[row['id']?.toString() ?? ''] ?? 'not_started',
+        pregnancyStatus: pregnancyStatus,
+        pregnancyLnmp: DateTime.tryParse(
+          patient['source_pregnancy_lnmp']?.toString() ?? '',
+        ),
+        pregnancyEstimatedDueDate: DateTime.tryParse(
+          patient['source_pregnancy_estimated_due_date']?.toString() ?? '',
+        ),
+        pregnancyProvenance:
+            patient['source_pregnancy_provenance']?.toString() ?? '',
       );
     }).toList(growable: false);
     appointments.sort(

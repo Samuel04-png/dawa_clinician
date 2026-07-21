@@ -6,6 +6,7 @@ import '/backend/backend.dart';
 import '/backend/schema/structs/index.dart';
 
 import '/auth/base_auth_user_provider.dart';
+import '/components/offline_status_banner.dart';
 
 import '/flutter_flow/flutter_flow_util.dart';
 
@@ -79,229 +80,234 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
       errorBuilder: (context, state) =>
           appStateNotifier.loggedIn ? HomeWidget() : LoginWidget(),
       routes: [
-        FFRoute(
-          name: '_initialize',
-          path: '/',
-          builder: (context, _) =>
-              appStateNotifier.loggedIn ? HomeWidget() : LoginWidget(),
-        ),
-        FFRoute(
-          name: LoginWidget.routeName,
-          path: LoginWidget.routePath,
-          builder: (context, params) => LoginWidget(),
-        ),
-        FFRoute(
-          name: CompleteClincianRegWidget.routeName,
-          path: CompleteClincianRegWidget.routePath,
-          requireAuth: true,
-          builder: (context, params) => CompleteClincianRegWidget(),
-        ),
-        FFRoute(
-          name: AdminCreateAccountWidget.routeName,
-          path: AdminCreateAccountWidget.routePath,
-          builder: (context, params) => AdminCreateAccountWidget(),
-        ),
-        FFRoute(
-          name: CreateMomWidget.routeName,
-          path: CreateMomWidget.routePath,
-          builder: (context, params) => CreateMomWidget(
-            momDetails: params.getParam(
-              'momDetails',
-              ParamType.DocumentReference,
-              isList: false,
-              collectionNamePath: ['mother'],
+        ShellRoute(
+          builder: (context, state, child) => OfflineStatusScope(child: child),
+          routes: [
+            FFRoute(
+              name: '_initialize',
+              path: '/',
+              builder: (context, _) =>
+                  appStateNotifier.loggedIn ? HomeWidget() : LoginWidget(),
             ),
-            firstEncounter: params.getParam(
-              'firstEncounter',
-              ParamType.DocumentReference,
-              isList: false,
-              collectionNamePath: ['first_encounter'],
+            FFRoute(
+              name: LoginWidget.routeName,
+              path: LoginWidget.routePath,
+              builder: (context, params) => LoginWidget(),
             ),
-          ),
-        ),
-        FFRoute(
-          name: HomeWidget.routeName,
-          path: HomeWidget.routePath,
-          requireAuth: true,
-          builder: (context, params) => HomeWidget(
-            firstEncounter: params.getParam(
-              'firstEncounter',
-              ParamType.DocumentReference,
-              isList: false,
-              collectionNamePath: ['first_encounter'],
+            FFRoute(
+              name: CompleteClincianRegWidget.routeName,
+              path: CompleteClincianRegWidget.routePath,
+              requireAuth: true,
+              builder: (context, params) => CompleteClincianRegWidget(),
             ),
-          ),
-        ),
-        FFRoute(
-          name: CareToolsWidget.routeName,
-          path: CareToolsWidget.routePath,
-          requireAuth: true,
-          builder: (context, params) => CareToolsWidget(),
-        ),
-        FFRoute(
-          name: HemonixApp.routeName,
-          path: HemonixApp.routePath,
-          requireAuth: true,
-          builder: (context, params) => HemonixApp(),
-        ),
-        FFRoute(
-          name: CtScanApp.routeName,
-          path: CtScanApp.routePath,
-          requireAuth: true,
-          builder: (context, params) => CtScanApp(),
-        ),
-        FFRoute(
-          name: BpMonitorApp.routeName,
-          path: BpMonitorApp.routePath,
-          requireAuth: true,
-          builder: (context, params) => BpMonitorApp(),
-        ),
-        FFRoute(
-          name: UltrasoundApp.routeName,
-          path: UltrasoundApp.routePath,
-          requireAuth: true,
-          builder: (context, params) => UltrasoundApp(),
-        ),
-        FFRoute(
-          name: MomsWidget.routeName,
-          path: MomsWidget.routePath,
-          requireAuth: true,
-          builder: (context, params) => MomsWidget(),
-        ),
-        FFRoute(
-          name: MomDetailsWidget.routeName,
-          path: MomDetailsWidget.routePath,
-          requireAuth: true,
-          builder: (context, params) => MomDetailsWidget(
-            momDetails: params.getParam(
-              'momDetails',
-              ParamType.DocumentReference,
-              isList: false,
-              collectionNamePath: ['mother'],
+            FFRoute(
+              name: AdminCreateAccountWidget.routeName,
+              path: AdminCreateAccountWidget.routePath,
+              builder: (context, params) => AdminCreateAccountWidget(),
             ),
-            firstEncounter: params.getParam(
-              'firstEncounter',
-              ParamType.DocumentReference,
-              isList: false,
-              collectionNamePath: ['first_encounter'],
+            FFRoute(
+              name: CreateMomWidget.routeName,
+              path: CreateMomWidget.routePath,
+              builder: (context, params) => CreateMomWidget(
+                momDetails: params.getParam(
+                  'momDetails',
+                  ParamType.DocumentReference,
+                  isList: false,
+                  collectionNamePath: ['mother'],
+                ),
+                firstEncounter: params.getParam(
+                  'firstEncounter',
+                  ParamType.DocumentReference,
+                  isList: false,
+                  collectionNamePath: ['first_encounter'],
+                ),
+              ),
             ),
-          ),
-        ),
-        FFRoute(
-          name: PatientDetailsWidget.routeName,
-          path: PatientDetailsWidget.routePath,
-          requireAuth: true,
-          builder: (context, params) => PatientDetailsWidget(
-            momDetails: params.getParam(
-              'momDetails',
-              ParamType.DocumentReference,
-              isList: false,
-              collectionNamePath: ['mother'],
+            FFRoute(
+              name: HomeWidget.routeName,
+              path: HomeWidget.routePath,
+              requireAuth: true,
+              builder: (context, params) => HomeWidget(
+                firstEncounter: params.getParam(
+                  'firstEncounter',
+                  ParamType.DocumentReference,
+                  isList: false,
+                  collectionNamePath: ['first_encounter'],
+                ),
+              ),
             ),
-            firstEncounter: params.getParam(
-              'firstEncounter',
-              ParamType.DocumentReference,
-              isList: false,
-              collectionNamePath: ['first_encounter'],
+            FFRoute(
+              name: CareToolsWidget.routeName,
+              path: CareToolsWidget.routePath,
+              requireAuth: true,
+              builder: (context, params) => CareToolsWidget(),
             ),
-          ),
-        ),
-        FFRoute(
-          name: EncounterWidget.routeName,
-          path: EncounterWidget.routePath,
-          requireAuth: true,
-          builder: (context, params) => EncounterWidget(
-            momDetails: params.getParam(
-              'momDetails',
-              ParamType.DocumentReference,
-              isList: false,
-              collectionNamePath: ['mother'],
+            FFRoute(
+              name: HemonixApp.routeName,
+              path: HemonixApp.routePath,
+              requireAuth: true,
+              builder: (context, params) => HemonixApp(),
             ),
-          ),
-        ),
-        FFRoute(
-          name: EncounterDetsWidget.routeName,
-          path: EncounterDetsWidget.routePath,
-          builder: (context, params) => EncounterDetsWidget(
-            momDets: params.getParam(
-              'momDets',
-              ParamType.DocumentReference,
-              isList: false,
-              collectionNamePath: ['mother'],
+            FFRoute(
+              name: CtScanApp.routeName,
+              path: CtScanApp.routePath,
+              requireAuth: true,
+              builder: (context, params) => CtScanApp(),
             ),
-            encounterDetails: params.getParam(
-              'encounterDetails',
-              ParamType.DocumentReference,
-              isList: false,
-              collectionNamePath: ['encounter'],
+            FFRoute(
+              name: BpMonitorApp.routeName,
+              path: BpMonitorApp.routePath,
+              requireAuth: true,
+              builder: (context, params) => BpMonitorApp(),
             ),
-          ),
-        ),
-        FFRoute(
-          name: EditEncounterWidget.routeName,
-          path: EditEncounterWidget.routePath,
-          requireAuth: true,
-          builder: (context, params) => EditEncounterWidget(
-            momDetails: params.getParam(
-              'momDetails',
-              ParamType.DocumentReference,
-              isList: false,
-              collectionNamePath: ['mother'],
+            FFRoute(
+              name: UltrasoundApp.routeName,
+              path: UltrasoundApp.routePath,
+              requireAuth: true,
+              builder: (context, params) => UltrasoundApp(),
             ),
-            encounterDetails: params.getParam(
-              'encounterDetails',
-              ParamType.DocumentReference,
-              isList: false,
-              collectionNamePath: ['encounter'],
+            FFRoute(
+              name: MomsWidget.routeName,
+              path: MomsWidget.routePath,
+              requireAuth: true,
+              builder: (context, params) => MomsWidget(),
             ),
-          ),
-        ),
-        FFRoute(
-          name: ScheduledEncountersWidget.routeName,
-          path: ScheduledEncountersWidget.routePath,
-          requireAuth: true,
-          builder: (context, params) => ScheduledEncountersWidget(),
-        ),
-        FFRoute(
-          name: ResetPasswordWidget.routeName,
-          path: ResetPasswordWidget.routePath,
-          builder: (context, params) => ResetPasswordWidget(),
-        ),
-        FFRoute(
-          name: ProfileWidget.routeName,
-          path: ProfileWidget.routePath,
-          builder: (context, params) => ProfileWidget(),
-        ),
-        FFRoute(
-          name: EditProfileWidget.routeName,
-          path: EditProfileWidget.routePath,
-          builder: (context, params) => EditProfileWidget(),
-        ),
-        FFRoute(
-          name: LoginCopyWidget.routeName,
-          path: LoginCopyWidget.routePath,
-          builder: (context, params) => LoginCopyWidget(),
-        ),
-        FFRoute(
-          name: MomDetails2Widget.routeName,
-          path: MomDetails2Widget.routePath,
-          requireAuth: true,
-          builder: (context, params) => MomDetails2Widget(
-            momDetails: params.getParam(
-              'momDetails',
-              ParamType.DocumentReference,
-              isList: false,
-              collectionNamePath: ['mother'],
+            FFRoute(
+              name: MomDetailsWidget.routeName,
+              path: MomDetailsWidget.routePath,
+              requireAuth: true,
+              builder: (context, params) => MomDetailsWidget(
+                momDetails: params.getParam(
+                  'momDetails',
+                  ParamType.DocumentReference,
+                  isList: false,
+                  collectionNamePath: ['mother'],
+                ),
+                firstEncounter: params.getParam(
+                  'firstEncounter',
+                  ParamType.DocumentReference,
+                  isList: false,
+                  collectionNamePath: ['first_encounter'],
+                ),
+              ),
             ),
-            firstEncounter: params.getParam(
-              'firstEncounter',
-              ParamType.DocumentReference,
-              isList: false,
-              collectionNamePath: ['first_encounter'],
+            FFRoute(
+              name: PatientDetailsWidget.routeName,
+              path: PatientDetailsWidget.routePath,
+              requireAuth: true,
+              builder: (context, params) => PatientDetailsWidget(
+                momDetails: params.getParam(
+                  'momDetails',
+                  ParamType.DocumentReference,
+                  isList: false,
+                  collectionNamePath: ['mother'],
+                ),
+                firstEncounter: params.getParam(
+                  'firstEncounter',
+                  ParamType.DocumentReference,
+                  isList: false,
+                  collectionNamePath: ['first_encounter'],
+                ),
+              ),
             ),
-          ),
-        )
-      ].map((r) => r.toRoute(appStateNotifier)).toList(),
+            FFRoute(
+              name: EncounterWidget.routeName,
+              path: EncounterWidget.routePath,
+              requireAuth: true,
+              builder: (context, params) => EncounterWidget(
+                momDetails: params.getParam(
+                  'momDetails',
+                  ParamType.DocumentReference,
+                  isList: false,
+                  collectionNamePath: ['mother'],
+                ),
+              ),
+            ),
+            FFRoute(
+              name: EncounterDetsWidget.routeName,
+              path: EncounterDetsWidget.routePath,
+              builder: (context, params) => EncounterDetsWidget(
+                momDets: params.getParam(
+                  'momDets',
+                  ParamType.DocumentReference,
+                  isList: false,
+                  collectionNamePath: ['mother'],
+                ),
+                encounterDetails: params.getParam(
+                  'encounterDetails',
+                  ParamType.DocumentReference,
+                  isList: false,
+                  collectionNamePath: ['encounter'],
+                ),
+              ),
+            ),
+            FFRoute(
+              name: EditEncounterWidget.routeName,
+              path: EditEncounterWidget.routePath,
+              requireAuth: true,
+              builder: (context, params) => EditEncounterWidget(
+                momDetails: params.getParam(
+                  'momDetails',
+                  ParamType.DocumentReference,
+                  isList: false,
+                  collectionNamePath: ['mother'],
+                ),
+                encounterDetails: params.getParam(
+                  'encounterDetails',
+                  ParamType.DocumentReference,
+                  isList: false,
+                  collectionNamePath: ['encounter'],
+                ),
+              ),
+            ),
+            FFRoute(
+              name: ScheduledEncountersWidget.routeName,
+              path: ScheduledEncountersWidget.routePath,
+              requireAuth: true,
+              builder: (context, params) => ScheduledEncountersWidget(),
+            ),
+            FFRoute(
+              name: ResetPasswordWidget.routeName,
+              path: ResetPasswordWidget.routePath,
+              builder: (context, params) => ResetPasswordWidget(),
+            ),
+            FFRoute(
+              name: ProfileWidget.routeName,
+              path: ProfileWidget.routePath,
+              builder: (context, params) => ProfileWidget(),
+            ),
+            FFRoute(
+              name: EditProfileWidget.routeName,
+              path: EditProfileWidget.routePath,
+              builder: (context, params) => EditProfileWidget(),
+            ),
+            FFRoute(
+              name: LoginCopyWidget.routeName,
+              path: LoginCopyWidget.routePath,
+              builder: (context, params) => LoginCopyWidget(),
+            ),
+            FFRoute(
+              name: MomDetails2Widget.routeName,
+              path: MomDetails2Widget.routePath,
+              requireAuth: true,
+              builder: (context, params) => MomDetails2Widget(
+                momDetails: params.getParam(
+                  'momDetails',
+                  ParamType.DocumentReference,
+                  isList: false,
+                  collectionNamePath: ['mother'],
+                ),
+                firstEncounter: params.getParam(
+                  'firstEncounter',
+                  ParamType.DocumentReference,
+                  isList: false,
+                  collectionNamePath: ['first_encounter'],
+                ),
+              ),
+            )
+          ].map((r) => r.toRoute(appStateNotifier)).toList(),
+        ),
+      ],
     );
 
 extension NavParamExtensions on Map<String, String?> {
