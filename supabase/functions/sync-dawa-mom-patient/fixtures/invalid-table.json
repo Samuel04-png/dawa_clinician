@@ -1,0 +1,9 @@
+{
+  "type": "INSERT",
+  "schema": "public",
+  "table": "appointments",
+  "record": {
+    "id": "mom-test-invalid-table"
+  },
+  "old_record": null
+}

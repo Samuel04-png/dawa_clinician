@@ -1,0 +1,10 @@
+{
+  "type": "DELETE",
+  "schema": "public",
+  "table": "mothers",
+  "record": null,
+  "old_record": {
+    "id": "mom-test-delete-missing",
+    "user_id": "auth-user-delete-missing"
+  }
+}

@@ -1,0 +1,27 @@
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+supabase/.temp/
+*.log
+.DS_Store
+._*
+analyze_output.txt
+
+# Local migration outputs and secrets.
+migration_exports/
+tools/firebase_to_supabase/.env
+tools/firebase_to_supabase/firebase-service.json
+tools/firebase_to_supabase/supabase-service.json
+tools/firebase_to_supabase/firebase-to-supabase/
+tools/firebase_to_supabase/node_modules/
+ios/Flutter/ephemeral/
+
+# Legacy Firebase native config should not come back into the Supabase app.
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+android/hs_err_pid*.log
+android/replay_pid*.log
