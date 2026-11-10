@@ -14,7 +14,7 @@ static const _deviceSpecificBaseUrl = String.fromEnvironment(
 
 static const _baseUrl = String.fromEnvironment(
   'PI_DEVICE_BASE_URL',
-  defaultValue: 'http://DAWA.local:8084',
+  defaultValue: 'https://dawa.local',
 );
 ```
 

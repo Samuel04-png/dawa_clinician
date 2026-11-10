@@ -9,7 +9,13 @@ import 'dart:ui' as ui;
 import 'package:image_picker/image_picker.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/services/offline_connectivity_service.dart';
+import '/components/edge_device_status_banner.dart';
+import '/services/edge_device/edge_device_models.dart';
 import 'cacx_upload_service.dart';
+import 'cacx_device_failure.dart';
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import '/services/edge_device/edge_device_manager.dart';
+import '/services/edge_device/edge_device_exceptions.dart';
 import 'cacx_model.dart';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -271,17 +277,30 @@ Future<String?> showImageSourcePicker(BuildContext context) async {
       uploadLabel: 'Upload Image',
       uploadSubtitle: 'Choose from gallery',
       onTakePhoto: () async {
-        final image = await ImagePickerService.captureImage();
-        if (!ctx.mounted) return;
-        Navigator.pop(ctx, image);
+        await _pickCacxImage(ctx, ImagePickerService.captureImage);
       },
       onUploadImage: () async {
-        final image = await ImagePickerService.pickImage();
-        if (!ctx.mounted) return;
-        Navigator.pop(ctx, image);
+        await _pickCacxImage(ctx, ImagePickerService.pickImage);
       },
     ),
   );
+}
+
+Future<void> _pickCacxImage(
+  BuildContext context,
+  Future<String?> Function() pick,
+) async {
+  try {
+    final image = await pick();
+    if (context.mounted) Navigator.pop(context, image);
+  } catch (error, stackTrace) {
+    debugPrint('[CaCx] Image selection failed: ${error.runtimeType}');
+    debugPrintStack(stackTrace: stackTrace);
+    if (context.mounted) {
+      showDawaToast(context,
+          'Could not load the image. Select a JPEG or PNG and try again.');
+    }
+  }
 }
 
 // ??? APP MODES ????????????????????????????????????????????????????????????????
@@ -321,6 +340,7 @@ class _CaCxAppState extends State<CaCxApp> {
   Timer? _deviceCountdownTimer;
   bool _deviceUploadInProgress = false;
   bool _cloudFallbackRequested = false;
+  CacxDeviceFailure? _lastDeviceFailure;
   bool _cloudFallbackInProgress = false;
   String? _currentScanImagePath;
   String? _currentScanPatientId;
@@ -365,6 +385,12 @@ class _CaCxAppState extends State<CaCxApp> {
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _trySyncPendingCacx();
+      final manager = EdgeDeviceManager.shared;
+      if (kDebugMode) {
+        debugPrint('[Device] CaCx configuration: '
+            '${manager.client.config.diagnosticSummary()}');
+      }
+      unawaited(manager.refreshObservedReadiness(EdgeAIModel.cervicalCancer));
     });
     if (widget.autoStartScreening) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -546,7 +572,7 @@ class _CaCxAppState extends State<CaCxApp> {
 
   Future<void> _trySyncPendingCacx() async {
     final connectivity = await OfflineConnectivityService.refreshStatus();
-    if (connectivity.isOffline) {
+    if (!connectivity.supabaseReachable) {
       return;
     }
     await CacxScreeningResultsRepository.syncPending();
@@ -566,6 +592,7 @@ class _CaCxAppState extends State<CaCxApp> {
     _deviceCountdownTimer = null;
     _deviceUploadInProgress = false;
     _cloudFallbackRequested = false;
+    _lastDeviceFailure = null;
     _cloudFallbackInProgress = false;
     _currentScanImagePath = null;
     _currentScanPatientId = null;
@@ -609,6 +636,7 @@ class _CaCxAppState extends State<CaCxApp> {
     if (_selectedImage == null) return;
 
     final image = _selectedImage!;
+    _lastDeviceFailure = null;
     final patientId = _selectedPatient?.id;
     final userId = currentUserUid.isEmpty ? null : currentUserUid;
     final imagePath = CacxScreeningResultsRepository.buildImagePath(
@@ -619,8 +647,16 @@ class _CaCxAppState extends State<CaCxApp> {
     _currentScanPatientId = patientId;
     _currentScanUserId = userId;
 
-    final connectivity = await OfflineConnectivityService.refreshStatus();
-    if (connectivity.isOffline) {
+    // Probe the local device as part of the decision. Local availability must
+    // win over the internet/Supabase state so a clinic can work LAN-only.
+    final connectivity = await OfflineConnectivityService.refreshStatus(
+      checkDevice: true,
+    );
+    final route = OfflineConnectivityService.cacxRouteFor(
+      deviceReachable: connectivity.deviceReachable,
+      internetAvailable: connectivity.internetAvailable,
+    );
+    if (route == CacxRoutingDecision.offline) {
       await _analyzeImageOfflineOnly(
         image: image,
         patientId: patientId,
@@ -634,7 +670,13 @@ class _CaCxAppState extends State<CaCxApp> {
 
     final primary = await _sendImageToDeviceOnce(image, patientId);
 
-    final secondRequired = primary.deviceStatus != 'success';
+    if (_lastDeviceFailure?.isApplicationError == true) {
+      _showApplicationFailure();
+      return;
+    }
+
+    final secondRequired = primary.deviceStatus != 'rejected' &&
+        (primary.deviceStatus != 'success' || primary.requiresSecondOpinion);
     final initialSecondStatus = secondRequired ? 'pending' : 'not_required';
     final recordId = await _savePrimaryResultForCurrentScan(
       primary: primary,
@@ -662,16 +704,27 @@ class _CaCxAppState extends State<CaCxApp> {
     }
 
     _setFlowStatus(
-      recordId == null
-          ? 'Device status received, but Supabase save failed'
-          : 'Device result saved to Supabase',
+      cacxOutcomeStatus(primary, saved: recordId != null),
       warning: recordId == null
           ? 'The screening flow continued, but the screening result row could not be saved.'
           : _flowWarningMessage,
     );
 
+    if (primary.deviceStatus == 'rejected') {
+      _setFlowStatus(
+        'Image rejected — retake the photo',
+        warning: primary.error ??
+            'The image is not suitable for screening. Please retake the photo.',
+      );
+      setState(() {
+        _deviceSecondsRemaining = null;
+        _isAnalyzing = false;
+        _appState = AppState.dashboard;
+      });
+      return;
+    }
+
     if (!secondRequired) {
-      _setFlowStatus('Device handled case');
       setState(() {
         _deviceSecondsRemaining = null;
         _analysisResult = primary.toAnalysisResult(image);
@@ -685,7 +738,9 @@ class _CaCxAppState extends State<CaCxApp> {
       primary: primary,
       statusMessage: primary.deviceStatus == 'timeout'
           ? 'Device did not respond in time. Sending for second opinion.'
-          : 'Device failed. Sending for second opinion.',
+          : primary.deviceStatus == 'rejected'
+              ? 'Device rejected the image quality. Sending for second opinion.'
+              : 'Device failed. Sending for second opinion.',
       warning: 'The online scan is using the same uploaded image.',
     );
   }
@@ -713,6 +768,25 @@ class _CaCxAppState extends State<CaCxApp> {
     );
 
     if (primary.deviceStatus != 'success') {
+      if (_lastDeviceFailure?.isApplicationError == true) {
+        _showApplicationFailure();
+        return;
+      }
+      if (primary.deviceStatus == 'rejected') {
+        if (!mounted) return;
+        _setFlowStatus(
+          'Image rejected — retake the photo',
+          warning: primary.error ??
+              'The image is not suitable for screening. Please retake the photo.',
+        );
+        setState(() {
+          _primaryDeviceResult = primary;
+          _isAnalyzing = false;
+          _deviceSecondsRemaining = null;
+          _appState = AppState.dashboard;
+        });
+        return;
+      }
       _showOfflineDeviceUnavailable();
       return;
     }
@@ -757,6 +831,19 @@ class _CaCxAppState extends State<CaCxApp> {
     });
   }
 
+  void _showApplicationFailure() {
+    if (!mounted) return;
+    _setFlowStatus(
+      'Examination failed in the application',
+      warning: _lastDeviceFailure!.message,
+    );
+    setState(() {
+      _isAnalyzing = false;
+      _deviceSecondsRemaining = null;
+      _secondOpinionStatus = 'not_required';
+    });
+  }
+
   Future<CervicalDeviceInterpretation> _sendImageToDeviceOnce(
     String image,
     String? patientId, {
@@ -776,25 +863,43 @@ class _CaCxAppState extends State<CaCxApp> {
     }
 
     final deadline = DateTime.now().add(
-      const Duration(seconds: CervicalDeviceConfig.timeoutSeconds),
+      Duration(seconds: CervicalDeviceConfig.timeoutSeconds),
     );
     _deviceUploadInProgress = true;
     _setDeviceCountdown(deadline, 0);
 
     debugPrint('[Device] Connection attempt');
-    _setFlowStatus('Connecting to device...');
+    _setFlowStatus('Connecting to Dawa Device...');
     _startDeviceCountdown(deadline);
 
+    final manager = EdgeDeviceManager.shared;
+    void syncDeviceStatus() {
+      if (!mounted || !_deviceUploadInProgress) return;
+      final status = switch (manager.state) {
+        EdgeDeviceState.connecting ||
+        EdgeDeviceState.connected =>
+          'Connecting to Dawa Device...',
+        EdgeDeviceState.loadingModel =>
+          'Preparing Cervical AI: waiting for model initialization...',
+        EdgeDeviceState.ready => 'Cervical AI ready',
+        EdgeDeviceState.examining => 'Sending image for device processing...',
+        EdgeDeviceState.busy => 'Device busy',
+        _ => null,
+      };
+      if (status != null) _setFlowStatus(status);
+    }
+
+    if (manager.modelManagementEnabled) manager.addListener(syncDeviceStatus);
+
+    var inferenceCompleted = false;
     try {
-      if (!skipHealthCheck) {
+      if (!skipHealthCheck &&
+          !EdgeDeviceManager.shared.modelManagementEnabled) {
         await CervicalDeviceService.checkHealth();
       }
 
-      _setFlowStatus('Sending image to device...');
-      debugPrint('[Device] Upload started');
-
-      _setFlowStatus('Waiting for device response...');
-      debugPrint('[Device] Waiting for response');
+      _setFlowStatus('Preparing cervical AI...');
+      debugPrint('[Device] Preparing device request');
       final remaining = deadline.difference(DateTime.now());
       if (remaining <= Duration.zero) {
         throw TimeoutException(
@@ -808,6 +913,7 @@ class _CaCxAppState extends State<CaCxApp> {
         timeout: remaining,
       );
 
+      inferenceCompleted = true;
       if (result.failed) {
         debugPrint('[Device] Unrecoverable error: ${result.error}');
       } else {
@@ -816,74 +922,49 @@ class _CaCxAppState extends State<CaCxApp> {
       }
 
       return result;
-    } on TimeoutException catch (error) {
-      final message =
-          'Device timeout after ${CervicalDeviceConfig.timeoutSeconds} seconds';
-      debugPrint(
-          '[Device] Timeout after ${CervicalDeviceConfig.timeoutSeconds} seconds');
+    } catch (error, stackTrace) {
+      final failure = classifyCacxDeviceFailure(error, isWeb: kIsWeb);
+      final timedOut = failure.kind == CacxDeviceFailureKind.timeout;
+      if (failure.isApplicationError) {
+        debugPrint('[CaCx] Application exception: ${error.runtimeType}');
+        debugPrintStack(stackTrace: stackTrace);
+      }
+      debugPrint('[Device] Fallback reason: ${failure.kind.name} '
+          '(${error.runtimeType})');
+      _lastDeviceFailure = failure;
       _setFlowStatus(
         allowCloudFallbackMessages
-            ? 'Device timed out. Sending for second opinion...'
+            ? failure.isApplicationError
+                ? 'Application error: ${failure.message}'
+                : 'Device unavailable: ${failure.message}'
             : 'Offline mode: Arduino device not connected',
         warning: allowCloudFallbackMessages
-            ? 'Device did not respond in time. Sending for second opinion.'
+            ? failure.message
             : 'Offline mode: Arduino device not connected. Please connect the device or go online.',
       );
       return CervicalDeviceInterpretation.failure(
         label: 'Error',
-        message: message,
-        deviceStatus: 'timeout',
+        message: failure.message,
+        deviceStatus: timedOut ? 'timeout' : 'failed',
         rawResponse: {
-          'status': 'timeout',
-          'error': error.toString(),
+          'status': timedOut ? 'timeout' : 'failed',
+          'failure_kind': failure.kind.name,
+          'error': failure.message,
           'endpoint': CervicalDeviceConfig.imagePostUrl,
-          'timeout_seconds': CervicalDeviceConfig.timeoutSeconds,
-        },
-      );
-    } on CervicalDeviceHttpException catch (error) {
-      debugPrint('[Device] HTTP failure: $error');
-      _setFlowStatus(
-        allowCloudFallbackMessages
-            ? 'Device failed. Sending for second opinion...'
-            : 'Offline mode: Arduino device not connected',
-        warning: allowCloudFallbackMessages
-            ? (error.body.isEmpty ? error.toString() : error.body)
-            : 'Offline mode: Arduino device not connected. Please connect the device or go online.',
-      );
-      return CervicalDeviceInterpretation.failure(
-        label: 'Error',
-        message: error.toString(),
-        deviceStatus: 'failed',
-        rawResponse: {
-          'status': 'failed',
-          'status_code': error.statusCode,
-          'error': error.body,
-          'endpoint': CervicalDeviceConfig.imagePostUrl,
-        },
-      );
-    } catch (error) {
-      debugPrint('[Device] Network failure: $error');
-      _setFlowStatus(
-        allowCloudFallbackMessages
-            ? 'Device failed. Sending for second opinion...'
-            : 'Offline mode: Arduino device not connected',
-        warning: allowCloudFallbackMessages
-            ? error.toString()
-            : 'Offline mode: Arduino device not connected. Please connect the device or go online.',
-      );
-      return CervicalDeviceInterpretation.failure(
-        label: 'Error',
-        message: error.toString(),
-        deviceStatus: 'failed',
-        rawResponse: {
-          'status': 'offline',
-          'error': error.toString(),
-          'endpoint': CervicalDeviceConfig.imagePostUrl,
+          if (timedOut) 'timeout_seconds': CervicalDeviceConfig.timeoutSeconds,
         },
       );
     } finally {
+      if (manager.modelManagementEnabled) {
+        manager.removeListener(syncDeviceStatus);
+      }
       _deviceUploadInProgress = false;
       _stopDeviceCountdown();
+      if (inferenceCompleted) {
+        unawaited(
+          manager.refreshObservedReadiness(EdgeAIModel.cervicalCancer),
+        );
+      }
     }
   }
 
@@ -920,11 +1001,11 @@ class _CaCxAppState extends State<CaCxApp> {
   }) async {
     final existingId = _screeningRecordId;
     if (existingId != null && existingId.isNotEmpty) {
-      await CacxScreeningResultsRepository.updatePrimaryResult(
+      final saved = await CacxScreeningResultsRepository.updatePrimaryResult(
         recordId: existingId,
         primary: primary,
       );
-      return existingId;
+      return saved ? existingId : null;
     }
 
     final recordId = await CacxScreeningResultsRepository.insertPrimaryResult(
@@ -963,8 +1044,10 @@ class _CaCxAppState extends State<CaCxApp> {
   Future<void> _skipToCloudResultNow() async {
     if (_selectedImage == null || _cloudFallbackInProgress) return;
 
-    _cloudFallbackRequested = true;
     final primary = _primaryDeviceResult ?? _pendingDeviceInterpretation();
+    final choice = await _askSecondOpinionApproval(primary);
+    if (!mounted || choice != _SecondOpinionChoice.sendOnline) return;
+    _cloudFallbackRequested = true;
 
     await _savePrimaryResultForCurrentScan(
       primary: primary,
@@ -980,6 +1063,7 @@ class _CaCxAppState extends State<CaCxApp> {
     });
 
     await _runCloudFallbackForCurrentScan(
+      userApproved: true,
       primary: primary,
       statusMessage: 'Using online scan result now...',
       warning:
@@ -987,15 +1071,88 @@ class _CaCxAppState extends State<CaCxApp> {
     );
   }
 
+  Future<_SecondOpinionChoice> _askSecondOpinionApproval(
+    CervicalDeviceInterpretation primary,
+  ) async {
+    final deviceFailed = primary.deviceStatus != 'success';
+    final failure = _lastDeviceFailure;
+    final reason = !deviceFailed
+        ? 'The device result recommends a second opinion.'
+        : primary.deviceStatus == 'rejected'
+            ? 'The device rejected the image quality.'
+            : failure?.message ??
+                primary.error ??
+                'The Dawa device could not analyse the image.';
+    debugPrint('[Device] Fallback reason: '
+        '${failure?.kind.name ?? primary.deviceStatus}');
+    final canRetry = deviceFailed && primary.deviceStatus != 'rejected';
+    final choice = await showDialog<_SecondOpinionChoice>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Send for online second opinion?'),
+        content: Text(
+          '$reason\n\nSending will upload this cervical image to the online '
+          'second-opinion service, outside the clinic network.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(_SecondOpinionChoice.cancel),
+            child: const Text('Do not send'),
+          ),
+          if (canRetry)
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext)
+                  .pop(_SecondOpinionChoice.retryDevice),
+              child: const Text('Retry device'),
+            ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext)
+                .pop(_SecondOpinionChoice.sendOnline),
+            child: const Text('Send online'),
+          ),
+        ],
+      ),
+    );
+    return choice ?? _SecondOpinionChoice.cancel;
+  }
+
   Future<void> _runCloudFallbackForCurrentScan({
     required CervicalDeviceInterpretation primary,
     required String statusMessage,
     String? warning,
+    bool userApproved = false,
   }) async {
     if (_selectedImage == null || _cloudFallbackInProgress) return;
 
+    if (!userApproved) {
+      final choice = await _askSecondOpinionApproval(primary);
+      if (!mounted) return;
+      if (choice == _SecondOpinionChoice.retryDevice) {
+        debugPrint('[Device] Controlled retry requested by clinician');
+        _lastDeviceFailure = null;
+        await _analyzeImage();
+        return;
+      }
+      if (choice != _SecondOpinionChoice.sendOnline) {
+        debugPrint('[Device] Online second opinion declined by clinician');
+        _setFlowStatus(
+          'Online second opinion not sent',
+          warning:
+              'The image was not sent to the online service. Re-run the scan when the Dawa device is ready.',
+        );
+        setState(() {
+          _deviceSecondsRemaining = null;
+          _isAnalyzing = false;
+          _appState = AppState.dashboard;
+        });
+        return;
+      }
+    }
+
     final connectivity = await OfflineConnectivityService.refreshStatus();
-    if (connectivity.isOffline) {
+    if (!connectivity.internetAvailable) {
       _setFlowStatus(
         'Offline mode: online scan unavailable',
         warning:
@@ -1068,9 +1225,29 @@ class _CaCxAppState extends State<CaCxApp> {
 
   Future<void> _runManualSecondOpinion() async {
     if (_selectedImage == null) return;
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Send for online second opinion?'),
+        content: const Text(
+          'This sends the selected image outside the clinic network to the online second-opinion service.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Do not send'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Send online'),
+          ),
+        ],
+      ),
+    );
+    if (approved != true || !mounted) return;
 
     final connectivity = await OfflineConnectivityService.refreshStatus();
-    if (connectivity.isOffline) {
+    if (!connectivity.internetAvailable) {
       _setFlowStatus(
         'Offline mode: online scan unavailable',
         warning:
@@ -1350,120 +1527,214 @@ class _CaCxAppState extends State<CaCxApp> {
       width: double.infinity,
       color: DawaTokens.surface,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
-          border: Border.all(
-            color: warning ? DawaTokens.statusWarning : DawaTokens.border,
-          ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_isAnalyzing)
-              SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: statusColor,
-                ),
-              )
-            else
-              Icon(statusIcon, color: statusColor, size: 18),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _analyzingStatus,
-                    style: DawaTextStyles.secondary.copyWith(
-                      color: warning
-                          ? DawaTokens.statusWarningText
-                          : DawaTokens.brandPrimary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  if (_flowWarningMessage != null) ...[
-                    const SizedBox(height: 3),
-                    Text(
-                      _flowWarningMessage!,
-                      style: DawaTextStyles.secondary.copyWith(
-                        color: DawaTokens.statusWarningText,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                  if (_isAnalyzing && remaining != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'This may take up to 2 minutes.',
-                      style: DawaTextStyles.secondary.copyWith(
-                        color: warning
-                            ? DawaTokens.statusWarningText
-                            : DawaTokens.textSecondary,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(99),
-                      child: LinearProgressIndicator(
-                        value: progress,
-                        minHeight: 5,
-                        color: statusColor,
-                        backgroundColor: Colors.white.withOpacity(0.65),
-                      ),
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      '$remaining seconds remaining'
-                      '${_deviceRetryCount > 0 ? ' - retry $_deviceRetryCount' : ''}',
-                      style: DawaTextStyles.secondary.copyWith(
-                        color: warning
-                            ? DawaTokens.statusWarningText
-                            : DawaTokens.textSecondary,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                  if (showCloudSkip) ...[
-                    const SizedBox(height: 10),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: OutlinedButton.icon(
-                        onPressed: _cloudFallbackInProgress
-                            ? null
-                            : _skipToCloudResultNow,
-                        icon: const Icon(Icons.cloud_outlined, size: 16),
-                        label: const Text('Use Online Scan Now'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: DawaTokens.brandPrimary,
-                          side:
-                              const BorderSide(color: DawaTokens.brandPrimary),
-                          backgroundColor: DawaTokens.surface,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
+              border: Border.all(
+                color: warning ? DawaTokens.statusWarning : DawaTokens.border,
               ),
             ),
-            if (!showCloudSkip &&
-                !_isAnalyzing &&
-                _selectedImage != null &&
-                _secondOpinionStatus == 'failed')
-              TextButton(
-                onPressed: _runManualSecondOpinion,
-                child: const Text('Retry server'),
-              ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_isAnalyzing)
+                  SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: statusColor,
+                    ),
+                  )
+                else
+                  Icon(statusIcon, color: statusColor, size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _analyzingStatus,
+                        style: DawaTextStyles.secondary.copyWith(
+                          color: warning
+                              ? DawaTokens.statusWarningText
+                              : DawaTokens.brandPrimary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (_flowWarningMessage != null) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          _flowWarningMessage!,
+                          style: DawaTextStyles.secondary.copyWith(
+                            color: DawaTokens.statusWarningText,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                      if (_isAnalyzing && remaining != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'The device may need several minutes to prepare and process the image.',
+                          style: DawaTextStyles.secondary.copyWith(
+                            color: warning
+                                ? DawaTokens.statusWarningText
+                                : DawaTokens.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(99),
+                          child: LinearProgressIndicator(
+                            value: progress,
+                            minHeight: 5,
+                            color: statusColor,
+                            backgroundColor: Colors.white.withOpacity(0.65),
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          '$remaining seconds remaining'
+                          '${_deviceRetryCount > 0 ? ' - retry $_deviceRetryCount' : ''}',
+                          style: DawaTextStyles.secondary.copyWith(
+                            color: warning
+                                ? DawaTokens.statusWarningText
+                                : DawaTokens.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                      if (showCloudSkip) ...[
+                        const SizedBox(height: 10),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: OutlinedButton.icon(
+                            onPressed: _cloudFallbackInProgress
+                                ? null
+                                : _skipToCloudResultNow,
+                            icon: const Icon(Icons.cloud_outlined, size: 16),
+                            label: const Text('Use Online Scan Now'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: DawaTokens.brandPrimary,
+                              side: const BorderSide(
+                                color: DawaTokens.brandPrimary,
+                              ),
+                              backgroundColor: DawaTokens.surface,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (!showCloudSkip &&
+                    !_isAnalyzing &&
+                    _selectedImage != null &&
+                    _secondOpinionStatus == 'failed')
+                  TextButton(
+                    onPressed: _runManualSecondOpinion,
+                    child: const Text('Retry server'),
+                  ),
+                if (!_isAnalyzing &&
+                    _selectedImage != null &&
+                    _lastDeviceFailure?.isApplicationError == true)
+                  TextButton(
+                    onPressed: () {
+                      setState(() => _isAnalyzing = true);
+                      _analyzeImage();
+                    },
+                    child: const Text('Retry device'),
+                  ),
+              ],
+            ),
+          ),
+          if (_isAnalyzing || _primaryDeviceResult != null) ...[
+            const SizedBox(height: 8),
+            _buildCacxEdgeStatus(),
           ],
-        ),
+        ],
       ),
     );
+  }
+
+  Widget _buildCacxEdgeStatus() {
+    final manager = EdgeDeviceManager.shared;
+    return AnimatedBuilder(
+      animation: manager,
+      builder: (context, _) {
+        if (manager.activeExaminationId != null &&
+            manager.activeModel != EdgeAIModel.cervicalCancer) {
+          return const SizedBox.shrink();
+        }
+        if (!manager.modelManagementEnabled) {
+          return const EdgeDeviceStatusBanner(
+            state: EdgeDeviceState.unverified,
+            message:
+                'Legacy CaCx upload remains available. The device does not confirm model readiness until George verifies model-management support.',
+          );
+        }
+        final unresolved = manager.activeModel == EdgeAIModel.cervicalCancer &&
+            manager.activeExaminationId != null &&
+            {
+              EdgeDeviceState.error,
+              EdgeDeviceState.loadingModel,
+              EdgeDeviceState.busy,
+              EdgeDeviceState.unsupported,
+            }.contains(manager.state);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            EdgeDeviceStatusBanner(
+              model: EdgeAIModel.cervicalCancer,
+              state: manager.state,
+              message: manager.readinessMessage ??
+                  'Active model: ${(manager.activeModel ?? manager.observedReadyModel)?.wireValue ?? 'none'}',
+            ),
+            if (unresolved)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: _reconcileCacxEdgeSession,
+                  icon: const Icon(Icons.sync),
+                  label: const Text('Recheck device session'),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _reconcileCacxEdgeSession() async {
+    final manager = EdgeDeviceManager.shared;
+    if (manager.activeModel != EdgeAIModel.cervicalCancer) {
+      if (mounted) {
+        showDawaToast(
+          context,
+          'The active device session is not a cervical examination.',
+        );
+      }
+      return;
+    }
+    try {
+      final status = await manager.reconcileActiveExamination();
+      if (status.state == EdgeDeviceModelState.ready) {
+        final examinationId = manager.activeExaminationId;
+        if (examinationId != null) {
+          await manager.completeExamination(examinationId);
+        }
+      }
+    } on EdgeDeviceException catch (error) {
+      if (mounted) {
+        showDawaToast(context, 'Device status is unresolved: ${error.message}');
+      }
+    }
   }
 
   // ??? SIDEBAR ??????????????????????????????????????????????????????????????
@@ -4501,3 +4772,5 @@ void showDawaToast(
     ),
   );
 }
+
+enum _SecondOpinionChoice { sendOnline, retryDevice, cancel }

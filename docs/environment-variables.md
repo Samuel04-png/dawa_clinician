@@ -6,12 +6,39 @@ Do not commit real secrets. The values below are placeholders.
 
 ## Flutter Dart Defines
 
+For `tool/run_web_dev.sh`, `EDGE_DEVICE_IP` selects the device host (default
+`dawa.local`), and `EDGE_DEVICE_HUB_PORT_REMOTE` selects the device's hub port
+(default `80`; set `8080` if the hub is started on that port).
+`EDGE_PROXY_HUB_PORT`, `EDGE_PROXY_CERVICAL_PORT`, and
+`EDGE_PROXY_ULTRASOUND_PORT` change only the local proxy listening ports.
+The proxy accepts requests only from the configured browser origin; curl
+requests to the proxy need an `Origin` header.
+
 | Variable | Purpose | Default In Code | Notes |
 | --- | --- | --- | --- |
 | `SUPABASE_URL` | Supabase project URL used by the Flutter app. | Yes | Use a placeholder in docs and CI examples. |
 | `SUPABASE_ANON_KEY` | Public anon/publishable key for the Flutter app. | Yes | Public anon keys still need RLS to be safe. |
-| `PI_DEVICE_BASE_URL` | Shared local device/Pi API base URL. | `http://DAWA.local:8084` | Used by CaCx unless the cervical-specific URL is provided. |
-| `CERVICAL_DEVICE_BASE_URL` | CaCx-specific device API base URL. | Empty | Overrides `PI_DEVICE_BASE_URL` for CaCx. |
+| `EDGE_DEVICE_BASE_URL` | Shared edge-device API base URL for CaCx and Ultrasound. | Empty | Preferred when set; otherwise `CERVICAL_DEVICE_BASE_URL`, then `PI_DEVICE_BASE_URL`. |
+| `CERVICAL_DEVICE_BASE_URL` | Legacy edge-device base URL fallback. | Empty | Used only when `EDGE_DEVICE_BASE_URL` is empty. |
+| `PI_DEVICE_BASE_URL` | Legacy shared device/Pi URL fallback. | `http://dawa.local:8080` | Used only when the shared and cervical URLs are empty. |
+| `EDGE_DEVICE_MODEL_MANAGEMENT_ENABLED` | Enables hub `POST /api/select` + `GET /api/status`, module health checks and CaCx `/predict`. | `false` | Keep disabled until hardware integration is verified. Flag off = legacy `/upload/cervical` only. |
+| `EDGE_DEVICE_ULTRASOUND_INFERENCE_ENABLED` | Enables ultrasound `POST /predict` on port 8086. | `false` | Requires model management enabled. Research-stage model; see handoff. |
+| `EDGE_DEVICE_API_VERSION` | Optional `X-API-Version` header for the shared device API. | Empty | George must confirm version negotiation and supported value. |
+| `EDGE_DEVICE_HEALTH_PATH` | Shared health route. | `/health` | Client route only; health means reachability, not model readiness. |
+| `EDGE_DEVICE_CERVICAL_UPLOAD_PATH` | Legacy CaCx multipart upload route. | `/upload/cervical` | Preserve compatibility with deployed legacy devices. |
+| `EDGE_DEVICE_CERVICAL_MODEL_ID` | Hub module id for CaCx. | `cervitriage` | From `dawa/dawa.yaml`. |
+| `EDGE_DEVICE_ULTRASOUND_MODEL_ID` | Hub module id for ultrasound. | `ultrasound` | From `dawa/dawa.yaml`. |
+| `EDGE_DEVICE_REQUEST_TIMEOUT_SECONDS` | Timeout for shared device health/status requests. | Falls back to `CERVICAL_HEALTH_TIMEOUT_SECONDS` (`5`) | Shared setting for both workflows. |
+| `EDGE_DEVICE_UPLOAD_TIMEOUT_SECONDS` | Timeout for shared device image uploads. | Falls back to `CERVICAL_IMAGE_TIMEOUT_SECONDS` (`120`) | Shared setting for both workflows. |
+| `EDGE_DEVICE_MODEL_REQUEST_TIMEOUT_SECONDS` | Timeout for activation requests. | `30` | Tune to confirmed device behavior. |
+| `EDGE_DEVICE_MODEL_READY_TIMEOUT_SECONDS` | Process-switch timeout (hub `ready_timeout_s` is 300). | `300` | Total wait for hub `ready` plus affirmative module health. |
+| `EDGE_DEVICE_MODEL_POLL_INTERVAL_MILLISECONDS` | Delay between model status polls. | `1000` | Tune to confirmed device behavior. |
+| `EDGE_DEVICE_HUB_PORT` / `EDGE_DEVICE_CERVICAL_PORT` / `EDGE_DEVICE_ULTRASOUND_PORT` | Hub and module ports replacing the port in the base URL. | `8080` / `8085` / `8086` | From device configs. `EDGE_DEVICE_BASE_URL` must be plain `http://<host>`. |
+| `EDGE_DEVICE_HUB_SELECT_PATH` / `EDGE_DEVICE_HUB_STATUS_PATH` | Hub routes. | `/api/select` / `/api/status` | Confirmed in `dawa/main.py`. |
+| `EDGE_DEVICE_MODULE_HEALTH_PATH` / `EDGE_DEVICE_PREDICT_PATH` | Module routes. | `/health` / `/predict` | Confirmed in module sources. |
+| `EDGE_DEVICE_CERVICAL_HEALTH_READY_FIELD` / `EDGE_DEVICE_ULTRASOUND_HEALTH_READY_FIELD` | Boolean field in module `/health` that must be `true`. | `ready` / `ready` | Readiness must include model warm-up, not just model loading. |
+| `EDGE_DEVICE_SUPPORTED_IMAGE_MIME_TYPES` | Accepted image MIME types. | `image/jpeg,image/png` | Confirm against device decoders. |
+| `EDGE_DEVICE_MODULE_HEALTH_GRACE_SECONDS` | Legacy configuration retained for compatibility. | `10` | Readiness now waits up to the model-ready timeout instead. |
 | `CERVICAL_IMAGE_TIMEOUT_SECONDS` | Timeout for cervical image upload/response. | `120` | Used by device upload flow. |
 | `CERVICAL_HEALTH_TIMEOUT_SECONDS` | Timeout for device health checks. | `5` | Used by device and offline reachability checks. |
 | `CERVICAL_DEVICE_RETRY_INTERVAL_SECONDS` | Retry interval for device wait UI. | `5` | Currently confirmed as a config constant and tested default. |
@@ -21,8 +48,10 @@ Example:
 ```env
 SUPABASE_URL=your_supabase_url
 SUPABASE_ANON_KEY=your_supabase_anon_key
-PI_DEVICE_BASE_URL=http://device-ip-or-host:8084
-CERVICAL_DEVICE_BASE_URL=http://device-ip-or-host:8084
+PI_DEVICE_BASE_URL=http://dawa.local:8080
+EDGE_DEVICE_BASE_URL=http://dawa.local
+EDGE_DEVICE_MODEL_MANAGEMENT_ENABLED=false
+EDGE_DEVICE_ULTRASOUND_INFERENCE_ENABLED=false
 CERVICAL_IMAGE_TIMEOUT_SECONDS=120
 CERVICAL_HEALTH_TIMEOUT_SECONDS=5
 CERVICAL_DEVICE_RETRY_INTERVAL_SECONDS=5

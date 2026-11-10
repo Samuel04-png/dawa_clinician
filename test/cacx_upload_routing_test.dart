@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:clinician/application/cacx/cacx_upload_service.dart';
+import 'package:clinician/services/offline_connectivity_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -39,18 +42,51 @@ void main() {
   test('device endpoint defaults match cervical upload configuration', () {
     expect(
       CervicalDeviceConfig.deviceBaseUrl,
-      'http://DAWA.local:8084',
+      'http://dawa.local:8080',
     );
     expect(
       CervicalDeviceConfig.healthUrl,
-      'http://DAWA.local:8084/health',
+      'http://dawa.local:8080/health',
     );
     expect(
       CervicalDeviceConfig.imagePostUrl,
-      'http://DAWA.local:8084/upload/cervical',
+      'http://dawa.local:8080/upload/cervical',
     );
     expect(CervicalDeviceConfig.timeoutSeconds, 120);
     expect(CervicalDeviceConfig.healthTimeoutSeconds, 5);
     expect(CervicalDeviceConfig.retryIntervalSeconds, 5);
+  });
+
+  test('CaCx routing prioritizes the local device over internet state', () {
+    expect(
+      OfflineConnectivityService.cacxRouteFor(
+        deviceReachable: true,
+        internetAvailable: false,
+      ),
+      CacxRoutingDecision.localDevice,
+    );
+    expect(
+      OfflineConnectivityService.cacxRouteFor(
+        deviceReachable: false,
+        internetAvailable: true,
+      ),
+      CacxRoutingDecision.gradio,
+    );
+    expect(
+      OfflineConnectivityService.cacxRouteFor(
+        deviceReachable: false,
+        internetAvailable: false,
+      ),
+      CacxRoutingDecision.offline,
+    );
+  });
+
+  test(
+      'web connectivity does not depend on the CORS-incompatible gstatic probe',
+      () {
+    final source = File(
+      'lib/services/offline_connectivity_service.dart',
+    ).readAsStringSync();
+    expect(source, isNot(contains('https://www.gstatic.com/generate_204')));
   });
 }

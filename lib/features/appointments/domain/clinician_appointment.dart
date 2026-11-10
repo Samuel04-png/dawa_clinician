@@ -33,7 +33,8 @@ class ClinicianAppointment {
   final String integrationErrorCode;
   final DateTime? receivedAt;
 
-  DateTime get scheduledStart => _combineDateAndTime(appointmentDate, startTime);
+  DateTime get scheduledStart =>
+      _combineDateAndTime(appointmentDate, startTime);
 
   DateTime get scheduledEnd => _combineDateAndTime(appointmentDate, endTime);
 

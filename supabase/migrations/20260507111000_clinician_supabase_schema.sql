@@ -1,5 +1,4 @@
 create extension if not exists pgcrypto;
-
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -9,7 +8,6 @@ begin
   return new;
 end;
 $$;
-
 create table if not exists public."user" (
   id text primary key,
   email text,
@@ -22,7 +20,6 @@ create table if not exists public."user" (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-
 create table if not exists public.clinic (
   id text primary key,
   name text,
@@ -30,7 +27,6 @@ create table if not exists public.clinic (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-
 create table if not exists public.doctor (
   id text primary key,
   speciality text,
@@ -44,7 +40,6 @@ create table if not exists public.doctor (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-
 create table if not exists public.mother (
   id text primary key,
   "dateOfBirth" timestamptz,
@@ -58,7 +53,6 @@ create table if not exists public.mother (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-
 create table if not exists public.first_encounter (
   id text primary key,
   gravidity text,
@@ -97,7 +91,6 @@ create table if not exists public.first_encounter (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-
 create table if not exists public.encounter (
   id text primary key,
   bp text,
@@ -138,7 +131,6 @@ create table if not exists public.encounter (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-
 create table if not exists public.parity (
   id text primary key,
   weight text,
@@ -172,7 +164,6 @@ create table if not exists public.parity (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-
 create table if not exists public.appointments (
   id text primary key,
   "mother_Id" text,
@@ -185,7 +176,6 @@ create table if not exists public.appointments (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-
 create index if not exists idx_user_uid on public."user" (uid);
 create index if not exists idx_user_email on public."user" (email);
 create index if not exists idx_doctor_user_id on public.doctor ("user_Id");
@@ -198,47 +188,38 @@ create index if not exists idx_encounter_doctor_date_time_status on public.encou
 create index if not exists idx_encounter_mother_date_time_status on public.encounter (mother_id, date, time, status);
 create index if not exists idx_appointments_mother_date on public.appointments ("mother_Id", date);
 create index if not exists idx_appointments_mother_status_date on public.appointments ("mother_Id", status, date);
-
 drop trigger if exists set_user_updated_at on public."user";
 create trigger set_user_updated_at
 before update on public."user"
 for each row execute function public.set_updated_at();
-
 drop trigger if exists set_clinic_updated_at on public.clinic;
 create trigger set_clinic_updated_at
 before update on public.clinic
 for each row execute function public.set_updated_at();
-
 drop trigger if exists set_doctor_updated_at on public.doctor;
 create trigger set_doctor_updated_at
 before update on public.doctor
 for each row execute function public.set_updated_at();
-
 drop trigger if exists set_mother_updated_at on public.mother;
 create trigger set_mother_updated_at
 before update on public.mother
 for each row execute function public.set_updated_at();
-
 drop trigger if exists set_first_encounter_updated_at on public.first_encounter;
 create trigger set_first_encounter_updated_at
 before update on public.first_encounter
 for each row execute function public.set_updated_at();
-
 drop trigger if exists set_encounter_updated_at on public.encounter;
 create trigger set_encounter_updated_at
 before update on public.encounter
 for each row execute function public.set_updated_at();
-
 drop trigger if exists set_parity_updated_at on public.parity;
 create trigger set_parity_updated_at
 before update on public.parity
 for each row execute function public.set_updated_at();
-
 drop trigger if exists set_appointments_updated_at on public.appointments;
 create trigger set_appointments_updated_at
 before update on public.appointments
 for each row execute function public.set_updated_at();
-
 alter table public."user" enable row level security;
 alter table public.clinic enable row level security;
 alter table public.doctor enable row level security;
@@ -247,7 +228,6 @@ alter table public.first_encounter enable row level security;
 alter table public.encounter enable row level security;
 alter table public.parity enable row level security;
 alter table public.appointments enable row level security;
-
 drop policy if exists "authenticated users can manage user records" on public."user";
 create policy "authenticated users can manage user records"
 on public."user"
@@ -255,7 +235,6 @@ for all
 to authenticated
 using (true)
 with check (true);
-
 drop policy if exists "authenticated users can manage clinics" on public.clinic;
 create policy "authenticated users can manage clinics"
 on public.clinic
@@ -263,7 +242,6 @@ for all
 to authenticated
 using (true)
 with check (true);
-
 drop policy if exists "authenticated users can manage doctors" on public.doctor;
 create policy "authenticated users can manage doctors"
 on public.doctor
@@ -271,7 +249,6 @@ for all
 to authenticated
 using (true)
 with check (true);
-
 drop policy if exists "authenticated users can manage mothers" on public.mother;
 create policy "authenticated users can manage mothers"
 on public.mother
@@ -279,7 +256,6 @@ for all
 to authenticated
 using (true)
 with check (true);
-
 drop policy if exists "authenticated users can manage first encounters" on public.first_encounter;
 create policy "authenticated users can manage first encounters"
 on public.first_encounter
@@ -287,7 +263,6 @@ for all
 to authenticated
 using (true)
 with check (true);
-
 drop policy if exists "authenticated users can manage encounters" on public.encounter;
 create policy "authenticated users can manage encounters"
 on public.encounter
@@ -295,7 +270,6 @@ for all
 to authenticated
 using (true)
 with check (true);
-
 drop policy if exists "authenticated users can manage parity" on public.parity;
 create policy "authenticated users can manage parity"
 on public.parity
@@ -303,7 +277,6 @@ for all
 to authenticated
 using (true)
 with check (true);
-
 drop policy if exists "authenticated users can manage appointments" on public.appointments;
 create policy "authenticated users can manage appointments"
 on public.appointments

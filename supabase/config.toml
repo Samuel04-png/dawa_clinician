@@ -11,3 +11,9 @@ verify_jwt = false
 
 [functions.process-dawa-mom-status-outbox]
 verify_jwt = false
+
+[functions.process-service-catalog-outbox]
+verify_jwt = false
+
+[functions.sync-dawa-mom-risk-alert]
+verify_jwt = false

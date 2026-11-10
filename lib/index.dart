@@ -28,3 +28,5 @@ export '/application/mom_details2/mom_details2_widget.dart'
     show MomDetails2Widget;
 export '/application/patient_details/patient_details_widget.dart'
     show PatientDetailsWidget;
+export '/features/services/presentation/clinician_service_catalog_admin_widget.dart'
+    show ClinicianServiceCatalogAdminWidget;

@@ -44,9 +44,8 @@ class ClinicianAppointmentRepository {
         params: {
           'p_appointment_id': appointmentId,
           'p_status': status,
-          'p_appointment_date': appointmentDate == null
-              ? null
-              : _dateOnly(appointmentDate),
+          'p_appointment_date':
+              appointmentDate == null ? null : _dateOnly(appointmentDate),
           'p_start_time': startTime,
           'p_end_time': endTime,
           'p_patient_safe_message': patientSafeMessage,
@@ -58,13 +57,10 @@ class ClinicianAppointmentRepository {
   Future<void> markNotificationRead(String notificationId) async {
     if (notificationId.isEmpty) return;
     await runSupabaseRequest(
-      () => supabaseClient
-          .from('notifications')
-          .update({
-            'is_read': true,
-            'read_at': DateTime.now().toUtc().toIso8601String(),
-          })
-          .eq('id', notificationId),
+      () => supabaseClient.from('notifications').update({
+        'is_read': true,
+        'read_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', notificationId),
     );
   }
 

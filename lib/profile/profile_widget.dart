@@ -1,5 +1,6 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/supabase/supabase_config.dart';
 import '/components/clinician_bottom_nav/clinician_bottom_nav_widget.dart';
 import '/components/dawa_design_system.dart';
 import '/components/small_side_nav/small_side_nav_widget.dart';
@@ -24,6 +25,7 @@ class ProfileWidget extends StatefulWidget {
 
 class _ProfileWidgetState extends State<ProfileWidget> {
   late ProfileModel _model;
+  late final Future<bool> _adminFuture;
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
@@ -31,6 +33,7 @@ class _ProfileWidgetState extends State<ProfileWidget> {
   void initState() {
     super.initState();
     _model = createModel(context, () => ProfileModel());
+    _adminFuture = _isAdmin();
     FFAppState().selectedPage = 'Settings';
 
     WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
@@ -214,6 +217,32 @@ class _ProfileWidgetState extends State<ProfileWidget> {
                       );
                     },
                   ),
+                  FutureBuilder<bool>(
+                    future: _adminFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.data != true) {
+                        return const SizedBox.shrink();
+                      }
+                      return _settingsRow(
+                        context: context,
+                        icon: Icons.price_change_outlined,
+                        label: 'Services & Pricing',
+                        iconKind: _SettingIconKind.profile,
+                        onTap: () async {
+                          context.pushNamed(
+                            ClinicianServiceCatalogAdminWidget.routeName,
+                            extra: <String, dynamic>{
+                              kTransitionInfoKey: TransitionInfo(
+                                hasTransition: true,
+                                transitionType: PageTransitionType.fade,
+                                duration: Duration(milliseconds: 0),
+                              ),
+                            },
+                          );
+                        },
+                      );
+                    },
+                  ),
                 ],
               ),
               SizedBox(height: 20.0),
@@ -264,6 +293,13 @@ class _ProfileWidgetState extends State<ProfileWidget> {
         ),
       ),
     );
+  }
+
+  Future<bool> _isAdmin() async {
+    final result = await runSupabaseRequest(
+      () => supabaseClient.rpc('current_clinician_is_admin'),
+    );
+    return result == true;
   }
 
   Widget _settingsHeader(BuildContext context) {

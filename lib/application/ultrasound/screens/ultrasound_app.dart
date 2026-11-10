@@ -1,14 +1,21 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 
 import '/reset_password/reset_password_widget.dart';
 import '/components/dawa_design_system.dart';
+import '/components/edge_device_status_banner.dart';
 import '/flutter_flow/flutter_flow_util.dart';
-import '../mock/ultrasound_mock_data.dart';
+import '/services/edge_device/edge_device_exceptions.dart';
+import '/services/edge_device/edge_device_manager.dart';
+import '/services/edge_device/edge_device_models.dart';
 import '../models/ultrasound_models.dart';
 import '../services/ultrasound_ai_service.dart';
+import '../services/ultrasound_edge_service.dart';
 import '../services/ultrasound_image_picker_service.dart';
+import '../repositories/ultrasound_repository.dart';
 
 // ─── MAIN WIDGET ─────────────────────────────────────────────────────────────
 
@@ -20,6 +27,8 @@ class UltrasoundApp extends StatefulWidget {
     this.initialPatient,
     this.initialMode = UltrasoundLaunchMode.dashboard,
     this.onExit,
+    this.repository,
+    this.edgeDeviceManager,
   });
 
   static String routeName = 'Ultrasound';
@@ -28,6 +37,8 @@ class UltrasoundApp extends StatefulWidget {
   final PregnantPatient? initialPatient;
   final UltrasoundLaunchMode initialMode;
   final VoidCallback? onExit;
+  final UltrasoundRepository? repository;
+  final EdgeDeviceManager? edgeDeviceManager;
 
   @override
   State<UltrasoundApp> createState() => _UltrasoundAppState();
@@ -39,9 +50,19 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
 
   List<PregnantPatient> _patients = [];
   List<UltrasoundScanRecord> _scanHistory = [];
+  bool _isLoadingData = true;
+  bool _isSavingResult = false;
+  String? _dataError;
+  String _patientSearch = '';
+  Future<void>? _edgePreparation;
+  late final UltrasoundRepository _repository;
+  late final EdgeDeviceManager _edgeDeviceManager;
+  late final UltrasoundEdgeService _edgeService;
 
   PregnantPatient? _selectedPatient;
   String? _capturedImage;
+  String? _activeExaminationId;
+  String? _savedRecordExaminationId;
   UltrasoundAnalysisResult? _analysisResult;
   ScanType _activeScanType = ScanType.manual;
 
@@ -53,15 +74,13 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
   bool _sweepComplete = false;
   bool _initialLaunchHandled = false;
 
-  // Form controllers
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _ageController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _gaController = TextEditingController();
-
   @override
   void initState() {
     super.initState();
+    _repository = widget.repository ?? const SupabaseUltrasoundRepository();
+    _edgeDeviceManager = widget.edgeDeviceManager ?? EdgeDeviceManager.shared;
+    _edgeDeviceManager.addListener(_onEdgeStatusChanged);
+    _edgeService = UltrasoundEdgeService(deviceManager: _edgeDeviceManager);
     _sweepSteps = SweepGuidanceProtocol.getObstetricSweepSteps();
     _selectedPatient = widget.initialPatient;
     _loadData();
@@ -74,16 +93,85 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
     });
   }
 
-  void _loadData() {
-    setState(() {
+  void _onEdgeStatusChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _edgeDeviceManager.removeListener(_onEdgeStatusChanged);
+    super.dispose();
+  }
+
+  bool get _edgeImageActionsEnabled {
+    if (_isAnalyzing) return false;
+    if (!_edgeDeviceManager.client.config.ultrasoundInferenceEnabled) {
+      return true;
+    }
+    return _edgeDeviceManager.activeExaminationId == _activeExaminationId &&
+        _activeExaminationId != null &&
+        _edgeDeviceManager.activeModel == EdgeAIModel.ultrasound &&
+        {
+          EdgeDeviceState.ready,
+          EdgeDeviceState.examining,
+        }.contains(_edgeDeviceManager.state);
+  }
+
+  Future<void> _loadData() async {
+    if (mounted) {
+      setState(() {
+        _isLoadingData = true;
+        _dataError = null;
+      });
+    }
+    try {
+      final patients = (await _repository.loadPatients()).toList();
+      final history = await _repository.loadScanRecords();
+      final latestRecords = <String, UltrasoundScanRecord>{};
+      for (final record in history) {
+        latestRecords.putIfAbsent(record.patientId, () => record);
+      }
+      for (var index = 0; index < patients.length; index++) {
+        final patient = patients[index];
+        final latestRecord = latestRecords[patient.id];
+        if (latestRecord == null) continue;
+        patients[index] = PregnantPatient(
+          id: patient.id,
+          name: patient.name,
+          age: patient.age,
+          contact: patient.contact,
+          gestationalAgeWeeks: patient.gestationalAgeWeeks,
+          lmp: patient.lmp,
+          edd: patient.edd,
+          lastScanDate: latestRecord.date,
+          scanStatus: ScanStatus.recorded,
+          riskLevel: RiskLevel.unknown,
+          pregnancyStatus: patient.pregnancyStatus,
+          gravida: patient.gravida,
+          imageUrl: patient.imageUrl,
+        );
+      }
       final initialPatient = widget.initialPatient;
-      final mockPatients = UltrasoundMockData.getPatients();
-      _patients = initialPatient != null &&
-              !mockPatients.any((patient) => patient.id == initialPatient.id)
-          ? [initialPatient, ...mockPatients]
-          : mockPatients;
-      _scanHistory = UltrasoundMockData.getScanHistory();
-    });
+      if (!mounted) return;
+      setState(() {
+        _patients = patients;
+        _scanHistory = history;
+        if (initialPatient != null) {
+          final authorizedPatient = patients.where(
+            (patient) => patient.id == initialPatient.id,
+          );
+          _selectedPatient =
+              authorizedPatient.isEmpty ? null : authorizedPatient.first;
+        }
+        _isLoadingData = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _dataError = error.toString();
+        _isLoadingData = false;
+      });
+    }
   }
 
   void _handleLogout() {
@@ -233,6 +321,10 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
   // ── Image capture ────────────────────────────────────────────────────────
 
   Future<void> _captureFromProbe() async {
+    if (!_edgeImageActionsEnabled) {
+      _showToast('Wait until the ultrasound model is ready before capturing.');
+      return;
+    }
     // In production this connects to the probe's SDK/stream.
     // For now we fall back to the camera (same physical feed on a tablet).
     _activeScanType = _appState == UltrasoundAppState.aiGuidedScan
@@ -246,6 +338,10 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
   }
 
   Future<void> _pickFromGallery() async {
+    if (!_edgeImageActionsEnabled) {
+      _showToast('Wait until the ultrasound model is ready before uploading.');
+      return;
+    }
     _activeScanType = _appState == UltrasoundAppState.aiGuidedScan
         ? ScanType.aiGuided
         : ScanType.manual;
@@ -258,13 +354,38 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
 
   Future<void> _runAnalysis() async {
     if (_capturedImage == null) return;
+    final examinationId = _activeExaminationId;
+    if (examinationId == null) {
+      _showToast('Begin an examination before requesting an analysis.');
+      return;
+    }
     setState(() => _isAnalyzing = true);
 
-    final result = await UltrasoundAIService.analyzeUltrasoundImage(
-      _capturedImage!,
-      _selectedPatient?.gestationalAgeWeeks,
-    );
+    UltrasoundAnalysisResult result;
+    try {
+      if (_edgeDeviceManager.client.config.ultrasoundInferenceEnabled) {
+        final preparation = _edgePreparation;
+        if (preparation != null) await preparation;
+        result = await _edgeService.analyzeImage(
+          image: _capturedImage!,
+          gestationalAgeWeeks: _selectedPatient?.gestationalAgeWeeks,
+          examinationId: examinationId,
+        );
+      } else {
+        result = await UltrasoundAIService.analyzeUltrasoundImage(
+          _capturedImage!,
+          _selectedPatient?.gestationalAgeWeeks,
+          examinationId,
+        );
+      }
+    } on EdgeDeviceException catch (error) {
+      result = UltrasoundAIService.unavailableResult(
+        _capturedImage!,
+        error.message,
+      );
+    }
 
+    if (!mounted) return;
     setState(() {
       _analysisResult = result;
       _isAnalyzing = false;
@@ -272,54 +393,176 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
     });
   }
 
-  void _saveResult() {
-    if (_analysisResult == null || _selectedPatient == null) return;
+  Future<void> _saveResult() async {
+    if (_analysisResult == null ||
+        _analysisResult!.error != null ||
+        _selectedPatient == null ||
+        _isSavingResult) {
+      return;
+    }
 
-    final record = UltrasoundScanRecord(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      patientId: _selectedPatient!.id,
-      patientName: _selectedPatient!.name,
-      date: DateTime.now(),
-      scanType: _activeScanType,
-      result: _analysisResult!.overallLevel == FindingLevel.normal
-          ? 'Normal'
-          : 'Abnormal',
-      notes: _analysisResult!.overallAssessment,
-      aiAnalysis: _analysisResult!.recommendation,
-      gestationalAgeWeeks: _analysisResult!.estimatedGestationalAge,
-      measurements: _analysisResult!.measurements,
-    );
+    final examinationId = _activeExaminationId;
+    if (examinationId == null) return;
+    setState(() => _isSavingResult = true);
+    try {
+      if (_savedRecordExaminationId != examinationId) {
+        final record = await _repository.saveScanRecord(
+          patient: _selectedPatient!,
+          analysis: _analysisResult!,
+          scanType: _activeScanType,
+        );
+        _scanHistory = [record, ..._scanHistory];
+        _savedRecordExaminationId = examinationId;
+      }
+      final completionError = await _completeActiveEdgeExamination();
+      if (completionError != null) {
+        if (!mounted) return;
+        setState(() => _isSavingResult = false);
+        _showToast(
+          'Scan record saved. Device session status still requires reconciliation.',
+        );
+        return;
+      }
+      if (!mounted) return;
+      setState(() {
+        _isSavingResult = false;
+        _appState = UltrasoundAppState.dashboard;
+        _activeTab = UltrasoundDashboardTab.patients;
+        _analysisResult = null;
+        _capturedImage = null;
+        _activeExaminationId = null;
+        _savedRecordExaminationId = null;
+        _selectedPatient = null;
+        _activeScanType = ScanType.manual;
+        _currentSweepStep = 0;
+        _sweepComplete = false;
+      });
+      _showToast('Scan record saved.');
+      await _loadData();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isSavingResult = false);
+      _showToast('Could not save the scan record: $error');
+    }
+  }
 
+  void _startManualScan() {
+    if (!_requireSelectedPatient()) return;
+    final examinationId = const Uuid().v4();
     setState(() {
-      _scanHistory = [record, ..._scanHistory];
+      _activeScanType = ScanType.manual;
+      _savedRecordExaminationId = null;
+      _activeExaminationId = examinationId;
+      _appState = UltrasoundAppState.manualScan;
+    });
+    _edgePreparation = _prepareUltrasoundModel(examinationId);
+  }
+
+  void _startAIGuidedScan() {
+    if (!_requireSelectedPatient()) return;
+    final examinationId = const Uuid().v4();
+    setState(() {
+      _activeScanType = ScanType.aiGuided;
+      _savedRecordExaminationId = null;
+      _activeExaminationId = examinationId;
+      _currentSweepStep = 0;
+      _sweepComplete = false;
+      _appState = UltrasoundAppState.aiGuidedScan;
+    });
+    _edgePreparation = _prepareUltrasoundModel(examinationId);
+  }
+
+  bool _requireSelectedPatient() {
+    final selectedId = _selectedPatient?.id;
+    final authorizedPatient = _patients.where(
+      (patient) => patient.id == selectedId,
+    );
+    if (authorizedPatient.isNotEmpty) {
+      _selectedPatient = authorizedPatient.first;
+      return true;
+    }
+    _selectedPatient = null;
+    setState(() => _activeTab = UltrasoundDashboardTab.patients);
+    _showToast('Select an existing patient before beginning a scan.');
+    return false;
+  }
+
+  Future<void> _prepareUltrasoundModel(String examinationId) async {
+    if (!_edgeDeviceManager.modelManagementEnabled) return;
+    try {
+      await _edgeService.prepareExamination(examinationId: examinationId);
+    } on EdgeDeviceException catch (error) {
+      if (mounted) _showToast('Edge model unavailable: ${error.message}');
+    }
+  }
+
+  Future<String?> _completeActiveEdgeExamination() async {
+    final examinationId = _activeExaminationId;
+    if (examinationId == null ||
+        _edgeDeviceManager.activeExaminationId != examinationId ||
+        _edgeDeviceManager.activeModel != EdgeAIModel.ultrasound) {
+      return null;
+    }
+    try {
+      final preparation = _edgePreparation;
+      if (preparation != null) await preparation;
+      if (!{
+        EdgeDeviceState.ready,
+        EdgeDeviceState.examining,
+      }.contains(_edgeDeviceManager.state)) {
+        return 'The device examination is not in a state that can be completed.';
+      }
+      await _edgeDeviceManager.completeExamination(examinationId);
+      _edgePreparation = null;
+      return null;
+    } on EdgeDeviceException catch (error) {
+      return error.message;
+    }
+  }
+
+  Future<void> _reconcileEdgeExamination() async {
+    if (_edgeDeviceManager.activeModel != EdgeAIModel.ultrasound ||
+        _edgeDeviceManager.activeExaminationId != _activeExaminationId) {
+      _showToast(
+          'The active device session is not this Ultrasound examination.');
+      return;
+    }
+    try {
+      final status = await _edgeDeviceManager.reconcileActiveExamination();
+      if (status.state == EdgeDeviceModelState.ready) {
+        final examinationId = _edgeDeviceManager.activeExaminationId;
+        if (examinationId != null &&
+            _savedRecordExaminationId == examinationId) {
+          await _edgeDeviceManager.completeExamination(examinationId);
+          _activeExaminationId = null;
+          _finishSavedExamination();
+        }
+      } else if (status.state == EdgeDeviceModelState.completed) {
+        _activeExaminationId = null;
+        if (_savedRecordExaminationId != null) {
+          _finishSavedExamination();
+        }
+      }
+      if (mounted) setState(() {});
+    } on EdgeDeviceException catch (error) {
+      if (mounted) _showToast('Device status is unresolved: ${error.message}');
+    }
+  }
+
+  void _finishSavedExamination() {
+    if (!mounted) return;
+    setState(() {
       _appState = UltrasoundAppState.dashboard;
-      _activeTab = UltrasoundDashboardTab.patients;
+      _activeTab = UltrasoundDashboardTab.history;
       _analysisResult = null;
       _capturedImage = null;
+      _activeExaminationId = null;
+      _savedRecordExaminationId = null;
       _selectedPatient = null;
       _activeScanType = ScanType.manual;
       _currentSweepStep = 0;
       _sweepComplete = false;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Scan record saved successfully!')),
-    );
-  }
-
-  void _startManualScan() {
-    setState(() {
-      _activeScanType = ScanType.manual;
-      _appState = UltrasoundAppState.manualScan;
-    });
-  }
-
-  void _startAIGuidedScan() {
-    setState(() {
-      _activeScanType = ScanType.aiGuided;
-      _currentSweepStep = 0;
-      _sweepComplete = false;
-      _appState = UltrasoundAppState.aiGuidedScan;
+      _edgePreparation = null;
     });
   }
 
@@ -613,6 +856,13 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
                   _buildMobileHeader(),
                   const Divider(height: 1),
                 ],
+                if (_dataError != null || _isLoadingData)
+                  _buildRepositoryNotice(),
+                if (_activeExaminationId != null &&
+                    _edgeDeviceManager.activeExaminationId ==
+                        _activeExaminationId &&
+                    _edgeDeviceManager.activeModel == EdgeAIModel.ultrasound)
+                  _buildEdgeDeviceStatus(allowReconcile: true),
                 Expanded(child: _buildCurrentTab()),
               ],
             ),
@@ -620,6 +870,79 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
         ],
       ),
       bottomNavigationBar: isMobile ? _buildMobileBottomNav() : null,
+    );
+  }
+
+  Widget _buildRepositoryNotice() {
+    if (_isLoadingData) {
+      return const LinearProgressIndicator(minHeight: 2);
+    }
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      color: DawaTokens.statusDangerBg,
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, color: DawaTokens.statusDanger),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Patient and scan records could not be loaded. $_dataError',
+              style: const TextStyle(color: DawaTokens.statusDangerText),
+            ),
+          ),
+          TextButton(
+            onPressed: _loadData,
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEdgeDeviceStatus({bool allowReconcile = false}) {
+    return AnimatedBuilder(
+      animation: _edgeDeviceManager,
+      builder: (context, _) {
+        final enabled = _edgeDeviceManager.modelManagementEnabled;
+        final state =
+            enabled ? _edgeDeviceManager.state : EdgeDeviceState.unsupported;
+        final message = enabled
+            ? _edgeDeviceManager.readinessMessage ??
+                'Active model: ${_edgeDeviceManager.activeModel?.wireValue ?? 'none'}'
+            : 'Edge model controls are disabled until George confirms the device API. Cloud analysis remains a separate path.';
+        final unresolved = allowReconcile &&
+            enabled &&
+            _edgeDeviceManager.activeExaminationId != null &&
+            {
+              EdgeDeviceState.error,
+              EdgeDeviceState.loadingModel,
+              EdgeDeviceState.busy,
+              EdgeDeviceState.unsupported,
+            }.contains(_edgeDeviceManager.state);
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              EdgeDeviceStatusBanner(
+                model: EdgeAIModel.ultrasound,
+                state: state,
+                message: message,
+              ),
+              if (unresolved)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: _reconcileEdgeExamination,
+                    icon: const Icon(Icons.sync),
+                    label: const Text('Recheck device session'),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -981,8 +1304,13 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
   }
 
   Widget _buildStatsGrid() {
-    final needsFollowUp =
-        _patients.where((p) => p.scanStatus == ScanStatus.abnormal).length;
+    final scansToday = _scanHistory
+        .where((record) => _sameCalendarDay(record.date, DateTime.now()))
+        .length;
+    final aiReviewFlags = _scanHistory.where((record) {
+      final level = _findingLevelForRecord(record);
+      return level == FindingLevel.monitor || level == FindingLevel.urgent;
+    }).length;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1004,27 +1332,27 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
                 '${_patients.length}',
                 Icons.people,
                 DawaTokens.brandPrimary,
-                '+${_patients.length} active',
+                'Existing patient records',
               ),
             ),
             SizedBox(
               width: width,
               child: _buildStatCard(
                 'Scans Today',
-                '5',
+                '$scansToday',
                 Icons.monitor_heart,
                 DawaTokens.statusSuccess,
-                'Normal activity',
+                'Saved scan records',
               ),
             ),
             SizedBox(
               width: width,
               child: _buildStatCard(
-                'Needs Follow-Up',
-                '$needsFollowUp',
+                'AI Flags to Review',
+                '$aiReviewFlags',
                 Icons.warning_amber,
                 DawaTokens.statusWarning,
-                needsFollowUp == 1 ? '1 urgent' : '$needsFollowUp urgent',
+                'Clinician review required',
               ),
             ),
           ],
@@ -1100,7 +1428,12 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
             ),
           ),
           const Divider(height: 1, color: DawaTokens.border),
-          if (_scanHistory.isEmpty)
+          if (_isLoadingData)
+            const Padding(
+              padding: EdgeInsets.all(20),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_scanHistory.isEmpty)
             Padding(
               padding: const EdgeInsets.all(20),
               child: Text(
@@ -1118,7 +1451,8 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
   }
 
   Widget _buildRecentScanTile(UltrasoundScanRecord record) {
-    final isNormal = record.result == 'Normal';
+    final level = _findingLevelForRecord(record);
+    final color = _levelColor(level);
     return Container(
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: DawaTokens.border)),
@@ -1129,27 +1463,29 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: isNormal
-                ? DawaTokens.statusSuccessBg
-                : DawaTokens.statusDangerBg,
+            color: color.withOpacity(0.12),
             shape: BoxShape.circle,
           ),
           child: Icon(
             record.scanType == ScanType.aiGuided
                 ? Icons.auto_fix_high
                 : Icons.sensors,
-            color:
-                isNormal ? DawaTokens.statusSuccess : DawaTokens.statusDanger,
+            color: color,
             size: 20,
           ),
         ),
         title: Text(record.patientName, style: DawaTextStyles.cardTitle),
         subtitle: Text(
             '${record.scanTypeString} • ${record.date.day}/${record.date.month}/${record.date.year}'
-            '${record.gestationalAgeWeeks != null ? ' • ${record.gestationalAgeWeeks}wks' : ''}'),
+            '${record.gestationalAgeWeeks != null ? ' • ${record.gestationalAgeWeeks}wks' : ''}'
+            ' • ${_analysisProviderLabel(record.analysisProvider)}'),
         trailing: DawaStatusBadge(
-          status: isNormal ? 'normal' : 'needs_review',
-          label: record.result,
+          status: level == FindingLevel.urgent
+              ? 'danger'
+              : level == FindingLevel.normal
+                  ? 'normal'
+                  : 'needs_review',
+          label: _levelLabel(level, segmentation: record.segmentation != null),
         ),
       ),
     );
@@ -1417,7 +1753,8 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: _pickFromGallery,
+                        onPressed:
+                            _edgeImageActionsEnabled ? _pickFromGallery : null,
                         icon: const Icon(Icons.photo_library),
                         label: const Text('Load Image'),
                         style: OutlinedButton.styleFrom(
@@ -1431,7 +1768,8 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: _captureFromProbe,
+                        onPressed:
+                            _edgeImageActionsEnabled ? _captureFromProbe : null,
                         icon: const Icon(Icons.camera_alt),
                         label: const Text('Capture Frame'),
                         style: ElevatedButton.styleFrom(
@@ -1638,7 +1976,9 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: _captureFromProbe,
+                          onPressed: _edgeImageActionsEnabled
+                              ? _captureFromProbe
+                              : null,
                           icon: const Icon(Icons.camera_alt),
                           label: const Text('Capture Frame'),
                           style: OutlinedButton.styleFrom(
@@ -1738,6 +2078,8 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
                         badges: const ['Manual workflow', 'Image analysis'],
                       ),
                       const SizedBox(height: 16),
+                      _buildEdgeDeviceStatus(),
+                      const SizedBox(height: 16),
                       if (isWide)
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1806,13 +2148,7 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
       appBar: _buildScanAppBar(
         title: 'AI-Guided Ultrasound Scan',
         accent: DawaTokens.statusSuccess,
-        onBack: () {
-          setState(() {
-            _appState = UltrasoundAppState.dashboard;
-            _currentSweepStep = 0;
-            _sweepComplete = false;
-          });
-        },
+        onBack: _returnToDashboard,
       ),
       body: SafeArea(
         child: LayoutBuilder(
@@ -1835,6 +2171,8 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
                         accent: DawaTokens.statusSuccess,
                         badges: const ['Guided sweep', 'AI analysis'],
                       ),
+                      const SizedBox(height: 16),
+                      _buildEdgeDeviceStatus(),
                       const SizedBox(height: 16),
                       _buildAiProgressCard(progress),
                       const SizedBox(height: 16),
@@ -1924,7 +2262,22 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
   }
 
   void _returnToDashboard() {
-    setState(() => _appState = UltrasoundAppState.dashboard);
+    _leaveExamination();
+  }
+
+  Future<void> _leaveExamination() async {
+    final error = await _completeActiveEdgeExamination();
+    if (!mounted) return;
+    setState(() {
+      _appState = UltrasoundAppState.dashboard;
+      _currentSweepStep = 0;
+      _sweepComplete = false;
+    });
+    if (error != null) {
+      _showToast(
+        'The edge session was not confirmed complete. Reconcile it before another edge examination.',
+      );
+    }
   }
 
   Widget _buildScanHeaderCard({
@@ -2206,7 +2559,9 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
             decoration: InputDecoration(
               filled: true,
               fillColor: DawaTokens.surfaceSecondary,
-              hintText: 'Select patient',
+              hintText: _patients.isEmpty
+                  ? 'No patient records available'
+                  : 'Select patient',
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               border: OutlineInputBorder(
@@ -2229,7 +2584,9 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
                   ),
                 )
                 .toList(),
-            onChanged: (patient) => setState(() => _selectedPatient = patient),
+            onChanged: _patients.isEmpty
+                ? null
+                : (patient) => setState(() => _selectedPatient = patient),
           ),
         ],
       ),
@@ -2253,7 +2610,7 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
           Text('Image source', style: DawaTextStyles.cardTitle),
           const SizedBox(height: 6),
           Text(
-            'Use a saved ultrasound frame or capture directly from the connected camera/probe.',
+            'Choose a saved ultrasound image or capture a still image with this device camera.',
             style: DawaTextStyles.secondary.copyWith(
               color: DawaTokens.textSecondary,
             ),
@@ -2267,13 +2624,13 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
                 icon: Icons.photo_library_outlined,
                 accent: DawaTokens.brandPrimary,
                 outlined: true,
-                onPressed: _pickFromGallery,
+                onPressed: _edgeImageActionsEnabled ? _pickFromGallery : null,
               );
               final capture = _buildScanActionButton(
                 label: 'Capture Frame',
                 icon: Icons.camera_alt_outlined,
                 accent: DawaTokens.brandPrimary,
-                onPressed: _captureFromProbe,
+                onPressed: _edgeImageActionsEnabled ? _captureFromProbe : null,
               );
 
               if (stack) {
@@ -2446,7 +2803,7 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
                 icon: Icons.camera_alt_outlined,
                 accent: DawaTokens.statusSuccess,
                 outlined: true,
-                onPressed: _captureFromProbe,
+                onPressed: _edgeImageActionsEnabled ? _captureFromProbe : null,
               );
               final next = _buildScanActionButton(
                 label: isLastStep ? 'Complete Sweep' : 'Next Step',
@@ -2487,7 +2844,7 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
     required String label,
     required IconData icon,
     required Color accent,
-    required VoidCallback onPressed,
+    required VoidCallback? onPressed,
     bool outlined = false,
   }) {
     final style = outlined
@@ -2639,34 +2996,27 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
   // ─── PATIENTS TAB ─────────────────────────────────────────────────────────
 
   Widget _buildPatientsTab() {
+    final visiblePatients = _patients.where((patient) {
+      final query = _patientSearch.trim().toLowerCase();
+      return query.isEmpty ||
+          patient.name.toLowerCase().contains(query) ||
+          patient.id.toLowerCase().contains(query) ||
+          patient.contact.toLowerCase().contains(query);
+    }).toList(growable: false);
     return Column(
       children: [
         Container(
           padding: const EdgeInsets.all(24),
           color: Colors.white,
-          child: Row(
+          width: double.infinity,
+          child: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Patient Registry',
-                        style: TextStyle(
-                            fontSize: 24, fontWeight: FontWeight.bold)),
-                    SizedBox(height: 4),
-                    Text('Obstetric patients and their scan records.',
-                        style: TextStyle(color: Colors.grey)),
-                  ],
-                ),
-              ),
-              ElevatedButton.icon(
-                onPressed: () => _showAddPatientSheet(),
-                icon: const Icon(Icons.add),
-                label: const Text('Add Patient'),
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: DawaTokens.brandPrimary,
-                    foregroundColor: Colors.white),
-              ),
+              Text('Patient Registry',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              SizedBox(height: 4),
+              Text('Existing obstetric patient records.',
+                  style: TextStyle(color: Colors.grey)),
             ],
           ),
         ),
@@ -2675,7 +3025,7 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
           color: Colors.grey[50],
           child: TextField(
             decoration: InputDecoration(
-              hintText: 'Search by name, ID or phone…',
+              hintText: 'Search by name, ID or phone',
               prefixIcon: const Icon(Icons.search),
               border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -2683,184 +3033,90 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
               filled: true,
               fillColor: Colors.white,
             ),
+            onChanged: (value) => setState(() => _patientSearch = value),
           ),
         ),
         Expanded(
-          child: ListView.builder(
-            itemCount: _patients.length,
-            itemBuilder: (ctx, i) {
-              final p = _patients[i];
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: p.statusColor.withOpacity(0.15),
-                    child: Text(p.name[0],
-                        style: TextStyle(
-                            color: p.statusColor, fontWeight: FontWeight.bold)),
-                  ),
-                  title: Text(p.name,
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text(
-                    '${p.id} • ${p.age}yrs • ${p.gravida ?? ''} • ${p.gestationalAgeWeeks != null ? '${p.gestationalAgeWeeks}wks' : 'Unknown GA'}'
-                    '\n${p.pregnancyStatusString}',
-                  ),
-                  isThreeLine: true,
-                  trailing: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Chip(
-                        backgroundColor: p.statusColor.withOpacity(0.12),
-                        label: Text(p.scanStatusString,
-                            style: TextStyle(
-                                color: p.statusColor,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 11)),
-                        padding: EdgeInsets.zero,
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          child: _isLoadingData
+              ? const Center(child: CircularProgressIndicator())
+              : visiblePatients.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          _dataError != null
+                              ? 'Patient records are unavailable.'
+                              : _patientSearch.isNotEmpty
+                                  ? 'No matching patient records.'
+                                  : 'No patient records are available.',
+                          style: DawaTextStyles.secondary,
+                          textAlign: TextAlign.center,
+                        ),
                       ),
-                    ],
-                  ),
-                  onTap: () {
-                    setState(() => _selectedPatient = p);
-                    _startAIGuidedScan();
-                  },
-                ),
-              );
-            },
-          ),
+                    )
+                  : ListView.builder(
+                      itemCount: visiblePatients.length,
+                      itemBuilder: (ctx, i) {
+                        final p = visiblePatients[i];
+                        final hasSavedScan = _scanHistory
+                            .any((record) => record.patientId == p.id);
+                        return Card(
+                          margin: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 6),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: p.statusColor.withOpacity(0.15),
+                              child: Text(p.name[0],
+                                  style: TextStyle(
+                                      color: p.statusColor,
+                                      fontWeight: FontWeight.bold)),
+                            ),
+                            title: Text(p.name,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold)),
+                            subtitle: Text(
+                              '${p.id} • ${p.age == null ? 'Age not recorded' : '${p.age}yrs'}'
+                              '${p.gravida == null ? '' : ' • ${p.gravida}'}'
+                              ' • ${p.gestationalAgeWeeks != null ? '${p.gestationalAgeWeeks}wks' : 'GA not recorded'}'
+                              '\n${p.pregnancyStatusString}',
+                            ),
+                            isThreeLine: true,
+                            trailing: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Chip(
+                                  backgroundColor: (hasSavedScan
+                                          ? DawaTokens.brandPrimary
+                                          : Colors.grey)
+                                      .withOpacity(0.12),
+                                  label: Text(
+                                      hasSavedScan
+                                          ? 'Saved scan'
+                                          : 'No saved scans',
+                                      style: TextStyle(
+                                          color: hasSavedScan
+                                              ? DawaTokens.brandPrimary
+                                              : Colors.grey,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 11)),
+                                  padding: EdgeInsets.zero,
+                                  materialTapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                              ],
+                            ),
+                            onTap: () {
+                              setState(() => _selectedPatient = p);
+                              _startAIGuidedScan();
+                            },
+                          ),
+                        );
+                      },
+                    ),
         ),
       ],
-    );
-  }
-
-  void _showAddPatientSheet() {
-    showDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) {
-        final size = MediaQuery.sizeOf(ctx);
-        final isCompact = size.width < 700.0;
-
-        return Dialog(
-          insetPadding: EdgeInsets.symmetric(
-            horizontal: isCompact ? 12.0 : 24.0,
-            vertical: isCompact ? 12.0 : 24.0,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(isCompact ? 20.0 : 28.0),
-          ),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: isCompact ? size.width - 24.0 : 560.0,
-              maxHeight: size.height * 0.88,
-            ),
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(
-                24,
-                24,
-                24,
-                MediaQuery.of(ctx).viewInsets.bottom + 24,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'New Patient',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Full Name',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _ageController,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Age',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextField(
-                          controller: _gaController,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'GA (weeks)',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _phoneController,
-                    keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(
-                      labelText: 'Phone',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        if (_nameController.text.isEmpty) return;
-                        final ga = int.tryParse(_gaController.text);
-                        final newP = PregnantPatient(
-                          id: 'OB-${2000 + _patients.length}',
-                          name: _nameController.text,
-                          age: int.tryParse(_ageController.text) ?? 0,
-                          contact: _phoneController.text,
-                          gestationalAgeWeeks: ga,
-                          pregnancyStatus: ga == null
-                              ? PregnancyStatus.unknown
-                              : ga < 14
-                                  ? PregnancyStatus.firstTrimester
-                                  : ga < 28
-                                      ? PregnancyStatus.secondTrimester
-                                      : PregnancyStatus.thirdTrimester,
-                          scanStatus: ScanStatus.unscanned,
-                          riskLevel: RiskLevel.low,
-                        );
-                        setState(() {
-                          _patients = [newP, ..._patients];
-                          _nameController.clear();
-                          _ageController.clear();
-                          _gaController.clear();
-                          _phoneController.clear();
-                        });
-                        Navigator.pop(ctx);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: DawaTokens.brandPrimary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      child: const Text('Register Patient'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
     );
   }
 
@@ -2884,60 +3140,78 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
           ),
         ),
         Expanded(
-          child: ListView.builder(
-            itemCount: _scanHistory.length,
-            itemBuilder: (ctx, i) {
-              final r = _scanHistory[i];
-              final isNormal = r.result == 'Normal';
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: isNormal
-                        ? DawaTokens.statusSuccessBg
-                        : DawaTokens.statusDangerBg,
-                    child: Icon(
-                      r.scanType == ScanType.aiGuided
-                          ? Icons.auto_fix_high
-                          : Icons.sensors,
-                      color: isNormal
-                          ? DawaTokens.statusSuccess
-                          : DawaTokens.statusDanger,
+          child: _isLoadingData
+              ? const Center(child: CircularProgressIndicator())
+              : _scanHistory.isEmpty
+                  ? Center(
+                      child: Text(
+                        _dataError != null
+                            ? 'Scan records are unavailable.'
+                            : 'No saved ultrasound records.',
+                        style: DawaTextStyles.secondary,
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: _scanHistory.length,
+                      itemBuilder: (ctx, i) {
+                        final r = _scanHistory[i];
+                        final level = _findingLevelForRecord(r);
+                        final color = _levelColor(level);
+                        return Card(
+                          margin: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 6),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: color.withOpacity(0.12),
+                              child: Icon(
+                                r.scanType == ScanType.aiGuided
+                                    ? Icons.auto_fix_high
+                                    : Icons.sensors,
+                                color: color,
+                              ),
+                            ),
+                            title: Text(r.patientName,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold)),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                    '${r.date.day}/${r.date.month}/${r.date.year} • ${r.scanTypeString}'
+                                    '${r.gestationalAgeWeeks != null ? ' • ${r.gestationalAgeWeeks}wks' : ''}'),
+                                if (r.aiAnalysis != null)
+                                  Text(r.aiAnalysis!,
+                                      style: const TextStyle(
+                                          fontSize: 12, color: Colors.grey)),
+                                Text(
+                                  'Source: ${_analysisProviderLabel(r.analysisProvider)}'
+                                  '${r.modelId == null ? '' : ' • ${r.modelId}'}'
+                                  '${r.modelVersion == null ? '' : ' ${r.modelVersion}'}',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            isThreeLine: true,
+                            trailing: Chip(
+                              backgroundColor: color.withOpacity(0.12),
+                              label: Text(
+                                  r.segmentation != null
+                                      ? 'Edge ${_levelLabel(level, segmentation: true)}'
+                                      : 'AI ${_levelLabel(level)}',
+                                  style: TextStyle(
+                                      color: color,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11)),
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                  ),
-                  title: Text(r.patientName,
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                          '${r.date.day}/${r.date.month}/${r.date.year} • ${r.scanTypeString}'
-                          '${r.gestationalAgeWeeks != null ? ' • ${r.gestationalAgeWeeks}wks' : ''}'),
-                      if (r.aiAnalysis != null)
-                        Text(r.aiAnalysis!,
-                            style: const TextStyle(
-                                fontSize: 12, color: Colors.grey)),
-                    ],
-                  ),
-                  isThreeLine: r.aiAnalysis != null,
-                  trailing: Chip(
-                    backgroundColor: isNormal
-                        ? DawaTokens.statusSuccessBg
-                        : DawaTokens.statusDangerBg,
-                    label: Text(r.result,
-                        style: TextStyle(
-                            color: isNormal
-                                ? DawaTokens.statusSuccessText
-                                : DawaTokens.statusDangerText,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11)),
-                  ),
-                ),
-              );
-            },
-          ),
         ),
       ],
     );
@@ -3052,16 +3326,20 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => setState(() {
-            _appState = UltrasoundAppState.dashboard;
-            _analysisResult = null;
-          }),
+          onPressed: _leaveResults,
         ),
         title: const Text('Scan Results'),
         backgroundColor: DawaTokens.brandPrimary,
         foregroundColor: Colors.white,
         actions: [
-          IconButton(icon: const Icon(Icons.save), onPressed: _saveResult),
+          IconButton(
+            icon: const Icon(Icons.save),
+            onPressed: result.error == null &&
+                    _selectedPatient != null &&
+                    !_isSavingResult
+                ? _saveResult
+                : null,
+          ),
         ],
       ),
       body: SingleChildScrollView(
@@ -3112,11 +3390,15 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
                         color: result.levelColor,
                         borderRadius: BorderRadius.circular(12)),
                     child: Icon(
-                      result.overallLevel == FindingLevel.normal
-                          ? Icons.check_circle
-                          : result.overallLevel == FindingLevel.monitor
-                              ? Icons.warning_amber
-                              : Icons.error,
+                      result.error != null
+                          ? Icons.info_outline
+                          : result.segmentation != null
+                              ? Icons.straighten
+                              : result.overallLevel == FindingLevel.normal
+                                  ? Icons.check_circle
+                                  : result.overallLevel == FindingLevel.monitor
+                                      ? Icons.warning_amber
+                                      : Icons.error,
                       color: Colors.white,
                       size: 28,
                     ),
@@ -3126,7 +3408,12 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(result.levelString,
+                        Text(
+                            result.error == null
+                                ? (result.segmentation != null
+                                    ? 'Edge segmentation'
+                                    : 'AI ${result.levelString}')
+                                : 'Analysis unavailable',
                             style: TextStyle(
                                 color: result.levelColor,
                                 fontWeight: FontWeight.bold,
@@ -3140,6 +3427,54 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
                 ],
               ),
             ),
+
+            const SizedBox(height: 16),
+
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: result.provider == UltrasoundAnalysisProvider.unavailable
+                    ? DawaTokens.statusWarningBg
+                    : DawaTokens.brandPrimaryPale,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                'Analysis source: ${_analysisProviderLabel(result.provider)}',
+                style: DawaTextStyles.secondary.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            if (result.modelId != null || result.examinationId != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                [
+                  if (result.modelId != null) 'Model ${result.modelId}',
+                  if (result.modelVersion != null)
+                    'Version ${result.modelVersion}',
+                  if (result.deviceId != null) 'Device ${result.deviceId}',
+                  if (result.examinationId != null)
+                    'Exam ${result.examinationId}',
+                ].join(' • '),
+                style: DawaTextStyles.secondary.copyWith(fontSize: 11),
+              ),
+            ],
+            if (result.error != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: DawaTokens.statusWarningBg,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: DawaTokens.statusWarning),
+                ),
+                child: Text(
+                  'Analysis unavailable. No AI interpretation was produced. '
+                  '${result.error} Review the image manually or retry.',
+                  style: TextStyle(color: DawaTokens.statusWarningText),
+                ),
+              ),
+            ],
 
             const SizedBox(height: 16),
 
@@ -3184,44 +3519,48 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
 
             const SizedBox(height: 16),
 
-            // ── Findings list ──────────────────────────────────────────────
-            const Text('Findings',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            ...result.findings.map((f) => _buildFindingTile(f)),
+            if (result.segmentation != null)
+              ..._buildSegmentationSection(result.segmentation!)
+            else ...[
+              // ── Findings list ──────────────────────────────────────────────
+              const Text('Findings',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              ...result.findings.map((f) => _buildFindingTile(f)),
 
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-            // ── Recommendation ─────────────────────────────────────────────
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: DawaTokens.statusInfoBg,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: DawaTokens.statusInfo),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.description, color: DawaTokens.statusInfo),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Recommendation',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: DawaTokens.statusInfo)),
-                        const SizedBox(height: 6),
-                        Text(result.recommendation,
-                            style: const TextStyle(fontSize: 14)),
-                      ],
+              // ── Recommendation ─────────────────────────────────────────────
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: DawaTokens.statusInfoBg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: DawaTokens.statusInfo),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.description, color: DawaTokens.statusInfo),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Recommendation',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: DawaTokens.statusInfo)),
+                          const SizedBox(height: 6),
+                          Text(result.recommendation,
+                              style: const TextStyle(fontSize: 14)),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+            ],
 
             const SizedBox(height: 20),
 
@@ -3229,9 +3568,21 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: _saveResult,
+                onPressed: result.error == null &&
+                        _selectedPatient != null &&
+                        !_isSavingResult
+                    ? _saveResult
+                    : null,
                 icon: const Icon(Icons.save),
-                label: const Text('Save Scan Record'),
+                label: Text(
+                  _isSavingResult
+                      ? 'Saving Scan Record…'
+                      : result.error != null
+                          ? 'Unavailable analysis cannot be saved'
+                          : _selectedPatient == null
+                              ? 'Select a patient before saving'
+                              : 'Save Scan Record',
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: DawaTokens.brandPrimary,
                   foregroundColor: Colors.white,
@@ -3259,7 +3610,9 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'AI-assisted tool only. Always confirm findings with clinical judgment and refer appropriately.',
+                      result.segmentation != null
+                          ? 'Research-stage segmentation using a placeholder prompt and an unvalidated model. It is not a diagnosis, fetal-growth assessment or risk classification. Confirm any measurement with a standard clinical ultrasound measurement.'
+                          : 'AI-assisted tool only. Always confirm findings with clinical judgment and refer appropriately.',
                       style: TextStyle(
                           color: DawaTokens.statusWarningText, fontSize: 12),
                     ),
@@ -3272,6 +3625,60 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
       ),
     );
   }
+
+  Future<void> _leaveResults() async {
+    final error = await _completeActiveEdgeExamination();
+    if (!mounted) return;
+    setState(() {
+      _appState = UltrasoundAppState.dashboard;
+      _analysisResult = null;
+    });
+    if (error != null) {
+      _showToast(
+        'The edge session was not confirmed complete. Reconcile it before another edge examination.',
+      );
+    }
+  }
+
+  FindingLevel? _findingLevelForRecord(UltrasoundScanRecord record) {
+    for (final level in FindingLevel.values) {
+      if (level.name == record.result) return level;
+    }
+    return null;
+  }
+
+  Color _levelColor(FindingLevel? level) {
+    return switch (level) {
+      FindingLevel.normal => DawaTokens.statusSuccess,
+      FindingLevel.monitor => DawaTokens.statusWarning,
+      FindingLevel.urgent => DawaTokens.statusDanger,
+      null => DawaTokens.textMuted,
+    };
+  }
+
+  String _levelLabel(FindingLevel? level, {bool segmentation = false}) {
+    if (segmentation) return 'Measurement';
+    return switch (level) {
+      FindingLevel.normal => 'No AI flag',
+      FindingLevel.monitor => 'Review',
+      FindingLevel.urgent => 'Urgent review',
+      null => 'Unavailable',
+    };
+  }
+
+  String _analysisProviderLabel(UltrasoundAnalysisProvider? provider) {
+    return switch (provider) {
+      UltrasoundAnalysisProvider.cloud => 'Cloud AI',
+      UltrasoundAnalysisProvider.edgeDevice => 'Edge device AI',
+      UltrasoundAnalysisProvider.unavailable => 'Unavailable',
+      null => 'Unknown',
+    };
+  }
+
+  bool _sameCalendarDay(DateTime first, DateTime second) =>
+      first.year == second.year &&
+      first.month == second.month &&
+      first.day == second.day;
 
   Widget _buildFindingTile(UltrasoundFinding f) {
     return Container(
@@ -3307,6 +3714,82 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
         ],
       ),
     );
+  }
+
+  List<Widget> _buildSegmentationSection(UltrasoundSegmentation seg) {
+    final overlay = seg.overlay;
+    Uint8List? overlayBytes;
+    if (overlay != null && overlay.contains(',')) {
+      try {
+        overlayBytes = base64Decode(overlay.split(',').last);
+      } on FormatException {
+        overlayBytes = null;
+      }
+    }
+    final ellipse = seg.ellipse;
+    return [
+      if (overlayBytes != null) ...[
+        const Text('Segmentation overlay',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 10),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.memory(overlayBytes, fit: BoxFit.contain),
+        ),
+        const SizedBox(height: 16),
+      ],
+      const Text('Abdominal measurement',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 10),
+      if (!seg.found)
+        Text(
+          'No abdominal segmentation was found. No measurement is available.',
+          style: DawaTextStyles.secondary,
+        )
+      else ...[
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            _buildMeasurementChip('Circumference',
+                '${seg.circumferencePx!.toStringAsFixed(1)} px'),
+            _buildMeasurementChip(
+                'Area', '${seg.areaPx!.toStringAsFixed(0)} px²'),
+            if (seg.isCalibrated) ...[
+              _buildMeasurementChip('Circumference (calibrated)',
+                  '${seg.circumferenceMm!.toStringAsFixed(1)} mm'),
+              _buildMeasurementChip('Area (calibrated)',
+                  '${seg.areaMm2!.toStringAsFixed(0)} mm²'),
+            ],
+            if (ellipse != null)
+              _buildMeasurementChip('Ellipse axes',
+                  '${ellipse.axis1Px.toStringAsFixed(1)} × ${ellipse.axis2Px.toStringAsFixed(1)} px'),
+            if (seg.iouScore != null)
+              _buildMeasurementChip(
+                  'Model IoU score', seg.iouScore!.toStringAsFixed(3)),
+          ],
+        ),
+        if (!seg.isCalibrated) ...[
+          const SizedBox(height: 10),
+          Text(
+            'Pixel spacing is not calibrated. Values are in image pixels and are not physical millimetres.',
+            style: DawaTextStyles.secondary,
+          ),
+        ],
+      ],
+      if (seg.timingsMs['total'] != null || seg.recordId != null) ...[
+        const SizedBox(height: 10),
+        Text(
+          [
+            if (seg.timingsMs['total'] != null)
+              'Device time ${seg.timingsMs['total']!.toStringAsFixed(0)} ms',
+            if (seg.recordId != null) 'Device record ${seg.recordId}',
+          ].join(' • '),
+          style: DawaTextStyles.secondary.copyWith(fontSize: 11),
+        ),
+      ],
+      const SizedBox(height: 16),
+    ];
   }
 
   Widget _buildMeasurementChip(String label, String value) {

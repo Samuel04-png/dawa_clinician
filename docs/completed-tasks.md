@@ -69,7 +69,7 @@ This page records the main work I confirmed from the repository, migrations, tes
 
 | Task | What changed | Files touched | Status | Notes |
 | --- | --- | --- | --- | --- |
-| Device configuration | I added build-time device URLs and timeouts for cervical upload and Pi base URL. | `lib/application/cacx/cacx_upload_service.dart`, `lib/services/offline_connectivity_service.dart` | Done | Defaults to `http://DAWA.local:8084` if no override is passed. |
+| Device configuration | I added build-time device URLs and timeouts for cervical upload and Pi base URL. | `lib/application/cacx/cacx_upload_service.dart`, `lib/services/offline_connectivity_service.dart` | Done | **Obsolete endpoint:** formerly defaulted to `http://DAWA.local:8084`; now defaults to `https://dawa.local`. |
 | Multipart device upload | I send the cervical image as multipart form data with `image`, `patient_id`, and `examination_type`. | `lib/application/cacx/cacx_upload_service.dart` | Done | Response parser accepts multiple result and confidence key names. |
 | Result risk mapping | I map labels like normal, low risk, CIN1, CIN2, CIN3, cancer, positive, and suspicious to normalized risk levels. | `lib/application/cacx/cacx_upload_service.dart`, `test/cacx_upload_routing_test.dart` | Done | Tests cover second-opinion routing rules. |
 | Supabase result storage | I added insert/update/sync logic for `cacx_screening_results`. | `lib/application/cacx/cacx_upload_service.dart`, `supabase/migrations/20260602120000_add_cacx_screening_results.sql` | Done | Saves primary result and second opinion metadata. |

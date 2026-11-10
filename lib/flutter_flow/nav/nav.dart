@@ -273,6 +273,12 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
           builder: (context, params) => ProfileWidget(),
         ),
         FFRoute(
+          name: ClinicianServiceCatalogAdminWidget.routeName,
+          path: ClinicianServiceCatalogAdminWidget.routePath,
+          requireAuth: true,
+          builder: (context, params) => ClinicianServiceCatalogAdminWidget(),
+        ),
+        FFRoute(
           name: EditProfileWidget.routeName,
           path: EditProfileWidget.routePath,
           builder: (context, params) => EditProfileWidget(),

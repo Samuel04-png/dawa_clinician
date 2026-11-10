@@ -162,8 +162,8 @@ class _DawaMomAppointmentRequestsState
         ? appointment.scheduledStart
         : now.add(const Duration(days: 1));
     var selectedTime = TimeOfDay.fromDateTime(selectedDate);
-    final originalDuration = appointment.scheduledEnd
-        .difference(appointment.scheduledStart);
+    final originalDuration =
+        appointment.scheduledEnd.difference(appointment.scheduledStart);
     final duration = originalDuration.inMinutes > 0
         ? originalDuration
         : const Duration(minutes: 30);
@@ -205,7 +205,8 @@ class _DawaMomAppointmentRequestsState
                                 final picked = await showDatePicker(
                                   context: dialogContext,
                                   initialDate: selectedDate,
-                                  firstDate: DateTime(now.year, now.month, now.day),
+                                  firstDate:
+                                      DateTime(now.year, now.month, now.day),
                                   lastDate: now.add(const Duration(days: 365)),
                                 );
                                 if (picked != null) {
@@ -426,8 +427,8 @@ class _DawaMomNotificationButtonState extends State<DawaMomNotificationButton> {
                             onTap: () async {
                               if (!notification.isRead) {
                                 try {
-                                    await _repository
-                                        .markNotificationRead(notification.id);
+                                  await _repository
+                                      .markNotificationRead(notification.id);
                                 } catch (_) {
                                   // Opening the linked appointment remains
                                   // useful if mark-read is temporarily offline.
@@ -507,7 +508,8 @@ class _AppointmentCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(appointment.patientName, style: DawaTextStyles.cardTitle),
+                    Text(appointment.patientName,
+                        style: DawaTextStyles.cardTitle),
                     const SizedBox(height: 3),
                     Text(
                       '${DateFormat('EEE, d MMM y').format(appointment.scheduledStart)} · '
@@ -516,12 +518,14 @@ class _AppointmentCard extends StatelessWidget {
                       style: DawaTextStyles.secondary,
                     ),
                     if (appointment.clinicName.isNotEmpty)
-                      Text(appointment.clinicName, style: DawaTextStyles.secondary),
+                      Text(appointment.clinicName,
+                          style: DawaTextStyles.secondary),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: statusColor.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(999),

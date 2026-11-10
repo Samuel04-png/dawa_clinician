@@ -39,6 +39,7 @@ enum PregnancyStatus {
 }
 
 enum ScanStatus {
+  recorded,
   normal,
   abnormal,
   pending,
@@ -49,12 +50,13 @@ enum RiskLevel {
   low,
   medium,
   high,
+  unknown,
 }
 
 class PregnantPatient {
   final String id;
   final String name;
-  final int age;
+  final int? age;
   final String contact;
   final int? gestationalAgeWeeks;
   final DateTime? lmp; // Last Menstrual Period
@@ -86,7 +88,7 @@ class PregnantPatient {
     return PregnantPatient(
       id: json['id'] ?? '',
       name: json['name'] ?? '',
-      age: json['age'] ?? 0,
+      age: json['age'] as int?,
       contact: json['contact'] ?? '',
       gestationalAgeWeeks: json['gestationalAgeWeeks'],
       lmp: json['lmp'] != null ? DateTime.parse(json['lmp']) : null,
@@ -100,7 +102,7 @@ class PregnantPatient {
       ),
       riskLevel: RiskLevel.values.firstWhere(
         (e) => e.toString().split('.').last == json['riskLevel'],
-        orElse: () => RiskLevel.low,
+        orElse: () => RiskLevel.unknown,
       ),
       pregnancyStatus: PregnancyStatus.values.firstWhere(
         (e) => e.toString().split('.').last == json['pregnancyStatus'],
@@ -139,6 +141,8 @@ class PregnantPatient {
         return 'Pending';
       case ScanStatus.unscanned:
         return 'Not Scanned';
+      case ScanStatus.recorded:
+        return 'Recorded';
     }
   }
 
@@ -167,6 +171,8 @@ class PregnantPatient {
         return DawaTokens.statusWarning;
       case ScanStatus.unscanned:
         return Colors.grey;
+      case ScanStatus.recorded:
+        return DawaTokens.brandPrimary;
     }
   }
 }
@@ -176,6 +182,21 @@ class PregnantPatient {
 enum ScanType {
   manual,
   aiGuided,
+  unknown,
+}
+
+enum UltrasoundAnalysisProvider {
+  cloud,
+  edgeDevice,
+  unavailable,
+}
+
+UltrasoundAnalysisProvider? _analysisProviderFromJson(dynamic value) {
+  if (value is! String) return null;
+  for (final provider in UltrasoundAnalysisProvider.values) {
+    if (provider.name == value) return provider;
+  }
+  return null;
 }
 
 class UltrasoundScanRecord {
@@ -190,6 +211,13 @@ class UltrasoundScanRecord {
   final String? aiAnalysis;
   final int? gestationalAgeWeeks;
   final Map<String, dynamic>? measurements; // BPD, HC, AC, FL etc.
+  final UltrasoundAnalysisProvider? analysisProvider;
+  final String? examinationId;
+  final List<UltrasoundFinding> findings;
+  final String? modelId;
+  final String? modelVersion;
+  final String? deviceId;
+  final UltrasoundSegmentation? segmentation;
 
   UltrasoundScanRecord({
     required this.id,
@@ -203,6 +231,13 @@ class UltrasoundScanRecord {
     this.aiAnalysis,
     this.gestationalAgeWeeks,
     this.measurements,
+    this.analysisProvider,
+    this.examinationId,
+    this.findings = const [],
+    this.modelId,
+    this.modelVersion,
+    this.deviceId,
+    this.segmentation,
   });
 
   factory UltrasoundScanRecord.fromJson(Map<String, dynamic> json) {
@@ -221,6 +256,27 @@ class UltrasoundScanRecord {
       aiAnalysis: json['aiAnalysis'],
       gestationalAgeWeeks: json['gestationalAgeWeeks'],
       measurements: json['measurements'],
+      analysisProvider: _analysisProviderFromJson(json['analysisProvider']),
+      examinationId: json['examinationId'],
+      findings: (json['findings'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(
+            (item) => UltrasoundFinding(
+              category: item['category'] as String,
+              finding: item['finding'] as String,
+              level: FindingLevel.values.byName(item['level'] as String),
+              note: item['note'] as String?,
+            ),
+          )
+          .toList(growable: false),
+      modelId: json['modelId'],
+      modelVersion: json['modelVersion'],
+      deviceId: json['deviceId'],
+      segmentation: json['segmentation'] is Map<String, dynamic>
+          ? UltrasoundSegmentation.fromJson(
+              json['segmentation'] as Map<String, dynamic>,
+            )
+          : null,
     );
   }
 
@@ -237,6 +293,22 @@ class UltrasoundScanRecord {
       'aiAnalysis': aiAnalysis,
       'gestationalAgeWeeks': gestationalAgeWeeks,
       'measurements': measurements,
+      'analysisProvider': analysisProvider?.name,
+      'examinationId': examinationId,
+      'findings': findings
+          .map(
+            (finding) => {
+              'category': finding.category,
+              'finding': finding.finding,
+              'level': finding.level.name,
+              if (finding.note != null) 'note': finding.note,
+            },
+          )
+          .toList(growable: false),
+      'modelId': modelId,
+      'modelVersion': modelVersion,
+      'deviceId': deviceId,
+      if (segmentation != null) 'segmentation': segmentation!.toJson(),
     };
   }
 
@@ -246,6 +318,8 @@ class UltrasoundScanRecord {
         return 'Manual';
       case ScanType.aiGuided:
         return 'AI Guided';
+      case ScanType.unknown:
+        return 'Clinical record';
     }
   }
 }
@@ -319,15 +393,235 @@ class UltrasoundFinding {
   }
 }
 
+// ─── EDGE SEGMENTATION RESULT ────────────────────────────────────────────────
+
+class UltrasoundEllipse {
+  const UltrasoundEllipse({
+    required this.cx,
+    required this.cy,
+    required this.axis1Px,
+    required this.axis2Px,
+    required this.angleDeg,
+  });
+
+  factory UltrasoundEllipse.fromJson(Map<String, dynamic> json) {
+    double number(String key) {
+      final value = json[key];
+      if (value is! num || !value.isFinite) {
+        throw FormatException('ellipse.$key must be a finite number.');
+      }
+      return value.toDouble();
+    }
+
+    final axis1 = number('axis1_px');
+    final axis2 = number('axis2_px');
+    if (axis1 <= 0 || axis2 <= 0) {
+      throw const FormatException('ellipse axes must be positive.');
+    }
+    return UltrasoundEllipse(
+      cx: number('cx'),
+      cy: number('cy'),
+      axis1Px: axis1,
+      axis2Px: axis2,
+      angleDeg: number('angle_deg'),
+    );
+  }
+
+  final double cx;
+  final double cy;
+  final double axis1Px;
+  final double axis2Px;
+  final double angleDeg;
+
+  Map<String, dynamic> toJson() => {
+        'cx': cx,
+        'cy': cy,
+        'axis1_px': axis1Px,
+        'axis2_px': axis2Px,
+        'angle_deg': angleDeg,
+      };
+}
+
+/// Fetal-abdomen segmentation measurement from the edge ultrasound module
+/// (`POST /predict` on port 8086). Pixel values are the primary measurement;
+/// millimetre values exist only when the device was given a pixel spacing.
+class UltrasoundSegmentation {
+  const UltrasoundSegmentation({
+    required this.found,
+    required this.imageWidth,
+    required this.imageHeight,
+    this.areaPx,
+    this.circumferencePx,
+    this.circumferenceMm,
+    this.areaMm2,
+    this.ellipse,
+    this.iouScore,
+    this.overlay,
+    this.timingsMs = const {},
+    this.recordId,
+  });
+
+  /// Strictly validates the device response; throws [FormatException].
+  factory UltrasoundSegmentation.fromDeviceJson(Map<String, dynamic> json) {
+    final found = json['found'];
+    if (found is! bool) {
+      throw const FormatException('Response is missing a boolean "found".');
+    }
+    final size = json['image_size'];
+    if (size is! List ||
+        size.length != 2 ||
+        size.any((v) => v is! int || v <= 0)) {
+      throw const FormatException('image_size must be two positive integers.');
+    }
+    final timings = json['timings_ms'];
+    if (timings is! Map ||
+        timings.values.any((v) => v != null && (v is! num || !v.isFinite))) {
+      throw const FormatException('timings_ms must be a map of numbers.');
+    }
+    final recordId = json['record_id'];
+    if (recordId != null && recordId is! int) {
+      throw const FormatException('record_id must be an integer.');
+    }
+    final overlay = json['overlay'];
+    if (overlay != null &&
+        (overlay is! String || !overlay.startsWith('data:image/'))) {
+      throw const FormatException('overlay must be an image data URI.');
+    }
+    final iou = json['iou_score'];
+    if (iou != null && (iou is! num || !iou.isFinite)) {
+      throw const FormatException('iou_score must be a number.');
+    }
+
+    double? positive(String key, {required bool required}) {
+      final value = json[key];
+      if (value == null) {
+        if (required) throw FormatException('$key is required when found.');
+        return null;
+      }
+      if (value is! num || !value.isFinite || value <= 0) {
+        throw FormatException('$key must be a positive number.');
+      }
+      return value.toDouble();
+    }
+
+    UltrasoundEllipse? ellipse;
+    double? area;
+    double? circumference;
+    double? circumferenceMm;
+    double? areaMm2;
+    if (found) {
+      area = positive('area_px', required: true);
+      circumference = positive('circumference_px', required: true);
+      circumferenceMm = positive('circumference_mm', required: false);
+      areaMm2 = positive('area_mm2', required: false);
+      if ((circumferenceMm == null) != (areaMm2 == null)) {
+        throw const FormatException(
+          'circumference_mm and area_mm2 must be reported together.',
+        );
+      }
+      final ellipseValue = json['ellipse'];
+      if (ellipseValue is! Map) {
+        throw const FormatException('ellipse is required when found.');
+      }
+      ellipse = UltrasoundEllipse.fromJson(
+        Map<String, dynamic>.from(ellipseValue),
+      );
+    }
+
+    return UltrasoundSegmentation(
+      found: found,
+      imageWidth: size[0] as int,
+      imageHeight: size[1] as int,
+      areaPx: area,
+      circumferencePx: circumference,
+      circumferenceMm: circumferenceMm,
+      areaMm2: areaMm2,
+      ellipse: ellipse,
+      iouScore: (iou as num?)?.toDouble(),
+      overlay: overlay as String?,
+      timingsMs: {
+        for (final entry in timings.entries)
+          if (entry.value is num)
+            entry.key.toString(): (entry.value as num).toDouble(),
+      },
+      recordId: recordId as int?,
+    );
+  }
+
+  /// Reads the persisted form written by [toJson].
+  factory UltrasoundSegmentation.fromJson(Map<String, dynamic> json) {
+    final size = json['image_size'] as List?;
+    return UltrasoundSegmentation(
+      found: json['found'] == true,
+      imageWidth: (size?[0] as num?)?.toInt() ?? 0,
+      imageHeight: (size?[1] as num?)?.toInt() ?? 0,
+      areaPx: (json['area_px'] as num?)?.toDouble(),
+      circumferencePx: (json['circumference_px'] as num?)?.toDouble(),
+      circumferenceMm: (json['circumference_mm'] as num?)?.toDouble(),
+      areaMm2: (json['area_mm2'] as num?)?.toDouble(),
+      ellipse: json['ellipse'] is Map
+          ? UltrasoundEllipse.fromJson(
+              Map<String, dynamic>.from(json['ellipse'] as Map),
+            )
+          : null,
+      iouScore: (json['iou_score'] as num?)?.toDouble(),
+      timingsMs: {
+        for (final entry in (json['timings_ms'] as Map? ?? const {}).entries)
+          if (entry.value is num)
+            entry.key.toString(): (entry.value as num).toDouble(),
+      },
+      recordId: (json['record_id'] as num?)?.toInt(),
+    );
+  }
+
+  final bool found;
+  final int imageWidth;
+  final int imageHeight;
+  final double? areaPx;
+  final double? circumferencePx;
+  final double? circumferenceMm;
+  final double? areaMm2;
+  final UltrasoundEllipse? ellipse;
+  final double? iouScore;
+  final String? overlay;
+  final Map<String, double> timingsMs;
+  final int? recordId;
+
+  bool get isCalibrated => circumferenceMm != null;
+
+  /// Persisted form. The overlay image is deliberately not stored.
+  Map<String, dynamic> toJson() => {
+        'found': found,
+        'image_size': [imageWidth, imageHeight],
+        if (areaPx != null) 'area_px': areaPx,
+        if (circumferencePx != null) 'circumference_px': circumferencePx,
+        if (circumferenceMm != null) 'circumference_mm': circumferenceMm,
+        if (areaMm2 != null) 'area_mm2': areaMm2,
+        if (ellipse != null) 'ellipse': ellipse!.toJson(),
+        if (iouScore != null) 'iou_score': iouScore,
+        'timings_ms': timingsMs,
+        if (recordId != null) 'record_id': recordId,
+      };
+}
+
 class UltrasoundAnalysisResult {
   final String imageUrl;
   final List<UltrasoundFinding> findings;
   final String overallAssessment;
-  final FindingLevel overallLevel;
+  final FindingLevel? overallLevel;
   final String recommendation;
   final int? estimatedGestationalAge;
   final Map<String, String>? measurements; // BPD, HC, AC, FL
   final String? error;
+  final UltrasoundAnalysisProvider provider;
+  final String? examinationId;
+  final String? modelId;
+  final String? modelVersion;
+  final String? deviceId;
+
+  /// Set for edge-device segmentation outcomes. These carry measurements and
+  /// geometry only; no risk level, findings or recommendation is derived.
+  final UltrasoundSegmentation? segmentation;
 
   UltrasoundAnalysisResult({
     required this.imageUrl,
@@ -338,10 +632,18 @@ class UltrasoundAnalysisResult {
     this.estimatedGestationalAge,
     this.measurements,
     this.error,
+    this.provider = UltrasoundAnalysisProvider.cloud,
+    this.examinationId,
+    this.modelId,
+    this.modelVersion,
+    this.deviceId,
+    this.segmentation,
   });
 
   Color get levelColor {
     switch (overallLevel) {
+      case null:
+        return DawaTokens.brandPrimary;
       case FindingLevel.normal:
         return DawaTokens.statusSuccess;
       case FindingLevel.monitor:
@@ -353,6 +655,8 @@ class UltrasoundAnalysisResult {
 
   String get levelString {
     switch (overallLevel) {
+      case null:
+        return 'Segmentation';
       case FindingLevel.normal:
         return 'Normal';
       case FindingLevel.monitor:

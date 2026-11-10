@@ -146,25 +146,25 @@ class _AdminPinConfirmationWidgetState
               mainAxisSize: MainAxisSize.max,
               children: [
                 Expanded(
-              child: FFButtonWidget(
-                onPressed: () async {
-                  final pin = _model.pinCodeController?.text.trim() ?? '';
-                  if (pin != '123456') {
-                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Invalid administrator pin.'),
-                      ),
-                    );
-                    return;
-                  }
+                  child: FFButtonWidget(
+                    onPressed: () async {
+                      final pin = _model.pinCodeController?.text.trim() ?? '';
+                      if (pin != '123456') {
+                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Invalid administrator pin.'),
+                          ),
+                        );
+                        return;
+                      }
 
-                  FFAppState().adminPin = pin;
-                  _model.updatePage(() {});
+                      FFAppState().adminPin = pin;
+                      _model.updatePage(() {});
 
-                  Navigator.of(context).pop();
-                },
-                text: 'Submit',
+                      Navigator.of(context).pop();
+                    },
+                    text: 'Submit',
                     options: FFButtonOptions(
                       height: 40.0,
                       padding:

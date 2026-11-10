@@ -3,14 +3,25 @@ import '/backend/supabase/supabase_config.dart';
 import '../models/ultrasound_models.dart';
 
 class UltrasoundAIService {
+  static UltrasoundAnalysisResult unavailableResult(
+    String image,
+    String error,
+  ) {
+    return _errorResult(image, error);
+  }
+
   static Future<UltrasoundAnalysisResult> analyzeUltrasoundImage(
-      String base64Image, int? gestationalAgeWeeks) async {
+    String base64Image,
+    int? gestationalAgeWeeks,
+    String examinationId,
+  ) async {
     try {
       final response = await supabaseClient.functions.invoke(
         'analyze-ultrasound-image',
         body: {
           'imageBase64': base64Image,
           'gestationalAgeWeeks': gestationalAgeWeeks,
+          'examinationId': examinationId,
         },
       );
 
@@ -19,107 +30,194 @@ class UltrasoundAIService {
       }
 
       final data = response.data;
-      return _parseResult(base64Image, data);
+      return parseResponse(
+        base64Image,
+        data,
+        expectedExaminationId: examinationId,
+      );
     } catch (e) {
       return _errorResult(base64Image, e.toString());
     }
   }
 
-  static UltrasoundAnalysisResult _parseResult(String imageUrl, dynamic data) {
-    try {
-      final findings = <UltrasoundFinding>[];
-
-      if (data['findings'] != null) {
-        for (final f in data['findings']) {
-          findings.add(UltrasoundFinding(
-            category: f['category'] ?? '',
-            finding: f['finding'] ?? '',
-            level: FindingLevel.values.firstWhere(
-              (e) => e.toString().split('.').last == f['level'],
-              orElse: () => FindingLevel.normal,
-            ),
-            note: f['note'],
-          ));
-        }
-      }
-
-      return UltrasoundAnalysisResult(
-        imageUrl: imageUrl,
-        findings: findings,
-        overallAssessment: data['overallAssessment'] ?? 'Assessment complete',
-        overallLevel: FindingLevel.values.firstWhere(
-          (e) => e.toString().split('.').last == data['overallLevel'],
-          orElse: () => FindingLevel.normal,
-        ),
-        recommendation: data['recommendation'] ?? '',
-        estimatedGestationalAge: data['estimatedGestationalAge'],
-        measurements: data['measurements'] != null
-            ? Map<String, String>.from(data['measurements'])
-            : null,
-      );
-    } catch (e) {
-      return _mockResult(imageUrl);
+  static UltrasoundAnalysisResult parseResponse(
+    String imageUrl,
+    dynamic data, {
+    String? expectedExaminationId,
+    String? expectedModelId,
+  }) {
+    if (data is! Map<String, dynamic>) {
+      return _errorResult(
+          imageUrl, 'The analysis service returned an invalid response.');
     }
-  }
 
-  /// Fallback mock result for demo / offline use
-  static UltrasoundAnalysisResult _mockResult(String imageUrl) {
+    final assessment = data['overallAssessment'];
+    final recommendation = data['recommendation'];
+    final providerValue = data['analysisProvider'];
+    if (providerValue is! String) {
+      return _errorResult(
+        imageUrl,
+        'The analysis response did not identify its provider.',
+      );
+    }
+    if (providerValue == 'unavailable') {
+      final error = data['error'];
+      return _errorResult(
+        imageUrl,
+        error is String
+            ? error
+            : 'No cloud AI model was available to analyze this image.',
+      );
+    }
+    final serviceError = data['error'];
+    if (serviceError is String && serviceError.isNotEmpty) {
+      return _errorResult(imageUrl, serviceError);
+    }
+    final provider = switch (providerValue) {
+      'gemini' => UltrasoundAnalysisProvider.cloud,
+      'edgeDevice' => UltrasoundAnalysisProvider.edgeDevice,
+      _ => UltrasoundAnalysisProvider.unavailable,
+    };
+    if (provider == UltrasoundAnalysisProvider.unavailable) {
+      return _errorResult(
+        imageUrl,
+        'The analysis service did not identify a validated analysis provider.',
+      );
+    }
+
+    final findingsValue = data['findings'];
+    final overallLevelValue = data['overallLevel'];
+    if (findingsValue is! List ||
+        findingsValue.isEmpty ||
+        assessment is! String ||
+        assessment.trim().isEmpty ||
+        overallLevelValue is! String ||
+        recommendation is! String ||
+        recommendation.trim().isEmpty) {
+      return _errorResult(
+          imageUrl, 'The analysis service returned incomplete findings.');
+    }
+
+    final overallLevel = _findingLevel(overallLevelValue);
+    if (overallLevel == null) {
+      return _errorResult(imageUrl,
+          'The analysis service returned an unknown assessment level.');
+    }
+
+    final findings = <UltrasoundFinding>[];
+    for (final item in findingsValue) {
+      if (item is! Map<String, dynamic> ||
+          item['category'] is! String ||
+          (item['category'] as String).trim().isEmpty ||
+          item['finding'] is! String ||
+          (item['finding'] as String).trim().isEmpty ||
+          item['level'] is! String) {
+        return _errorResult(
+            imageUrl, 'The analysis service returned an invalid finding.');
+      }
+      final level = _findingLevel(item['level'] as String);
+      if (level == null) {
+        return _errorResult(imageUrl,
+            'The analysis service returned an unknown finding level.');
+      }
+      final note = item['note'];
+      if (note != null && note is! String) {
+        return _errorResult(
+            imageUrl, 'The analysis service returned an invalid finding note.');
+      }
+      findings.add(
+        UltrasoundFinding(
+          category: item['category'] as String,
+          finding: item['finding'] as String,
+          level: level,
+          note: note as String?,
+        ),
+      );
+    }
+
+    final estimatedGestationalAge = data['estimatedGestationalAge'];
+    if (estimatedGestationalAge != null && estimatedGestationalAge is! int) {
+      return _errorResult(imageUrl,
+          'The analysis service returned an invalid gestational age.');
+    }
+
+    final measurementsValue = data['measurements'];
+    Map<String, String>? measurements;
+    if (measurementsValue != null) {
+      if (measurementsValue is! Map ||
+          measurementsValue.keys.any((key) => key is! String) ||
+          measurementsValue.values.any((value) => value is! String)) {
+        return _errorResult(
+            imageUrl, 'The analysis service returned invalid measurements.');
+      }
+      measurements = Map<String, String>.from(measurementsValue);
+    }
+    final responseExaminationId = data['examinationId'];
+    if (responseExaminationId is! String ||
+        responseExaminationId.trim().isEmpty ||
+        (expectedExaminationId != null &&
+            responseExaminationId != expectedExaminationId)) {
+      return _errorResult(
+        imageUrl,
+        'The analysis response did not match this examination.',
+      );
+    }
+    final modelId = data['modelId'];
+    if (modelId is! String ||
+        modelId.trim().isEmpty ||
+        (expectedModelId != null && modelId != expectedModelId)) {
+      return _errorResult(
+        imageUrl,
+        'The analysis response omitted or mismatched model provenance.',
+      );
+    }
+    final modelVersion = data['modelVersion'];
+    if (modelVersion != null && modelVersion is! String) {
+      return _errorResult(
+        imageUrl,
+        'The analysis response returned invalid model version provenance.',
+      );
+    }
+    final deviceId = data['deviceId'];
+    if (deviceId != null && deviceId is! String) {
+      return _errorResult(
+        imageUrl,
+        'The analysis response returned invalid device provenance.',
+      );
+    }
+
     return UltrasoundAnalysisResult(
       imageUrl: imageUrl,
-      findings: const [
-        UltrasoundFinding(
-          category: 'Fetal Position',
-          finding: 'Cephalic (head down)',
-          level: FindingLevel.normal,
-          note: 'Optimal position for delivery',
-        ),
-        UltrasoundFinding(
-          category: 'Placenta',
-          finding: 'Posterior, Grade II',
-          level: FindingLevel.normal,
-          note: 'Clear of cervical os',
-        ),
-        UltrasoundFinding(
-          category: 'Amniotic Fluid',
-          finding: 'AFI 12cm — Normal',
-          level: FindingLevel.normal,
-        ),
-        UltrasoundFinding(
-          category: 'Fetal Heart Rate',
-          finding: '148 bpm — Normal',
-          level: FindingLevel.normal,
-        ),
-        UltrasoundFinding(
-          category: 'Fetal Growth',
-          finding: 'Consistent with dates',
-          level: FindingLevel.normal,
-          note: 'EFW within 10th–90th percentile',
-        ),
-      ],
-      overallAssessment:
-          'Normal obstetric ultrasound. Fetus is active and well-positioned.',
-      overallLevel: FindingLevel.normal,
-      recommendation:
-          'Routine antenatal care. Next scan at 36 weeks or as clinically indicated.',
-      estimatedGestationalAge: 28,
-      measurements: {
-        'BPD': '72mm',
-        'HC': '261mm',
-        'AC': '241mm',
-        'FL': '53mm',
-        'EFW': '1.1kg',
-      },
+      findings: findings,
+      overallAssessment: assessment,
+      overallLevel: overallLevel,
+      recommendation: recommendation,
+      estimatedGestationalAge: estimatedGestationalAge as int?,
+      measurements: measurements,
+      provider: provider,
+      examinationId: responseExaminationId,
+      modelId: modelId,
+      modelVersion: modelVersion as String?,
+      deviceId: deviceId as String?,
     );
+  }
+
+  static FindingLevel? _findingLevel(String value) {
+    for (final level in FindingLevel.values) {
+      if (level.name == value) return level;
+    }
+    return null;
   }
 
   static UltrasoundAnalysisResult _errorResult(String imageUrl, String error) {
     return UltrasoundAnalysisResult(
       imageUrl: imageUrl,
       findings: const [],
-      overallAssessment: 'Analysis failed',
-      overallLevel: FindingLevel.monitor,
+      overallAssessment: 'Analysis unavailable',
+      overallLevel: null,
       recommendation: 'Please retake the image and try again.',
       error: error,
+      provider: UltrasoundAnalysisProvider.unavailable,
     );
   }
 }

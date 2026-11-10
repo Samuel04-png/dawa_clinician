@@ -1307,6 +1307,27 @@ class GradioService {
 class ImagePickerService {
   static final ImagePicker _picker = ImagePicker();
 
+  @visibleForTesting
+  static String encodePickedImage(List<int> bytes) {
+    final png = bytes.length >= 8 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4e &&
+        bytes[3] == 0x47 &&
+        bytes[4] == 0x0d &&
+        bytes[5] == 0x0a &&
+        bytes[6] == 0x1a &&
+        bytes[7] == 0x0a;
+    final jpeg = bytes.length >= 3 &&
+        bytes[0] == 0xff &&
+        bytes[1] == 0xd8 &&
+        bytes[2] == 0xff;
+    if (!png && !jpeg) {
+      throw const FormatException('Select a JPEG or PNG image.');
+    }
+    return 'data:image/${png ? 'png' : 'jpeg'};base64,${base64Encode(bytes)}';
+  }
+
   static Future<String?> pickImage() async {
     try {
       final XFile? image = await _picker.pickImage(
@@ -1317,11 +1338,11 @@ class ImagePickerService {
       );
       if (image != null) {
         final bytes = await image.readAsBytes();
-        final b64 = base64Encode(bytes);
-        return 'data:image/jpeg;base64,$b64';
+        return encodePickedImage(bytes);
       }
     } catch (e) {
       debugPrint('Error picking image: $e');
+      rethrow;
     }
     return null;
   }
@@ -1336,11 +1357,11 @@ class ImagePickerService {
       );
       if (image != null) {
         final bytes = await image.readAsBytes();
-        final b64 = base64Encode(bytes);
-        return 'data:image/jpeg;base64,$b64';
+        return encodePickedImage(bytes);
       }
     } catch (e) {
       debugPrint('Error capturing image: $e');
+      rethrow;
     }
     return null;
   }

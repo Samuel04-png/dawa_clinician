@@ -723,15 +723,14 @@ Future maybeCreateUser(User user) async {
   final metadata = user.userMetadata ?? const <String, dynamic>{};
   final userData = createUserRecordData(
     email: user.email,
-    displayName: (metadata['display_name'] ??
-            metadata['full_name'] ??
-            metadata['name'])
-        ?.toString(),
+    displayName:
+        (metadata['display_name'] ?? metadata['full_name'] ?? metadata['name'])
+            ?.toString(),
     photoUrl: (metadata['avatar_url'] ?? metadata['picture'])?.toString(),
     uid: user.id,
     phoneNumber: user.phone,
-    createdTime: DateTime.tryParse(user.createdAt)?.toLocal() ??
-        getCurrentTimestamp,
+    createdTime:
+        DateTime.tryParse(user.createdAt)?.toLocal() ?? getCurrentTimestamp,
   );
 
   await userRecord.set(userData);

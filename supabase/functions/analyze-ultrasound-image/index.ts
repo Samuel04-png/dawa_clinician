@@ -11,6 +11,10 @@ type UltrasoundFinding = {
 };
 
 type UltrasoundAnalysisResponse = {
+  analysisProvider: 'gemini' | 'unavailable';
+  examinationId?: string;
+  modelId?: string;
+  modelVersion?: string;
   findings: UltrasoundFinding[];
   overallAssessment: string;
   overallLevel: FindingLevel;
@@ -24,6 +28,7 @@ type AnalyzeUltrasoundBody = {
   imageBase64?: unknown;
   gestationalAgeWeeks?: unknown;
   mimeType?: unknown;
+  examinationId?: unknown;
 };
 
 const validLevels = new Set<FindingLevel>(['normal', 'monitor', 'urgent']);
@@ -43,6 +48,10 @@ serve(async (req) => {
   }
 
   const gestationalAgeWeeks = normalizeGestationalAge(body.gestationalAgeWeeks);
+  if (typeof body.examinationId !== 'string' || !body.examinationId.trim()) {
+    return jsonResponse({ error: 'examinationId is required.' }, 400);
+  }
+  const examinationId = body.examinationId.trim();
   const image = parseImageBase64(
     body.imageBase64,
     typeof body.mimeType === 'string' ? body.mimeType : undefined,
@@ -58,7 +67,12 @@ serve(async (req) => {
 
   const apiKey = Deno.env.get('GEMINI_API_KEY');
   if (!apiKey) {
-    return jsonResponse(buildFallbackResult(gestationalAgeWeeks));
+    return jsonResponse({
+      analysisProvider: 'unavailable',
+      examinationId,
+      findings: [],
+      error: 'The cloud ultrasound model is not configured.',
+    }, 503);
   }
 
   try {
@@ -67,15 +81,18 @@ serve(async (req) => {
       imageBase64: image.base64,
       mimeType: image.mimeType,
       gestationalAgeWeeks,
+      examinationId,
     });
 
     return jsonResponse(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return jsonResponse({
-      ...buildFallbackResult(gestationalAgeWeeks),
+      analysisProvider: 'unavailable',
+      examinationId,
+      findings: [],
       error: message,
-    });
+    }, 502);
   }
 });
 
@@ -125,11 +142,13 @@ async function analyzeWithGemini({
   imageBase64,
   mimeType,
   gestationalAgeWeeks,
+  examinationId,
 }: {
   apiKey: string;
   imageBase64: string;
   mimeType: string;
   gestationalAgeWeeks?: number;
+  examinationId: string;
 }): Promise<UltrasoundAnalysisResponse> {
   const model =
     Deno.env.get('GEMINI_ULTRASOUND_MODEL') ||
@@ -179,7 +198,11 @@ async function analyzeWithGemini({
       ?.map((part: { text?: string }) => part.text ?? '')
       .join('') ?? '';
 
-  return normalizeModelResult(parseJsonObject(text), gestationalAgeWeeks);
+  return normalizeModelResult(
+    parseJsonObject(text),
+    examinationId,
+    model,
+  );
 }
 
 function buildPrompt(gestationalAgeWeeks?: number) {
@@ -213,42 +236,52 @@ function parseJsonObject(text: string) {
 
 function normalizeModelResult(
   value: Record<string, unknown>,
-  gestationalAgeWeeks?: number,
+  examinationId: string,
+  modelId: string,
 ): UltrasoundAnalysisResponse {
-  const fallback = buildFallbackResult(gestationalAgeWeeks);
-  const rawFindings = normalizeFindings(value.findings);
-  const findings = rawFindings.length ? rawFindings : fallback.findings;
+  const findings = normalizeFindings(value.findings);
   const overallLevel = normalizeLevel(value.overallLevel) ?? deriveOverallLevel(findings);
   const measurements = normalizeMeasurements(value.measurements);
-  const estimatedGestationalAge = normalizeGestationalAge(value.estimatedGestationalAge) ??
-    gestationalAgeWeeks;
+  const estimatedGestationalAge = normalizeGestationalAge(value.estimatedGestationalAge);
+  const overallAssessment = normalizeText(value.overallAssessment);
+  const recommendation = normalizeText(value.recommendation);
+  if (!overallAssessment || !recommendation) {
+    throw new Error('Model response omitted the assessment or recommendation.');
+  }
 
   return {
+    analysisProvider: 'gemini',
+    examinationId,
+    modelId,
     findings,
-    overallAssessment: normalizeText(value.overallAssessment) ||
-      'AI-assisted ultrasound review completed. Confirm all findings clinically.',
+    overallAssessment,
     overallLevel,
-    recommendation: normalizeText(value.recommendation) ||
-      'Review the image quality and confirm findings with a qualified clinician.',
+    recommendation,
     ...(estimatedGestationalAge ? { estimatedGestationalAge } : {}),
     ...(measurements ? { measurements } : {}),
   };
 }
 
 function normalizeFindings(value: unknown): UltrasoundFinding[] {
-  if (!Array.isArray(value)) {
-    return [];
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error('Model response omitted structured findings.');
   }
 
   return value.slice(0, 8).map((item) => {
-    const finding = item && typeof item === 'object'
-      ? item as Record<string, unknown>
-      : {};
-
+    if (!item || typeof item !== 'object') {
+      throw new Error('Model response contained an invalid finding.');
+    }
+    const finding = item as Record<string, unknown>;
+    const category = normalizeText(finding.category);
+    const description = normalizeText(finding.finding);
+    const level = normalizeLevel(finding.level);
+    if (!category || !description || !level) {
+      throw new Error('Model response contained an incomplete finding.');
+    }
     return {
-      category: normalizeText(finding.category) || 'Image Review',
-      finding: normalizeText(finding.finding) || 'No specific finding returned.',
-      level: normalizeLevel(finding.level) ?? 'monitor',
+      category,
+      finding: description,
+      level,
       ...(normalizeText(finding.note) ? { note: normalizeText(finding.note) } : {}),
     };
   });
@@ -296,31 +329,6 @@ function deriveOverallLevel(findings: UltrasoundFinding[]): FindingLevel {
 
 function normalizeText(value: unknown) {
   return typeof value === 'string' ? value.trim().slice(0, 500) : '';
-}
-
-function buildFallbackResult(gestationalAgeWeeks?: number): UltrasoundAnalysisResponse {
-  return {
-    findings: [
-      {
-        category: 'Image Received',
-        finding: 'Ultrasound image was received for AI-assisted review.',
-        level: 'monitor',
-        note: 'No vision model is configured, so this is a fallback response.',
-      },
-      {
-        category: 'Clinical Confirmation',
-        finding: 'Image interpretation should be confirmed by a trained clinician.',
-        level: 'monitor',
-        note: 'Configure GEMINI_API_KEY for model-assisted findings.',
-      },
-    ],
-    overallAssessment:
-      'Ultrasound analysis endpoint is available. Model-assisted interpretation is not configured in this environment.',
-    overallLevel: 'monitor',
-    recommendation:
-      'Confirm findings manually and configure GEMINI_API_KEY to enable AI-assisted ultrasound image review.',
-    ...(gestationalAgeWeeks ? { estimatedGestationalAge: gestationalAgeWeeks } : {}),
-  };
 }
 
 function clamp(value: number, min: number, max: number) {

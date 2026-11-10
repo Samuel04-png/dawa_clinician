@@ -1,0 +1,120 @@
+import 'dart:async';
+
+import 'package:clinician/application/ultrasound/models/ultrasound_models.dart';
+import 'package:clinician/application/ultrasound/repositories/ultrasound_repository.dart';
+import 'package:clinician/application/ultrasound/screens/ultrasound_app.dart';
+import 'package:clinician/services/edge_device/edge_device_client.dart';
+import 'package:clinician/services/edge_device/edge_device_config.dart';
+import 'package:clinician/services/edge_device/edge_device_manager.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+
+void main() {
+  testWidgets('shows an honest empty patient state without sample records',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: UltrasoundApp(repository: _EmptyUltrasoundRepository()),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Patients').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('No patient records are available.'), findsOneWidget);
+    expect(
+      find.text(
+        'Demonstration data only. Sample patients, scan history, and records are not clinical records.',
+      ),
+      findsNothing,
+    );
+    expect(find.textContaining('Sample Patient'), findsNothing);
+  });
+
+  testWidgets('image actions remain disabled until ultrasound is ready',
+      (tester) async {
+    tester.view.physicalSize = const Size(1200, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final health = Completer<http.Response>();
+    final patient = PregnantPatient(
+      id: 'test',
+      name: 'Test',
+      age: 30,
+      contact: '',
+      scanStatus: ScanStatus.unscanned,
+      riskLevel: RiskLevel.unknown,
+      pregnancyStatus: PregnancyStatus.unknown,
+    );
+    final manager = EdgeDeviceManager(
+      client: EdgeDeviceClient(
+        config: const EdgeDeviceConfig(
+          baseUrl: 'http://localhost',
+          modelManagementEnabled: true,
+          ultrasoundInferenceEnabled: true,
+        ),
+        httpClient: MockClient((request) async {
+          if (request.url.path == '/health') return health.future;
+          return http.Response(
+              '{"active":"ultrasound","state":"ready","modules":{"ultrasound":{}}}',
+              200);
+        }),
+      ),
+    );
+    addTearDown(manager.dispose);
+    await tester.pumpWidget(MaterialApp(
+      home: UltrasoundApp(
+        repository: _PatientUltrasoundRepository(patient),
+        edgeDeviceManager: manager,
+        initialPatient: patient,
+        initialMode: UltrasoundLaunchMode.manualScan,
+      ),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump();
+    final upload = find.widgetWithText(OutlinedButton, 'Upload Image');
+    expect(upload, findsOneWidget);
+    expect(tester.widget<OutlinedButton>(upload).onPressed, isNull);
+    health.complete(http.Response('{"status":"ok","ready":true}', 200));
+    await tester.pump();
+    await tester.pump();
+    expect(tester.widget<OutlinedButton>(upload).onPressed, isNotNull);
+    await manager.completeExamination(manager.activeExaminationId!);
+  });
+}
+
+class _PatientUltrasoundRepository extends _EmptyUltrasoundRepository {
+  _PatientUltrasoundRepository(this.patient);
+  final PregnantPatient patient;
+
+  @override
+  Future<List<PregnantPatient>> loadPatients() async => [patient];
+}
+
+class _EmptyUltrasoundRepository implements UltrasoundRepository {
+  @override
+  Future<List<PregnantPatient>> loadPatients() async => const [];
+
+  @override
+  Future<List<UltrasoundScanRecord>> loadScanRecords() async => const [];
+
+  @override
+  Future<UltrasoundScanRecord> saveScanRecord({
+    required PregnantPatient patient,
+    required UltrasoundAnalysisResult analysis,
+    required ScanType scanType,
+  }) {
+    throw UnimplementedError('The empty-state test does not save records.');
+  }
+}

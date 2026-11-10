@@ -12,6 +12,12 @@ void main() {
   final patientReceiver = File(
     'supabase/functions/sync-dawa-mom-patient/index.ts',
   );
+  final serviceSyncMigration = File(
+    'supabase/migrations/202609160001_add_clinician_service_catalog.sql',
+  );
+  final serviceSyncSender = File(
+    'supabase/functions/process-service-catalog-outbox/index.ts',
+  );
   final repository = File(
     'lib/features/appointments/data/clinician_appointment_repository.dart',
   );
@@ -72,6 +78,60 @@ void main() {
         reason: 'appointments should arrive through the scoped realtime query');
     expect(source, contains('update_dawa_mom_appointment_status'));
     expect(source, isNot(contains(".from('appointments').update")));
+  });
+
+  test('clinician owns the authoritative service catalog and sync outbox', () {
+    final sql = serviceSyncMigration.readAsStringSync();
+
+    expect(
+        sql, contains('create table if not exists public.clinician_services'));
+    expect(sql, contains('source_updated_at'));
+    expect(sql, contains('current_clinician_is_admin()'));
+    expect(sql, contains('service_catalog_sync_outbox'));
+    expect(sql, contains('enqueue_service_catalog_sync_job'));
+    expect(sql,
+        contains('(is_paid and price > 0) or (not is_paid and price = 0)'));
+    expect(sql, contains("status in ('pending', 'retrying')"));
+    expect(sql, contains('attempt_count = 0'));
+  });
+
+  test(
+      'service catalog sender posts to the DawaMom receiver with retry safeguards',
+      () {
+    final source = serviceSyncSender.readAsStringSync();
+
+    expect(source, contains('receive-service-catalog-sync'));
+    expect(source, contains('x-dawa-sync-secret'));
+    expect(source, contains('claim_service_catalog_sync_jobs'));
+    expect(source, contains('retryDelayMs'));
+    expect(source, contains('permanently_failed'));
+  });
+
+  test('service catalog UI uses the existing admin authorization boundary', () {
+    final profile = File('lib/profile/profile_widget.dart').readAsStringSync();
+    final screen = File(
+      'lib/features/services/presentation/clinician_service_catalog_admin_widget.dart',
+    ).readAsStringSync();
+
+    expect(profile, contains("rpc('current_clinician_is_admin')"));
+    expect(profile, contains('Services & Pricing'));
+    expect(screen, contains("rpc('current_clinician_is_admin')"));
+    expect(screen, contains('context.goNamed(ProfileWidget.routeName)'));
+  });
+
+  test('service edits coalesce pending work and preserve newest timestamps',
+      () {
+    final sql = serviceSyncMigration.readAsStringSync();
+
+    expect(sql, contains("o.status in ('pending', 'retrying')"));
+    expect(sql, contains('set payload = jsonb_strip_nulls'));
+    expect(sql, contains('source_updated_at'));
+    expect(sql, contains('next_attempt_at = now()'));
+    expect(sql, contains('attempt_count = 0'));
+    expect(
+        sql,
+        contains(
+            "status in ('pending', 'processing', 'completed', 'retrying'"));
   });
 
   test('Flutter client does not contain cross-project server credentials', () {

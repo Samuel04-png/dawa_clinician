@@ -33,14 +33,28 @@ Related commit: `3e1dbfc Dawa clinician offline mode update`.
 
 The exact file-level changes should be reviewed with `git show 0cda061` if more detail is needed.
 
+## 2026-10-01
+
+### DAWA HTTPS Migration
+
+- Migrated the DAWA local device endpoint from HTTP on port `8084` to HTTPS.
+- Old default: `http://DAWA.local:8084`
+- New default: `https://dawa.local`
+- Updated `PiDeviceConfig`, `OfflineConnectivityService`, and the CaCx routing
+  tests, plus the integration docs accordingly.
+
 ## 2026-06-17
 
-### Raspberry Pi URL Update
+### Raspberry Pi URL Update (historical / obsolete endpoint)
+
+> **Obsolete:** These entries refer to the previous `http://DAWA:8084` /
+> `http://DAWA.local:8084` HTTP endpoint, which has since been replaced by
+> `https://dawa.local`.
 
 - Updated the Raspberry Pi/device URL behavior around `http://DAWA:8084` / `http://DAWA.local:8084`.
 - The current code uses `PI_DEVICE_BASE_URL` and `CERVICAL_DEVICE_BASE_URL` dart defines, with default behavior in `CervicalDeviceConfig` and `PiDeviceConfig`.
 
-Related commit: `4e8b160 updated the ip address for the reasberry pi http://DAWA:8084`.
+Related commit: `4e8b160 updated the ip address for the reasberry pi http://DAWA:8084` (obsolete endpoint).
 
 ## 2026-06-16
 

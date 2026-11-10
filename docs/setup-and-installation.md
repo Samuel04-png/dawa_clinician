@@ -34,7 +34,7 @@ If the app needs custom Supabase or device values, pass dart defines:
 flutter run \
   --dart-define=SUPABASE_URL=your_supabase_url \
   --dart-define=SUPABASE_ANON_KEY=your_supabase_anon_key \
-  --dart-define=PI_DEVICE_BASE_URL=http://device-host:8084
+  --dart-define=PI_DEVICE_BASE_URL=https://dawa.local
 ```
 
 ## Run Tests
@@ -98,11 +98,11 @@ POST /upload/cervical
 Run with:
 
 ```bash
-flutter run --dart-define=PI_DEVICE_BASE_URL=http://device-host:8084
+flutter run --dart-define=PI_DEVICE_BASE_URL=https://dawa.local
 ```
 
 or override only CaCx:
 
 ```bash
-flutter run --dart-define=CERVICAL_DEVICE_BASE_URL=http://device-host:8084
+flutter run --dart-define=CERVICAL_DEVICE_BASE_URL=https://dawa.local
 ```
