@@ -18,6 +18,14 @@ class EdgeDeviceStatusBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final presentation = _presentation(state, model);
+    // While the model loads, tell the clinician how long it takes so nobody
+    // uploads an image too early.
+    final text = message ??
+        (state == EdgeDeviceState.loadingModel
+            ? 'Please wait for "Model ready" before uploading. This usually '
+                'takes about a minute, up to 3 minutes after the device '
+                'switches scan.'
+            : null);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
@@ -42,10 +50,10 @@ class EdgeDeviceStatusBanner extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                if (message != null) ...[
+                if (text != null) ...[
                   const SizedBox(height: 3),
                   Text(
-                    message!,
+                    text,
                     style: DawaTextStyles.secondary.copyWith(fontSize: 12),
                   ),
                 ],

@@ -880,7 +880,7 @@ class _CaCxAppState extends State<CaCxApp> {
         EdgeDeviceState.connected =>
           'Connecting to Dawa Device...',
         EdgeDeviceState.loadingModel =>
-          'Preparing Cervical AI: waiting for model initialization...',
+          'Preparing Cervical AI: waiting for the model to load (usually about a minute, up to 3 minutes)...',
         EdgeDeviceState.ready => 'Cervical AI ready',
         EdgeDeviceState.examining => 'Sending image for device processing...',
         EdgeDeviceState.busy => 'Device busy',
