@@ -10,9 +10,10 @@ import 'edge_device_models.dart';
 ///
 /// Flow: hub `GET /api/status` -> `POST /api/select` -> poll status until the
 /// requested module is `ready` AND its own `/health` affirms the model is
-/// loaded. The device offers no examination reservation or completion
-/// endpoint, so the lock here is local to this app instance; completing an
-/// examination only releases it locally and never stops the module.
+/// loaded. Once ready, the app takes the device-side examination lock
+/// (`/api/exam/start`), keeps it alive with a heartbeat every 30 s, and
+/// releases it (`/api/exam/end`) when the examination completes. Completing an
+/// examination never stops the module.
 class EdgeDeviceManager extends ChangeNotifier {
   EdgeDeviceManager({
     required this.client,
@@ -31,6 +32,8 @@ class EdgeDeviceManager extends ChangeNotifier {
   EdgeAIModel? _activeModel;
   String? _activeExaminationId;
   String? _activeRequestId;
+  String? _deviceExamId;
+  Timer? _heartbeatTimer;
   Future<EdgeDeviceModelStatus>? _activationFuture;
   EdgeAIModel? _pendingModel;
   String? _pendingExaminationId;
@@ -224,6 +227,7 @@ class EdgeDeviceManager extends ChangeNotifier {
         message: 'The examination does not match the active device session.',
       );
     }
+    await _releaseDeviceExam();
     _clearActiveExamination();
     _setState(EdgeDeviceState.connected);
   }
@@ -345,6 +349,10 @@ class EdgeDeviceManager extends ChangeNotifier {
         await _waitUntilReady(selected, model: model);
       }
       _log('Model ready: $moduleId');
+      _deviceExamId =
+          await client.startExam(model, device: _deviceLabel(requestId));
+      _log('Device examination lock taken');
+      _startHeartbeat();
       _observedReadyModel = model;
       _setState(EdgeDeviceState.ready);
       return EdgeDeviceModelStatus(
@@ -446,7 +454,49 @@ class EdgeDeviceManager extends ChangeNotifier {
     }
   }
 
+  String _deviceLabel(String requestId) =>
+      'app-${requestId.length > 8 ? requestId.substring(0, 8) : requestId}';
+
+  void _startHeartbeat() {
+    _heartbeatTimer?.cancel();
+    final id = _deviceExamId;
+    if (id == null) return;
+    _heartbeatTimer =
+        Timer.periodic(const Duration(seconds: 30), (timer) async {
+      if (_deviceExamId != id) {
+        timer.cancel();
+        return;
+      }
+      try {
+        await client.examHeartbeat(id);
+      } on EdgeDeviceException catch (error) {
+        if (error.statusCode == 404 && _deviceExamId == id) {
+          timer.cancel();
+          _deviceExamId = null;
+          _readinessMessage = 'The device examination lock was lost.';
+          _setState(EdgeDeviceState.error);
+        }
+        // Other failures (a network blip): retry at the next tick; the lock
+        // survives until its 120 s TTL runs out.
+      } catch (_) {}
+    });
+  }
+
+  Future<void> _releaseDeviceExam() async {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+    final id = _deviceExamId;
+    _deviceExamId = null;
+    if (id == null) return;
+    try {
+      await client.endExam(id);
+    } catch (_) {
+      // The device expires the lock by itself if this fails.
+    }
+  }
+
   void _clearActiveExamination() {
+    unawaited(_releaseDeviceExam());
     _activeExaminationId = null;
     _activeModel = null;
     _activeRequestId = null;
@@ -461,6 +511,7 @@ class EdgeDeviceManager extends ChangeNotifier {
 
   @override
   void dispose() {
+    _heartbeatTimer?.cancel();
     client.close();
     super.dispose();
   }

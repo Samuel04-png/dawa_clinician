@@ -537,6 +537,78 @@ void main() {
       await device.close();
     }
   });
+  test('device lock is taken once the module is ready and released on completion',
+      () async {
+    final device = await _MockDevice.start();
+    final manager = _manager(device);
+    try {
+      await manager.beginExamination(
+        model: EdgeAIModel.cervicalCancer,
+        examinationId: 'lock-1',
+      );
+      expect(device.examStarts, 1);
+      expect(device.examId, isNotNull);
+      expect(device.examModule, 'cervitriage');
+      await manager.completeExamination('lock-1');
+      expect(device.examEnds, 1);
+      expect(device.examId, isNull);
+    } finally {
+      manager.dispose();
+      await device.close();
+    }
+  });
+
+  test('device lock held by another client is reported as busy', () async {
+    final device = await _MockDevice.start()
+      ..examStartConflict = true;
+    final manager = _manager(device);
+    try {
+      await expectLater(
+        manager.beginExamination(
+          model: EdgeAIModel.cervicalCancer,
+          examinationId: 'lock-busy',
+        ),
+        throwsA(isA<EdgeDeviceException>()
+            .having((e) => e.failure, 'failure', EdgeDeviceFailure.busy)
+            .having((e) => e.message, 'message', contains('exam_in_progress'))),
+      );
+      expect(manager.state, EdgeDeviceState.busy);
+      expect(manager.activeExaminationId, isNull);
+    } finally {
+      manager.dispose();
+      await device.close();
+    }
+  });
+
+  test('another client cannot switch module while the app holds the lock',
+      () async {
+    final device = await _MockDevice.start();
+    final manager = _manager(device);
+    try {
+      await manager.beginExamination(
+        model: EdgeAIModel.cervicalCancer,
+        examinationId: 'lock-2',
+      );
+      final intruder = _manager(device);
+      try {
+        await expectLater(
+          intruder.beginExamination(
+            model: EdgeAIModel.ultrasound,
+            examinationId: 'us-intruder',
+          ),
+          throwsA(isA<EdgeDeviceException>()
+              .having((e) => e.failure, 'failure', EdgeDeviceFailure.busy)),
+        );
+      } finally {
+        intruder.dispose();
+      }
+      expect(device.selects, ['cervitriage']);
+    } finally {
+      manager.dispose();
+      await device.close();
+    }
+  });
+
 }
 
 EdgeDeviceManager _manager(
@@ -583,6 +655,14 @@ class _MockDevice {
   String? active;
   String hubState = 'stopped';
   String? stickyActive;
+  // Examination lock, as the real hub implements it (POST /api/exam/*).
+  String? examId;
+  String? examModule;
+  bool examStartConflict = false;
+  bool lockLost = false;
+  int examStarts = 0;
+  int examHeartbeats = 0;
+  int examEnds = 0;
   bool hubAvailable = true;
   bool hubErrors = false;
   bool selectConflict = false;
@@ -652,9 +732,46 @@ class _MockDevice {
       stopCalls += 1;
       return _json(r, 200, _status());
     }
+    if (path == '/api/exam/start' && r.method == 'POST') {
+      final body = jsonDecode(await utf8.decoder.bind(r).join()) as Map;
+      if (examStartConflict || examId != null) {
+        return _json(r, 409, {
+          'error': 'An examination is already in progress.',
+          'code': 'exam_in_progress',
+        });
+      }
+      examStarts += 1;
+      examId = 'exam-$examStarts';
+      examModule = body['module'] as String?;
+      return _json(r, 201, {'exam_id': examId, 'ttl_s': 120});
+    }
+    if (path == '/api/exam/heartbeat' && r.method == 'POST') {
+      await r.drain<void>();
+      examHeartbeats += 1;
+      if (lockLost || examId == null) {
+        return _json(r, 404, {
+          'error': 'No such examination (it may have expired).',
+          'code': 'exam_not_found',
+        });
+      }
+      return _json(r, 200, {'ttl_s': 120});
+    }
+    if (path == '/api/exam/end' && r.method == 'POST') {
+      await r.drain<void>();
+      examEnds += 1;
+      examId = null;
+      examModule = null;
+      return _json(r, 200, {'ended': true});
+    }
     if (path == '/api/select' && r.method == 'POST') {
       final body = jsonDecode(await utf8.decoder.bind(r).join()) as Map;
       final module = body['module'] as String;
+      if (examId != null && module != examModule) {
+        return _json(r, 409, {
+          'error': 'An examination is in progress.',
+          'code': 'exam_in_progress',
+        });
+      }
       if (module != 'cervitriage' && module != 'ultrasound') {
         return _json(r, 400, {'error': 'Unknown module: $module'});
       }

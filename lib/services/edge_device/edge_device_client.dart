@@ -61,6 +61,51 @@ class EdgeDeviceClient {
     return _parseHubStatus(response.body);
   }
 
+  /// Takes the device-side examination lock (`POST /api/exam/start`).
+  /// Request `{"module","device"}`; 201 `{"exam_id","ttl_s"}` (the same device
+  /// and module get the same id back with `"resumed":true`). While it is held
+  /// the hub answers `/api/select` and `/api/stop` with 409 `exam_in_progress`.
+  Future<String> startExam(EdgeAIModel model, {required String device}) async {
+    _ensureModelManagementEnabled();
+    final response = await _postJson(
+      _resolve(() => config.hubEndpoint('/api/exam/start')),
+      {'module': config.modelId(model), 'device': device},
+      timeout: config.modelRequestTimeout,
+    );
+    _ensureSuccess(response);
+    final id = _decodeObject(response.body)['exam_id'];
+    if (id is! String || id.isEmpty) {
+      throw const EdgeDeviceException(
+        failure: EdgeDeviceFailure.invalidResponse,
+        message: 'Device did not return an exam_id.',
+      );
+    }
+    return id;
+  }
+
+  /// Keeps the lock alive (`POST /api/exam/heartbeat`). The device expires it
+  /// after its TTL (120 s); 404 `exam_not_found` means the lock was lost.
+  Future<void> examHeartbeat(String examId) async {
+    _ensureModelManagementEnabled();
+    final response = await _postJson(
+      _resolve(() => config.hubEndpoint('/api/exam/heartbeat')),
+      {'exam_id': examId},
+      timeout: config.requestTimeout,
+    );
+    _ensureSuccess(response);
+  }
+
+  /// Releases the lock (`POST /api/exam/end`). Safe to call twice.
+  Future<void> endExam(String examId) async {
+    _ensureModelManagementEnabled();
+    final response = await _postJson(
+      _resolve(() => config.hubEndpoint('/api/exam/end')),
+      {'exam_id': examId},
+      timeout: config.requestTimeout,
+    );
+    _ensureSuccess(response);
+  }
+
   /// Module `GET /health`. HTTP 200 alone is not readiness; see
   /// [EdgeModuleHealth.inferenceReady].
   Future<EdgeModuleHealth> getModuleHealth(EdgeAIModel model) async {

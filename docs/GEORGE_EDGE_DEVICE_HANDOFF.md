@@ -1,5 +1,8 @@
 # Dawa Edge Device — Clinician Integration Handoff
 
+> **Superseded in part (2026-11-10).** Sections 4, 6 and 7 (readiness, legacy CaCx, examination lock) are answered and verified in
+> [`DAWA_DEVICE_CONTRACT_VERIFIED.md`](DAWA_DEVICE_CONTRACT_VERIFIED.md). The device lock and a third scan (`anemia`) are now deployed on both boards; the hub listens on port 80.
+
 **Audience:** George / edge-device team.
 **Basis:** the supplied `dawa.zip` (and `dawa_update.zip`) source. Everything marked **Confirmed (source)** is read from that code. It has **not** been verified on physical hardware. Mock-server tests in this repo only prove the Flutter client matches the source schemas; they are not evidence about the real device.
 
