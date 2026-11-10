@@ -13,7 +13,7 @@ class EdgeDeviceConfig {
     this.apiVersion = '',
     this.healthPath = '/health',
     this.cervicalUploadPath = '/upload/cervical',
-    this.hubPort = 8080,
+    this.hubPort = 80,
     this.cervicalPort = 8085,
     this.ultrasoundPort = 8086,
     this.hubSelectPath = '/api/select',
@@ -41,7 +41,7 @@ class EdgeDeviceConfig {
     );
     const piUrl = String.fromEnvironment(
       'PI_DEVICE_BASE_URL',
-      defaultValue: 'http://dawa.local:8080',
+      defaultValue: 'http://dawa.local',
     );
     const cervicalUrl = String.fromEnvironment(
       'CERVICAL_DEVICE_BASE_URL',
@@ -109,7 +109,7 @@ class EdgeDeviceConfig {
       ),
       hubPort: const int.fromEnvironment(
         'EDGE_DEVICE_HUB_PORT',
-        defaultValue: 8080,
+        defaultValue: 80,
       ),
       cervicalPort: const int.fromEnvironment(
         'EDGE_DEVICE_CERVICAL_PORT',

@@ -133,17 +133,21 @@ class _OfflineBanner extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          IconButton(
-            tooltip: 'Dismiss offline status',
-            onPressed: onDismiss,
-            icon: const Icon(
-              Icons.close_rounded,
-              size: 18,
-              color: DawaTokens.statusWarningText,
+          // This banner sits above the Navigator, outside its Overlay.
+          // Label the button without creating an Overlay-dependent Tooltip.
+          Semantics(
+            label: 'Dismiss offline status',
+            child: IconButton(
+              onPressed: onDismiss,
+              icon: const Icon(
+                Icons.close_rounded,
+                size: 18,
+                color: DawaTokens.statusWarningText,
+              ),
+              padding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints.tightFor(width: 32, height: 32),
             ),
-            padding: EdgeInsets.zero,
-            visualDensity: VisualDensity.compact,
-            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
           ),
         ],
       ),

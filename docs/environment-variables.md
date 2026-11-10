@@ -20,7 +20,7 @@ requests to the proxy need an `Origin` header.
 | `SUPABASE_ANON_KEY` | Public anon/publishable key for the Flutter app. | Yes | Public anon keys still need RLS to be safe. |
 | `EDGE_DEVICE_BASE_URL` | Shared edge-device API base URL for CaCx and Ultrasound. | Empty | Preferred when set; otherwise `CERVICAL_DEVICE_BASE_URL`, then `PI_DEVICE_BASE_URL`. |
 | `CERVICAL_DEVICE_BASE_URL` | Legacy edge-device base URL fallback. | Empty | Used only when `EDGE_DEVICE_BASE_URL` is empty. |
-| `PI_DEVICE_BASE_URL` | Legacy shared device/Pi URL fallback. | `http://dawa.local:8080` | Used only when the shared and cervical URLs are empty. |
+| `PI_DEVICE_BASE_URL` | Legacy shared device/Pi URL fallback. | `http://dawa.local` | Used only when the shared and cervical URLs are empty. |
 | `EDGE_DEVICE_MODEL_MANAGEMENT_ENABLED` | Enables hub `POST /api/select` + `GET /api/status`, module health checks and CaCx `/predict`. | `false` | Keep disabled until hardware integration is verified. Flag off = legacy `/upload/cervical` only. |
 | `EDGE_DEVICE_ULTRASOUND_INFERENCE_ENABLED` | Enables ultrasound `POST /predict` on port 8086. | `false` | Requires model management enabled. Research-stage model; see handoff. |
 | `EDGE_DEVICE_API_VERSION` | Optional `X-API-Version` header for the shared device API. | Empty | George must confirm version negotiation and supported value. |
@@ -33,7 +33,7 @@ requests to the proxy need an `Origin` header.
 | `EDGE_DEVICE_MODEL_REQUEST_TIMEOUT_SECONDS` | Timeout for activation requests. | `30` | Tune to confirmed device behavior. |
 | `EDGE_DEVICE_MODEL_READY_TIMEOUT_SECONDS` | Process-switch timeout (hub `ready_timeout_s` is 300). | `300` | Total wait for hub `ready` plus affirmative module health. |
 | `EDGE_DEVICE_MODEL_POLL_INTERVAL_MILLISECONDS` | Delay between model status polls. | `1000` | Tune to confirmed device behavior. |
-| `EDGE_DEVICE_HUB_PORT` / `EDGE_DEVICE_CERVICAL_PORT` / `EDGE_DEVICE_ULTRASOUND_PORT` | Hub and module ports replacing the port in the base URL. | `8080` / `8085` / `8086` | From device configs. `EDGE_DEVICE_BASE_URL` must be plain `http://<host>`. |
+| `EDGE_DEVICE_HUB_PORT` / `EDGE_DEVICE_CERVICAL_PORT` / `EDGE_DEVICE_ULTRASOUND_PORT` | Hub and module ports replacing the port in the base URL. | `80` / `8085` / `8086` | From device configs. `EDGE_DEVICE_BASE_URL` must be plain `http://<host>`. |
 | `EDGE_DEVICE_HUB_SELECT_PATH` / `EDGE_DEVICE_HUB_STATUS_PATH` | Hub routes. | `/api/select` / `/api/status` | Confirmed in `dawa/main.py`. |
 | `EDGE_DEVICE_MODULE_HEALTH_PATH` / `EDGE_DEVICE_PREDICT_PATH` | Module routes. | `/health` / `/predict` | Confirmed in module sources. |
 | `EDGE_DEVICE_CERVICAL_HEALTH_READY_FIELD` / `EDGE_DEVICE_ULTRASOUND_HEALTH_READY_FIELD` | Boolean field in module `/health` that must be `true`. | `ready` / `ready` | Readiness must include model warm-up, not just model loading. |
@@ -48,7 +48,7 @@ Example:
 ```env
 SUPABASE_URL=your_supabase_url
 SUPABASE_ANON_KEY=your_supabase_anon_key
-PI_DEVICE_BASE_URL=http://dawa.local:8080
+PI_DEVICE_BASE_URL=http://dawa.local
 EDGE_DEVICE_BASE_URL=http://dawa.local
 EDGE_DEVICE_MODEL_MANAGEMENT_ENABLED=false
 EDGE_DEVICE_ULTRASOUND_INFERENCE_ENABLED=false

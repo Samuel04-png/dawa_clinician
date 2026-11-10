@@ -1,5 +1,7 @@
 # Edge Device Integration Checklist
 
+> **2026-11-10 update:** the device contract and examination lock are now implemented; see [DAWA_DEVICE_CONTRACT_VERIFIED.md](./DAWA_DEVICE_CONTRACT_VERIFIED.md) and [GEORGE_DEVICE_LOCK_ACCEPTANCE.md](./GEORGE_DEVICE_LOCK_ACCEPTANCE.md). The historical gaps below predate George's patches. Hardware acceptance remains pending.
+
 Companion to [GEORGE_EDGE_DEVICE_HANDOFF.md](./GEORGE_EDGE_DEVICE_HANDOFF.md). "Blocker" = who must act. Mock tests are **not** hardware verification.
 
 | # | Item | Flutter (implemented) | Still missing | Blocker | File / config | Verified by |

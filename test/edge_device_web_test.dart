@@ -36,6 +36,9 @@ void main() {
           modelManagementEnabled: true,
         ),
         httpClient: MockClient((request) async {
+          if (request.url.path == '/api/exam/start') {
+            return http.Response('{"exam_id":"test-lock","ttl_s":120}', 201);
+          }
           if (request.url.path == '/api/status') {
             if (++statusCalls == 1) return firstStatus.future;
             return http.Response(
@@ -97,6 +100,9 @@ void main() {
         ),
         httpClient: MockClient((request) async {
           requests.add(request.url);
+          if (request.url.path == '/api/exam/start') {
+            return http.Response('{"exam_id":"test-lock","ttl_s":120}', 201);
+          }
           if (request.url.path == '/api/status') {
             return http.Response(
               '{"active":"cervitriage","state":"ready","modules":{"cervitriage":{}}}',
@@ -140,9 +146,9 @@ void main() {
     expect(find.text('Model ready'), findsOneWidget);
     expect(find.text('Model readiness unverified'), findsNothing);
     expect(requests.map((uri) => '${uri.port}${uri.path}'), [
-      '8080/api/status',
+      '80/api/status',
       '8085/health',
-      '8080/api/status',
+      '80/api/status',
     ]);
 
     await tester.runAsync(

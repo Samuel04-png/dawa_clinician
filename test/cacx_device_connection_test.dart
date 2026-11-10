@@ -56,7 +56,7 @@ void main() {
       );
       expect(config.configurationProblem(), isNull);
       expect(config.hubEndpoint('/api/status').toString(),
-          'http://10.127.36.206:8080/api/status');
+          'http://10.127.36.206/api/status');
       expect(
         config.endpoint('/predict', port: config.cervicalPort).toString(),
         'http://10.127.36.206:8085/predict',

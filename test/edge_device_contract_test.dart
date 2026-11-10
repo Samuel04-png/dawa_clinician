@@ -39,7 +39,7 @@ void main() {
     test('maps hub and module ports from the device configuration', () {
       final config = EdgeDeviceConfig(baseUrl: 'http://dawa.local');
       expect(config.hubEndpoint('/api/select').toString(),
-          'http://dawa.local:8080/api/select');
+          'http://dawa.local/api/select');
       expect(
         config
             .moduleEndpoint(EdgeAIModel.cervicalCancer, '/predict')
@@ -72,7 +72,7 @@ void main() {
         }),
       );
       expect(await client.checkHealth(), 200);
-      expect(requests.single.toString(), 'http://localhost:8080/api/status');
+      expect(requests.single.toString(), 'http://localhost/api/status');
     });
 
     test('device APIs are disabled by default', () async {

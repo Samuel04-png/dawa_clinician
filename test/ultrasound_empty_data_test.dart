@@ -65,6 +65,9 @@ void main() {
         ),
         httpClient: MockClient((request) async {
           if (request.url.path == '/health') return health.future;
+          if (request.url.path == '/api/exam/start') {
+            return http.Response('{"exam_id":"test-lock","ttl_s":120}', 201);
+          }
           return http.Response(
               '{"active":"ultrasound","state":"ready","modules":{"ultrasound":{}}}',
               200);
@@ -87,8 +90,7 @@ void main() {
     expect(upload, findsOneWidget);
     expect(tester.widget<OutlinedButton>(upload).onPressed, isNull);
     health.complete(http.Response('{"status":"ok","ready":true}', 200));
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(tester.widget<OutlinedButton>(upload).onPressed, isNotNull);
     await manager.completeExamination(manager.activeExaminationId!);
   });

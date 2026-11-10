@@ -216,8 +216,7 @@ class EdgeDeviceManager extends ChangeNotifier {
     _setState(EdgeDeviceState.error);
   }
 
-  /// Releases the local examination lock. The device has no completion
-  /// endpoint and the module is deliberately left running.
+  /// Releases the device and local examination locks, leaving the module running.
   Future<void> completeExamination(String examinationId) async {
     if (_activeExaminationId != examinationId ||
         _activeModel == null ||
@@ -269,6 +268,11 @@ class EdgeDeviceManager extends ChangeNotifier {
       if (hub.active == moduleId && hub.state == EdgeHubModuleState.ready) {
         final health = await client.getModuleHealth(model);
         if (health.inferenceReady) {
+          // Reconciliation can follow a timed-out select or a lost lock.
+          // Resume or reacquire the device lock before allowing an upload.
+          _deviceExamId =
+              await client.startExam(model, device: _deviceLabel(requestId));
+          _startHeartbeat();
           _setState(EdgeDeviceState.ready);
           return EdgeDeviceModelStatus(
             state: EdgeDeviceModelState.ready,
