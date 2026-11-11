@@ -52,7 +52,7 @@ void main() {
       CervicalDeviceConfig.imagePostUrl,
       'http://dawa.local/upload/cervical',
     );
-    expect(CervicalDeviceConfig.timeoutSeconds, 120);
+    expect(CervicalDeviceConfig.timeoutSeconds, 455);
     expect(CervicalDeviceConfig.healthTimeoutSeconds, 5);
     expect(CervicalDeviceConfig.retryIntervalSeconds, 5);
   });

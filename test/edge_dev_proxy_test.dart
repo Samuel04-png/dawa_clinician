@@ -47,6 +47,8 @@ void main() {
           '/api/status',
           '/api/select',
           '/predict',
+          '/upload/anemia',
+          '/upload/ultrasound',
           '/health',
           '/api/exam/start',
           '/api/exam/heartbeat',
@@ -152,6 +154,18 @@ void main() {
     }
     expect(kPortRoutes[8080], contains('/upload/cervical'));
     expect(kPortRoutes[8085], isNot(contains('/upload/cervical')));
+  });
+
+  test('hub proxy forwards anemia and ultrasound upload routes', () async {
+    for (final route in ['/upload/anemia', '/upload/ultrasound']) {
+      expect(kAllowedRoutes[route], {'POST'});
+      expect(kPortRoutes[80], contains(route));
+      final before = deviceHits;
+      final reply = await send('POST', route, body: [1, 2, 3]);
+      await text(reply);
+      expect(reply.statusCode, 200);
+      expect(deviceHits, before + 1);
+    }
   });
 
   test('wrong or missing origin is refused before reaching the device',

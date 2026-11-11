@@ -10,7 +10,7 @@ import 'edge_device_models.dart';
 
 /// Shared HTTP client for the Dawa edge device.
 ///
-/// Hub (dawa/main.py, default port 8080): `GET /api/status`, `POST /api/select`.
+/// Hub (dawa/main.py, default port 80): `GET /api/status`, `POST /api/select`.
 /// Modules (default ports 8085 cervitriage, 8086 ultrasound):
 /// `GET /health`, `POST /predict`.
 /// Legacy CaCx deployments keep `POST /upload/cervical` on the base URL.
@@ -137,10 +137,7 @@ class EdgeDeviceClient {
   }) {
     _ensureModelManagementEnabled();
     return _postMultipart(
-      _resolve(() => config.moduleEndpoint(
-            EdgeAIModel.cervicalCancer,
-            config.predictPath,
-          )),
+      _resolve(() => config.inferenceEndpoint(EdgeAIModel.cervicalCancer)),
       fields: const {},
       imageBytes: imageBytes,
       filename: filename,
@@ -181,14 +178,28 @@ class EdgeDeviceClient {
       );
     }
     return await _postMultipart(
-      _resolve(() => config.moduleEndpoint(
-            EdgeAIModel.ultrasound,
-            config.predictPath,
-          )),
+      _resolve(() => config.inferenceEndpoint(EdgeAIModel.ultrasound)),
       fields: {
         if (box != null) 'box': box.join(','),
         if (pixelSpacingMm != null) 'pixel_spacing_mm': '$pixelSpacingMm',
       },
+      imageBytes: imageBytes,
+      filename: filename,
+      mimeType: mimeType,
+      timeout: config.inferenceTimeout,
+    );
+  }
+
+  /// Verified hub forwards the lower-eyelid image to the active anemia model.
+  Future<http.Response> predictAnemia({
+    required List<int> imageBytes,
+    required String filename,
+    required String mimeType,
+  }) {
+    _ensureModelManagementEnabled();
+    return _postMultipart(
+      _resolve(() => config.inferenceEndpoint(EdgeAIModel.anemia)),
+      fields: const {},
       imageBytes: imageBytes,
       filename: filename,
       mimeType: mimeType,

@@ -27,7 +27,7 @@ void main() {
     await tester.pumpWidget(
       const MaterialApp(
         debugShowCheckedModeBanner: false,
-        home: CaCxApp(),
+        home: CaCxApp(demonstrationMode: true),
       ),
     );
     await tester.pump(const Duration(milliseconds: 300));

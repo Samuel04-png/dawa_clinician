@@ -1,4 +1,4 @@
-import 'dart:convert';
+import '/services/edge_device/edge_image_input.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
@@ -16,10 +16,10 @@ class UltrasoundImagePickerService {
       );
       if (image != null) {
         final bytes = await image.readAsBytes();
-        return 'data:image/jpeg;base64,${base64Encode(bytes)}';
+        return EdgeImageInput.fromBytes(bytes).dataUri;
       }
     } catch (e) {
-      debugPrint('Error picking image: $e');
+      debugPrint('Error picking image: ${e.runtimeType}');
     }
     return null;
   }
@@ -34,10 +34,10 @@ class UltrasoundImagePickerService {
       );
       if (image != null) {
         final bytes = await image.readAsBytes();
-        return 'data:image/jpeg;base64,${base64Encode(bytes)}';
+        return EdgeImageInput.fromBytes(bytes).dataUri;
       }
     } catch (e) {
-      debugPrint('Error capturing image: $e');
+      debugPrint('Error capturing image: ${e.runtimeType}');
     }
     return null;
   }

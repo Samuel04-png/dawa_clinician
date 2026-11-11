@@ -1,5 +1,17 @@
 # Edge Device Model Switching Contract
 
+> Current Ultrasound initialization behavior (11 November 2026): the app uses
+> `http://dawa.local/api/select` with `{"module":"ultrasound"}` automatically on
+> workflow entry and polls `/api/status` every 3 seconds. HTTP 202 acknowledges
+> selection only. Readiness requires matching `active`, boolean `ready: true`,
+> and `state: "ready"`, as confirmed after model warm-up by the hub. Model management
+> and verified local Ultrasound inference now default on.
+> Typical startup is about 60 seconds cold or up to 30 seconds warm; the safety
+> timeout remains 300 seconds. Patient/image preparation stays available and
+> no automatic online fallback is used. The proposal sections below are historical;
+> see `environment-variables.md` for the current configuration.
+
+
 **Audience:** George and the Dawa edge-device team  
 **Status: SUPERSEDED.** The proposed `/v1/*` model API below was replaced by the real hub API (`POST /api/select`, `GET /api/status`, per-module `/predict`). See `GEORGE_EDGE_DEVICE_HANDOFF.md`. Retained only as history. Original status: integration proposal; only the legacy CaCx endpoints below are verified from the clinician client. This is not evidence that the proposed model endpoints exist or are deployed.
 

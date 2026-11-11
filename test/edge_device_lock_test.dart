@@ -29,7 +29,7 @@ void main() {
           var status = 200;
           switch (request.url.path) {
             case '/api/status':
-              body = {'active': 'cervitriage', 'state': 'ready'};
+              body = {'active': 'cervitriage', 'state': 'ready', 'ready': true};
             case '/health':
               body = {'status': 'ok', 'ready': true};
             case '/api/exam/start':

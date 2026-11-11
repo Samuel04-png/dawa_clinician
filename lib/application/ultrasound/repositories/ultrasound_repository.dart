@@ -1,4 +1,5 @@
 import '/backend/supabase/supabase_config.dart';
+import '/services/screening_patient_repository.dart';
 import '../models/ultrasound_models.dart';
 
 abstract interface class UltrasoundRepository {
@@ -47,7 +48,15 @@ class SupabaseUltrasoundRepository implements UltrasoundRepository {
       );
     }
 
-    return rows.map((rawRow) {
+    final validIds = ScreeningPatient.parseRows(rows).map((p) => p.id).toSet();
+    final seen = <String>{};
+    return rows
+        .where((row) =>
+            validIds.contains(row['id']) &&
+            row['name'] is String &&
+            (row['name'] as String).trim().isNotEmpty &&
+            seen.add(row['id'] as String))
+        .map((rawRow) {
       final row = Map<String, dynamic>.from(rawRow);
       final id = row['id']?.toString() ?? '';
       final name = row['name']?.toString().trim() ?? '';

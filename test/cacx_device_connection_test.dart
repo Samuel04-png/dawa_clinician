@@ -31,13 +31,13 @@ void main() {
       expect(config.configurationProblem(), contains('plain HTTP'));
     });
 
-    test('flags a missing build-time URL as a compile-time problem', () {
+    test('accepts the default HTTP hostname without a build-time override', () {
       const config = EdgeDeviceConfig(
-        baseUrl: 'https://dawa.local',
+        baseUrl: 'http://dawa.local',
         baseUrlExplicit: false,
         modelManagementEnabled: true,
       );
-      expect(config.configurationProblem(), contains('compile-time'));
+      expect(config.configurationProblem(), isNull);
     });
 
     test('rejects a base URL that embeds a port', () {
@@ -85,7 +85,8 @@ void main() {
     });
 
     test('legacy mode (management off) is not blocked by the check', () {
-      const config = EdgeDeviceConfig(baseUrl: 'https://dawa.local');
+      const config = EdgeDeviceConfig(
+          baseUrl: 'https://dawa.local', modelManagementEnabled: false);
       expect(config.configurationProblem(), isNull);
     });
 

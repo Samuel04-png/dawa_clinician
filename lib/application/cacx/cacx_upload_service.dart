@@ -30,9 +30,7 @@ class CervicalDeviceConfig {
   static String get imagePostUrl {
     final config = EdgeDeviceConfig.fromEnvironment();
     if (config.modelManagementEnabled) {
-      return config
-          .moduleEndpoint(EdgeAIModel.cervicalCancer, config.predictPath)
-          .toString();
+      return config.inferenceEndpoint(EdgeAIModel.cervicalCancer).toString();
     }
     return config.endpoint(config.cervicalUploadPath).toString();
   }
@@ -281,7 +279,7 @@ class CervicalDeviceService {
         try {
           if (kDebugMode) {
             debugPrint('[Device] Sending cervical image to '
-                '${client.config.moduleEndpoint(EdgeAIModel.cervicalCancer, client.config.predictPath)}');
+                '${client.config.inferenceEndpoint(EdgeAIModel.cervicalCancer)}');
           }
           final response = await client.predictCervical(
             imageBytes: decoded.bytes,
@@ -296,10 +294,7 @@ class CervicalDeviceService {
             response.statusCode,
             response.body,
             deviceEndpoint: client.config
-                .moduleEndpoint(
-                  EdgeAIModel.cervicalCancer,
-                  client.config.predictPath,
-                )
+                .inferenceEndpoint(EdgeAIModel.cervicalCancer)
                 .toString(),
           );
         } finally {

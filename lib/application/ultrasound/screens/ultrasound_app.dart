@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -6,7 +7,7 @@ import 'package:uuid/uuid.dart';
 
 import '/reset_password/reset_password_widget.dart';
 import '/components/dawa_design_system.dart';
-import '/components/edge_device_status_banner.dart';
+import '/components/edge_workflow_status.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/services/edge_device/edge_device_exceptions.dart';
 import '/services/edge_device/edge_device_manager.dart';
@@ -67,6 +68,7 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
   ScanType _activeScanType = ScanType.manual;
 
   bool _isAnalyzing = false;
+  Completer<void>? _inferenceCompletion;
 
   // AI Sweep state
   int _currentSweepStep = 0;
@@ -84,6 +86,7 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
     _sweepSteps = SweepGuidanceProtocol.getObstetricSweepSteps();
     _selectedPatient = widget.initialPatient;
     _loadData();
+    unawaited(_edgeDeviceManager.prepareWorkflow(EdgeAIModel.ultrasound));
 
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {
@@ -100,13 +103,28 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
   @override
   void dispose() {
     _edgeDeviceManager.removeListener(_onEdgeStatusChanged);
+    _edgeDeviceManager.cancelWorkflowPreparation(EdgeAIModel.ultrasound);
+    final id = _activeExaminationId;
+    if (id != null) unawaited(_releaseOnExit(id));
     super.dispose();
+  }
+
+  Future<void> _releaseOnExit(String id) async {
+    try {
+      await _inferenceCompletion?.future;
+      await _edgePreparation;
+      if (_edgeDeviceManager.activeExaminationId == id) {
+        await _edgeDeviceManager.completeExamination(id);
+      }
+    } on EdgeDeviceException {
+      // Preserve an uncertain device session for explicit reconciliation.
+    }
   }
 
   bool get _edgeImageActionsEnabled {
     if (_isAnalyzing) return false;
     if (!_edgeDeviceManager.client.config.ultrasoundInferenceEnabled) {
-      return true;
+      return false;
     }
     return _edgeDeviceManager.activeExaminationId == _activeExaminationId &&
         _activeExaminationId != null &&
@@ -321,10 +339,7 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
   // ── Image capture ────────────────────────────────────────────────────────
 
   Future<void> _captureFromProbe() async {
-    if (!_edgeImageActionsEnabled) {
-      _showToast('Wait until the ultrasound model is ready before capturing.');
-      return;
-    }
+    if (_isAnalyzing) return;
     // In production this connects to the probe's SDK/stream.
     // For now we fall back to the camera (same physical feed on a tablet).
     _activeScanType = _appState == UltrasoundAppState.aiGuidedScan
@@ -338,10 +353,7 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
   }
 
   Future<void> _pickFromGallery() async {
-    if (!_edgeImageActionsEnabled) {
-      _showToast('Wait until the ultrasound model is ready before uploading.');
-      return;
-    }
+    if (_isAnalyzing) return;
     _activeScanType = _appState == UltrasoundAppState.aiGuidedScan
         ? ScanType.aiGuided
         : ScanType.manual;
@@ -354,35 +366,35 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
 
   Future<void> _runAnalysis() async {
     if (_capturedImage == null) return;
+    if (!_edgeImageActionsEnabled) {
+      _showToast(
+          'Image prepared. AI analysis will be available when Ultrasound AI is ready.');
+      return;
+    }
     final examinationId = _activeExaminationId;
     if (examinationId == null) {
       _showToast('Begin an examination before requesting an analysis.');
       return;
     }
     setState(() => _isAnalyzing = true);
+    final completion = Completer<void>();
+    _inferenceCompletion = completion;
 
     UltrasoundAnalysisResult result;
     try {
-      if (_edgeDeviceManager.client.config.ultrasoundInferenceEnabled) {
-        final preparation = _edgePreparation;
-        if (preparation != null) await preparation;
-        result = await _edgeService.analyzeImage(
-          image: _capturedImage!,
-          gestationalAgeWeeks: _selectedPatient?.gestationalAgeWeeks,
-          examinationId: examinationId,
-        );
-      } else {
-        result = await UltrasoundAIService.analyzeUltrasoundImage(
-          _capturedImage!,
-          _selectedPatient?.gestationalAgeWeeks,
-          examinationId,
-        );
-      }
+      result = await _edgeService.analyzeImage(
+        image: _capturedImage!,
+        gestationalAgeWeeks: _selectedPatient?.gestationalAgeWeeks,
+        examinationId: examinationId,
+      );
     } on EdgeDeviceException catch (error) {
       result = UltrasoundAIService.unavailableResult(
         _capturedImage!,
         error.message,
       );
+    } finally {
+      completion.complete();
+      _inferenceCompletion = null;
     }
 
     if (!mounted) return;
@@ -487,9 +499,24 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
     return false;
   }
 
+  Future<void> _retryUltrasoundPreparation() async {
+    final id = _activeExaminationId;
+    if (id == null) {
+      await _edgeDeviceManager.prepareWorkflow(EdgeAIModel.ultrasound);
+    } else {
+      _edgePreparation = _prepareUltrasoundModel(id);
+      await _edgePreparation;
+    }
+  }
+
   Future<void> _prepareUltrasoundModel(String examinationId) async {
     if (!_edgeDeviceManager.modelManagementEnabled) return;
     try {
+      await _edgeDeviceManager.prepareWorkflow(EdgeAIModel.ultrasound);
+      if (!mounted) return;
+      if (_edgeDeviceManager.observedReadyModel != EdgeAIModel.ultrasound) {
+        return; // Keep preparation available; retry is an explicit action.
+      }
       await _edgeService.prepareExamination(examinationId: examinationId);
     } on EdgeDeviceException catch (error) {
       if (mounted) _showToast('Edge model unavailable: ${error.message}');
@@ -858,11 +885,7 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
                 ],
                 if (_dataError != null || _isLoadingData)
                   _buildRepositoryNotice(),
-                if (_activeExaminationId != null &&
-                    _edgeDeviceManager.activeExaminationId ==
-                        _activeExaminationId &&
-                    _edgeDeviceManager.activeModel == EdgeAIModel.ultrasound)
-                  _buildEdgeDeviceStatus(allowReconcile: true),
+                _buildEdgeDeviceStatus(allowReconcile: true),
                 Expanded(child: _buildCurrentTab()),
               ],
             ),
@@ -900,51 +923,47 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
     );
   }
 
-  Widget _buildEdgeDeviceStatus({bool allowReconcile = false}) {
-    return AnimatedBuilder(
-      animation: _edgeDeviceManager,
-      builder: (context, _) {
-        final enabled = _edgeDeviceManager.modelManagementEnabled;
-        final state =
-            enabled ? _edgeDeviceManager.state : EdgeDeviceState.unsupported;
-        final message = enabled
-            ? _edgeDeviceManager.readinessMessage ??
-                'Active model: ${_edgeDeviceManager.activeModel?.wireValue ?? 'none'}'
-            : 'Edge model controls are disabled until George confirms the device API. Cloud analysis remains a separate path.';
-        final unresolved = allowReconcile &&
-            enabled &&
-            _edgeDeviceManager.activeExaminationId != null &&
-            {
-              EdgeDeviceState.error,
-              EdgeDeviceState.loadingModel,
-              EdgeDeviceState.busy,
-              EdgeDeviceState.unsupported,
-            }.contains(_edgeDeviceManager.state);
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              EdgeDeviceStatusBanner(
-                model: EdgeAIModel.ultrasound,
-                state: state,
-                message: message,
-              ),
-              if (unresolved)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: _reconcileEdgeExamination,
-                    icon: const Icon(Icons.sync),
-                    label: const Text('Recheck device session'),
-                  ),
-                ),
-            ],
-          ),
-        );
-      },
-    );
-  }
+  Widget _buildEdgeDeviceStatus({bool allowReconcile = false}) =>
+      AnimatedBuilder(
+          animation: _edgeDeviceManager,
+          builder: (context, _) {
+            final manager = _edgeDeviceManager;
+            final unresolved = allowReconcile &&
+                !_isAnalyzing &&
+                manager.activeExaminationId != null &&
+                manager.activeExaminationId == _activeExaminationId &&
+                manager.activeModel == EdgeAIModel.ultrasound &&
+                {
+                  EdgeDeviceState.error,
+                  EdgeDeviceState.busy,
+                  EdgeDeviceState.unsupported
+                }.contains(manager.state);
+            return Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      EdgeWorkflowStatus(
+                          manager: manager,
+                          model: EdgeAIModel.ultrasound,
+                          examinationId: _activeExaminationId,
+                          onRetry: _retryUltrasoundPreparation),
+                      if (!manager.client.config.ultrasoundInferenceEnabled)
+                        const Text(
+                            'Local Ultrasound AI analysis is disabled for this installation. Patient and image preparation remain available.'),
+                      if (_capturedImage != null)
+                        TextButton.icon(
+                            onPressed:
+                                _edgeImageActionsEnabled ? _runAnalysis : null,
+                            icon: const Icon(Icons.auto_awesome),
+                            label: const Text('Start AI Analysis')),
+                      if (unresolved)
+                        TextButton.icon(
+                            onPressed: _reconcileEdgeExamination,
+                            icon: const Icon(Icons.sync),
+                            label: const Text('Recheck device session')),
+                    ]));
+          });
 
   // ─── SIDEBAR ──────────────────────────────────────────────────────────────
 
@@ -1753,8 +1772,7 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed:
-                            _edgeImageActionsEnabled ? _pickFromGallery : null,
+                        onPressed: !_isAnalyzing ? _pickFromGallery : null,
                         icon: const Icon(Icons.photo_library),
                         label: const Text('Load Image'),
                         style: OutlinedButton.styleFrom(
@@ -1768,8 +1786,7 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed:
-                            _edgeImageActionsEnabled ? _captureFromProbe : null,
+                        onPressed: !_isAnalyzing ? _captureFromProbe : null,
                         icon: const Icon(Icons.camera_alt),
                         label: const Text('Capture Frame'),
                         style: ElevatedButton.styleFrom(
@@ -1976,9 +1993,7 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: _edgeImageActionsEnabled
-                              ? _captureFromProbe
-                              : null,
+                          onPressed: !_isAnalyzing ? _captureFromProbe : null,
                           icon: const Icon(Icons.camera_alt),
                           label: const Text('Capture Frame'),
                           style: OutlinedButton.styleFrom(
@@ -2624,13 +2639,13 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
                 icon: Icons.photo_library_outlined,
                 accent: DawaTokens.brandPrimary,
                 outlined: true,
-                onPressed: _edgeImageActionsEnabled ? _pickFromGallery : null,
+                onPressed: !_isAnalyzing ? _pickFromGallery : null,
               );
               final capture = _buildScanActionButton(
                 label: 'Capture Frame',
                 icon: Icons.camera_alt_outlined,
                 accent: DawaTokens.brandPrimary,
-                onPressed: _edgeImageActionsEnabled ? _captureFromProbe : null,
+                onPressed: !_isAnalyzing ? _captureFromProbe : null,
               );
 
               if (stack) {
@@ -2803,7 +2818,7 @@ class _UltrasoundAppState extends State<UltrasoundApp> {
                 icon: Icons.camera_alt_outlined,
                 accent: DawaTokens.statusSuccess,
                 outlined: true,
-                onPressed: _edgeImageActionsEnabled ? _captureFromProbe : null,
+                onPressed: !_isAnalyzing ? _captureFromProbe : null,
               );
               final next = _buildScanActionButton(
                 label: isLastStep ? 'Complete Sweep' : 'Next Step',

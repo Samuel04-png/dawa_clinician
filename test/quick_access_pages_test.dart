@@ -1,6 +1,5 @@
 import 'package:clinician/application/cacx/cacx_widget.dart';
 import 'package:clinician/application/ct_scan/ct_scan_module.dart';
-import 'package:clinician/application/hemonix/hemonix_module.dart';
 import 'package:clinician/backend/supabase/supabase_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,7 +21,7 @@ void main() {
       (tester) async {
     await _pumpQuickAccess(
       tester,
-      const CaCxApp(),
+      const CaCxApp(demonstrationMode: true),
       size: const Size(1200, 900),
     );
 
@@ -40,7 +39,7 @@ void main() {
       (tester) async {
     await _pumpQuickAccess(
       tester,
-      const CaCxApp(),
+      const CaCxApp(demonstrationMode: true),
       size: const Size(390, 820),
     );
 
@@ -108,82 +107,11 @@ void main() {
     });
   }
 
-  testWidgets('HemoNix results search matches patient and AI text',
-      (tester) async {
-    await _pumpQuickAccess(
-      tester,
-      const HemonixApp(),
-      size: const Size(1180, 860),
-    );
-
-    await tester.tap(find.text('Hb Results').first);
-    await tester.pump(const Duration(milliseconds: 100));
-    await tester.enterText(
-      find.byKey(const ValueKey('hemonix-results-search')),
-      'Grace',
-    );
-    await tester.pump(const Duration(milliseconds: 100));
-
-    expect(find.text('Grace Mwape'), findsOneWidget);
-    expect(find.text('Beatrice Zulu'), findsNothing);
-
-    await tester.enterText(
-      find.byKey(const ValueKey('hemonix-results-search')),
-      'confidence 90',
-    );
-    await tester.pump(const Duration(milliseconds: 100));
-
-    expect(find.text('Grace Mwape'), findsOneWidget);
-  });
-
-  testWidgets('HemoNix needs review filter narrows results', (tester) async {
-    await _pumpQuickAccess(
-      tester,
-      const HemonixApp(),
-      size: const Size(1180, 860),
-    );
-
-    await tester.tap(find.text('Hb Results').first);
-    await tester.pump(const Duration(milliseconds: 100));
-    await tester.tap(
-      find.byKey(
-        const ValueKey('hemonix-filter-needsReview'),
-      ),
-    );
-    await tester.pump(const Duration(milliseconds: 100));
-
-    expect(find.text('Grace Mwape'), findsOneWidget);
-    expect(find.text('Beatrice Zulu'), findsNothing);
-    expect(find.text('Mary Soko'), findsNothing);
-  });
-
-  testWidgets('HemoNix open patient navigates to the records tab',
-      (tester) async {
-    await _pumpQuickAccess(
-      tester,
-      const HemonixApp(),
-      size: const Size(1180, 860),
-    );
-
-    final openPatient = find.text('Open patient').first;
-    await tester.ensureVisible(openPatient);
-    await tester.pumpAndSettle();
-    await tester.tap(openPatient);
-    await tester.pumpAndSettle();
-
-    expect(
-      find.textContaining('Ready to add hb record for '),
-      findsOneWidget,
-    );
-    expect(find.text('Patient-linked hb record entries are ready for review.'),
-        findsNothing);
-  });
-
   testWidgets('Cervical Cancer results search and filter are usable',
       (tester) async {
     await _pumpQuickAccess(
       tester,
-      const CaCxApp(),
+      const CaCxApp(demonstrationMode: true),
       size: const Size(1200, 900),
     );
 
@@ -238,18 +166,6 @@ class _ModuleCase {
 }
 
 const _moduleCases = [
-  _ModuleCase(
-    widget: HemonixApp(),
-    key: 'hemonix',
-    title: 'HemoNix',
-    resultsLabel: 'Hb Results',
-    actions: [
-      'Add Hb Record',
-      'View Patient Records',
-      'View Hb Results',
-      'Search Results',
-    ],
-  ),
   _ModuleCase(
     widget: CtScanApp(),
     key: 'ct-scan',

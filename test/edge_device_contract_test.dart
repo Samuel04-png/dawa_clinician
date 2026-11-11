@@ -52,8 +52,8 @@ void main() {
       );
       expect(config.modelId(EdgeAIModel.cervicalCancer), 'cervitriage');
       expect(config.modelId(EdgeAIModel.ultrasound), 'ultrasound');
-      expect(config.modelManagementEnabled, isFalse);
-      expect(config.ultrasoundInferenceEnabled, isFalse);
+      expect(config.modelManagementEnabled, isTrue);
+      expect(config.ultrasoundInferenceEnabled, isTrue);
     });
   });
 
@@ -75,10 +75,11 @@ void main() {
       expect(requests.single.toString(), 'http://localhost/api/status');
     });
 
-    test('device APIs are disabled by default', () async {
+    test('device APIs can be explicitly disabled', () async {
       var calls = 0;
       final client = EdgeDeviceClient(
-        config: const EdgeDeviceConfig(baseUrl: 'http://device.local'),
+        config: const EdgeDeviceConfig(
+            baseUrl: 'http://device.local', modelManagementEnabled: false),
         httpClient: MockClient((_) async {
           calls += 1;
           return http.Response('{}', 200);

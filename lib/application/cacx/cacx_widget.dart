@@ -9,7 +9,9 @@ import 'dart:ui' as ui;
 import 'package:image_picker/image_picker.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/services/offline_connectivity_service.dart';
-import '/components/edge_device_status_banner.dart';
+import '/components/edge_workflow_status.dart';
+import '/services/screening_patient_repository.dart';
+import '/backend/supabase/supabase_config.dart';
 import '/services/edge_device/edge_device_models.dart';
 import 'cacx_upload_service.dart';
 import 'cacx_device_failure.dart';
@@ -315,8 +317,14 @@ class CaCxApp extends StatefulWidget {
     this.initialPatient,
     this.autoStartScreening = false,
     this.returnToPreviousOnSave = false,
+    this.deviceManager,
+    this.patientRepository,
+    this.demonstrationMode = false,
   });
 
+  final EdgeDeviceManager? deviceManager;
+  final ScreeningPatientRepository? patientRepository;
+  final bool demonstrationMode;
   final Patient? initialPatient;
   final bool autoStartScreening;
   final bool returnToPreviousOnSave;
@@ -326,6 +334,9 @@ class CaCxApp extends StatefulWidget {
 }
 
 class _CaCxAppState extends State<CaCxApp> {
+  late final EdgeDeviceManager _deviceManager;
+  bool _loadingPatients = true;
+  String? _patientLoadError;
   AppState _appState = AppState.dashboard;
   DashboardTab _activeTab = DashboardTab.home;
 
@@ -336,7 +347,6 @@ class _CaCxAppState extends State<CaCxApp> {
   String? _flowWarningMessage;
   String? _screeningRecordId;
   int? _deviceSecondsRemaining;
-  int _deviceRetryCount = 0;
   Timer? _deviceCountdownTimer;
   bool _deviceUploadInProgress = false;
   bool _cloudFallbackRequested = false;
@@ -378,19 +388,20 @@ class _CaCxAppState extends State<CaCxApp> {
   @override
   void initState() {
     super.initState();
-    _loadMockData();
+    _deviceManager = widget.deviceManager ?? EdgeDeviceManager.shared;
+    _loadScreeningData();
     if (widget.initialPatient != null) {
       _selectedPatient = widget.initialPatient;
       _patientSearchText = widget.initialPatient!.name;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _trySyncPendingCacx();
-      final manager = EdgeDeviceManager.shared;
+      final manager = _deviceManager;
       if (kDebugMode) {
         debugPrint('[Device] CaCx configuration: '
             '${manager.client.config.diagnosticSummary()}');
       }
-      unawaited(manager.refreshObservedReadiness(EdgeAIModel.cervicalCancer));
+      unawaited(manager.prepareWorkflow(EdgeAIModel.cervicalCancer));
     });
     if (widget.autoStartScreening) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -402,6 +413,7 @@ class _CaCxAppState extends State<CaCxApp> {
 
   @override
   void dispose() {
+    _deviceManager.cancelWorkflowPreparation(EdgeAIModel.cervicalCancer);
     _deviceCountdownTimer?.cancel();
     _nameController.dispose();
     _ageController.dispose();
@@ -410,18 +422,102 @@ class _CaCxAppState extends State<CaCxApp> {
     super.dispose();
   }
 
-  void _loadMockData() {
-    setState(() {
-      _patients = MockData.getPatients();
-      _historyRecords = MockData.getHistoryRecords();
-      _screeningData = MockData.getScreeningData();
-      final seededPatient = widget.initialPatient;
-      if (seededPatient != null &&
-          !_patients.any((patient) => patient.id == seededPatient.id)) {
-        _patients = [seededPatient, ..._patients];
-      }
-    });
+  Future<void> _loadScreeningData() async {
+    if (widget.demonstrationMode) {
+      setState(() {
+        _patients = MockData.getPatients();
+        _historyRecords = MockData.getHistoryRecords();
+        _screeningData = MockData.getScreeningData();
+        _loadingPatients = false;
+      });
+      return;
+    }
+    if (mounted)
+      setState(() {
+        _loadingPatients = true;
+        _patientLoadError = null;
+      });
+    try {
+      final patients = await (widget.patientRepository ??
+              const SupabaseScreeningPatientRepository())
+          .loadPatients();
+      if (!mounted) return;
+      setState(() {
+        _patients = patients
+            .map((p) => Patient(
+                id: p.id,
+                name: p.name,
+                age: p.age ?? 0,
+                contact: p.contact,
+                status: PatientStatus.untested,
+                riskLevel: RiskLevel.low))
+            .toList();
+        _loadingPatients = false;
+        final selectedId = _selectedPatient?.id;
+        final matches = _patients.where((p) => p.id == selectedId);
+        _selectedPatient = matches.isEmpty ? null : matches.first;
+      });
+      if (widget.patientRepository == null) await _loadSavedScreenings();
+    } catch (_) {
+      if (mounted)
+        setState(() {
+          _loadingPatients = false;
+          _patientLoadError =
+              'Patient records could not be loaded. Check your connection and sign-in, then retry.';
+        });
+    }
   }
+
+  Future<void> _loadSavedScreenings() async {
+    final userId = currentUserUid;
+    if (userId.isEmpty) return;
+    try {
+      final rows = await runSupabaseRequest(() => supabaseClient
+          .from(CacxScreeningResultsRepository.table)
+          .select()
+          .eq('user_id', userId)
+          .order('created_at', ascending: false)
+          .limit(100));
+      final byId = {for (final patient in _patients) patient.id: patient.name};
+      final history = <VIATestRecord>[];
+      for (final row in rows) {
+        final date = DateTime.tryParse(row['created_at']?.toString() ?? '');
+        final patientId = row['patient_id'];
+        final id = row['id'];
+        final label = row['primary_result'];
+        if (date == null ||
+            patientId is! String ||
+            id is! String ||
+            label is! String ||
+            !byId.containsKey(patientId)) continue;
+        history.add(VIATestRecord(
+            id: id,
+            patientId: patientId,
+            patientName: byId[patientId]!,
+            date: date,
+            result: label,
+            notes:
+                'Local device screening · ${row['device_status'] ?? 'recorded'}',
+            aiAnalysis: row['primary_confidence'] is num
+                ? 'Model confidence: ${row['primary_confidence']}%'
+                : null));
+      }
+      if (mounted)
+        setState(() {
+          _historyRecords = history;
+          _screeningData = [];
+        });
+    } catch (_) {
+      if (mounted)
+        setState(() => _patientLoadError =
+            'Patients loaded. Saved screening history is unavailable; retry to refresh.');
+    }
+  }
+
+  bool get _localCervicalReady =>
+      _deviceManager.state == EdgeDeviceState.ready &&
+      _deviceManager.observedReadyModel == EdgeAIModel.cervicalCancer &&
+      _deviceManager.activeExaminationId == null;
 
   void _handleTabChange(DashboardTab tab) => setState(() => _activeTab = tab);
 
@@ -587,7 +683,6 @@ class _CaCxAppState extends State<CaCxApp> {
     _secondOpinionStatus = 'not_required';
     _analyzingStatus = 'Ready for cervical device interpretation';
     _deviceSecondsRemaining = null;
-    _deviceRetryCount = 0;
     _deviceCountdownTimer?.cancel();
     _deviceCountdownTimer = null;
     _deviceUploadInProgress = false;
@@ -610,6 +705,11 @@ class _CaCxAppState extends State<CaCxApp> {
       return;
     }
 
+    if (widget.demonstrationMode) {
+      showDawaToast(context,
+          'Training data cannot be used for a real screening. Open a patient record in the clinical workflow.');
+      return;
+    }
     final image = await showImageSourcePicker(context);
     if (image == null) {
       if (widget.autoStartScreening &&
@@ -634,6 +734,24 @@ class _CaCxAppState extends State<CaCxApp> {
 
   Future<void> _analyzeImage() async {
     if (_selectedImage == null) return;
+    if (_selectedPatient == null ||
+        !_patients.any((p) => p.id == _selectedPatient!.id)) {
+      setState(() {
+        _isAnalyzing = false;
+        _activeTab = DashboardTab.patients;
+      });
+      showDawaToast(context,
+          'Select an existing patient before starting screening. Your prepared image is kept.');
+      return;
+    }
+    if (_deviceManager.modelManagementEnabled && !_localCervicalReady) {
+      setState(() {
+        _isAnalyzing = false;
+        _analyzingStatus =
+            'Image prepared. Start local analysis when Cervical AI is ready.';
+      });
+      return;
+    }
 
     final image = _selectedImage!;
     _lastDeviceFailure = null;
@@ -647,23 +765,18 @@ class _CaCxAppState extends State<CaCxApp> {
     _currentScanPatientId = patientId;
     _currentScanUserId = userId;
 
-    // Probe the local device as part of the decision. Local availability must
-    // win over the internet/Supabase state so a clinic can work LAN-only.
-    final connectivity = await OfflineConnectivityService.refreshStatus(
-      checkDevice: true,
-    );
-    final route = OfflineConnectivityService.cacxRouteFor(
-      deviceReachable: connectivity.deviceReachable,
-      internetAvailable: connectivity.internetAvailable,
-    );
-    if (route == CacxRoutingDecision.offline) {
-      await _analyzeImageOfflineOnly(
-        image: image,
-        patientId: patientId,
-        userId: userId,
-        imagePath: imagePath,
-      );
-      return;
+    // Model-managed screening uses the LAN hub independently of internet status.
+    if (!_deviceManager.modelManagementEnabled) {
+      final connectivity =
+          await OfflineConnectivityService.refreshStatus(checkDevice: true);
+      if (!connectivity.deviceReachable && !connectivity.internetAvailable) {
+        await _analyzeImageOfflineOnly(
+            image: image,
+            patientId: patientId,
+            userId: userId,
+            imagePath: imagePath);
+        return;
+      }
     }
 
     await _trySyncPendingCacx();
@@ -872,15 +985,15 @@ class _CaCxAppState extends State<CaCxApp> {
     _setFlowStatus('Connecting to Dawa Device...');
     _startDeviceCountdown(deadline);
 
-    final manager = EdgeDeviceManager.shared;
+    final manager = _deviceManager;
     void syncDeviceStatus() {
       if (!mounted || !_deviceUploadInProgress) return;
       final status = switch (manager.state) {
         EdgeDeviceState.connecting ||
         EdgeDeviceState.connected =>
           'Connecting to Dawa Device...',
-        EdgeDeviceState.loadingModel =>
-          'Preparing Cervical AI: waiting for the model to load (usually about a minute, up to 3 minutes)...',
+        EdgeDeviceState.loadingModel => manager.readinessMessage ??
+            'Preparing Cervical AI. Patient and image preparation remain available.',
         EdgeDeviceState.ready => 'Cervical AI ready',
         EdgeDeviceState.examining => 'Sending image for device processing...',
         EdgeDeviceState.busy => 'Device busy',
@@ -893,8 +1006,7 @@ class _CaCxAppState extends State<CaCxApp> {
 
     var inferenceCompleted = false;
     try {
-      if (!skipHealthCheck &&
-          !EdgeDeviceManager.shared.modelManagementEnabled) {
+      if (!skipHealthCheck && !_deviceManager.modelManagementEnabled) {
         await CervicalDeviceService.checkHealth();
       }
 
@@ -911,6 +1023,7 @@ class _CaCxAppState extends State<CaCxApp> {
         image,
         patientId,
         timeout: remaining,
+        deviceManager: manager,
       );
 
       inferenceCompleted = true;
@@ -990,7 +1103,6 @@ class _CaCxAppState extends State<CaCxApp> {
             CervicalDeviceConfig.timeoutSeconds,
           )
           .toInt();
-      _deviceRetryCount = retryCount;
     });
   }
 
@@ -1373,29 +1485,6 @@ class _CaCxAppState extends State<CaCxApp> {
     );
   }
 
-  void _addNewPatient() {
-    if (_nameController.text.isEmpty ||
-        _ageController.text.isEmpty ||
-        _phoneController.text.isEmpty) return;
-
-    final newPatient = Patient(
-      id: 'DM-${1000 + _patients.length}',
-      name: _nameController.text,
-      age: int.parse(_ageController.text),
-      contact: _phoneController.text,
-      status: PatientStatus.untested,
-      riskLevel: RiskLevel.low,
-    );
-
-    setState(() {
-      _patients = [newPatient, ..._patients];
-      _selectedPatient = newPatient;
-      _nameController.clear();
-      _ageController.clear();
-      _phoneController.clear();
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     switch (_appState) {
@@ -1482,6 +1571,22 @@ class _CaCxAppState extends State<CaCxApp> {
                     _buildMobileHeader(),
                     const Divider(height: 1),
                   ],
+                  if (_loadingPatients) const LinearProgressIndicator(),
+                  if (widget.demonstrationMode)
+                    const Text('Training data — real screening is disabled.'),
+                  if (_patientLoadError != null)
+                    Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Row(children: [
+                          Expanded(child: Text(_patientLoadError!)),
+                          TextButton(
+                              onPressed: _loadScreeningData,
+                              child: const Text('Retry records')),
+                        ])),
+                  Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      child: _buildCacxEdgeStatus()),
                   if (_shouldShowFlowStatus) _buildFlowStatusBanner(),
                   Expanded(child: _buildCurrentTab()),
                 ],
@@ -1512,16 +1617,11 @@ class _CaCxAppState extends State<CaCxApp> {
             ? Icons.sync_rounded
             : Icons.check_circle_outline;
     final remaining = _deviceSecondsRemaining;
-    final progress = remaining == null
-        ? null
-        : 1 -
-            (remaining / CervicalDeviceConfig.timeoutSeconds)
-                .clamp(0.0, 1.0)
-                .toDouble();
     final showCloudSkip = _isAnalyzing &&
         _deviceUploadInProgress &&
         !_cloudFallbackRequested &&
-        _selectedImage != null;
+        _selectedImage != null &&
+        _deviceManager.state == EdgeDeviceState.examining;
 
     return Container(
       width: double.infinity,
@@ -1580,7 +1680,7 @@ class _CaCxAppState extends State<CaCxApp> {
                       if (_isAnalyzing && remaining != null) ...[
                         const SizedBox(height: 8),
                         Text(
-                          'The device may need several minutes to prepare and process the image.',
+                          'The device is processing this screening. Readiness and results are confirmed by the device.',
                           style: DawaTextStyles.secondary.copyWith(
                             color: warning
                                 ? DawaTokens.statusWarningText
@@ -1592,21 +1692,9 @@ class _CaCxAppState extends State<CaCxApp> {
                         ClipRRect(
                           borderRadius: BorderRadius.circular(99),
                           child: LinearProgressIndicator(
-                            value: progress,
                             minHeight: 5,
                             color: statusColor,
                             backgroundColor: Colors.white.withOpacity(0.65),
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          '$remaining seconds remaining'
-                          '${_deviceRetryCount > 0 ? ' - retry $_deviceRetryCount' : ''}',
-                          style: DawaTextStyles.secondary.copyWith(
-                            color: warning
-                                ? DawaTokens.statusWarningText
-                                : DawaTokens.textSecondary,
-                            fontSize: 12,
                           ),
                         ),
                       ],
@@ -1654,65 +1742,54 @@ class _CaCxAppState extends State<CaCxApp> {
               ],
             ),
           ),
-          if (_isAnalyzing || _primaryDeviceResult != null) ...[
-            const SizedBox(height: 8),
-            _buildCacxEdgeStatus(),
-          ],
         ],
       ),
     );
   }
 
-  Widget _buildCacxEdgeStatus() {
-    final manager = EdgeDeviceManager.shared;
-    return AnimatedBuilder(
-      animation: manager,
+  Widget _buildCacxEdgeStatus() => AnimatedBuilder(
+      animation: _deviceManager,
       builder: (context, _) {
-        if (manager.activeExaminationId != null &&
-            manager.activeModel != EdgeAIModel.cervicalCancer) {
-          return const SizedBox.shrink();
-        }
-        if (!manager.modelManagementEnabled) {
-          return const EdgeDeviceStatusBanner(
-            state: EdgeDeviceState.unverified,
-            message:
-                'Legacy CaCx upload remains available. The device does not confirm model readiness until George verifies model-management support.',
-          );
-        }
+        final manager = _deviceManager;
         final unresolved = manager.activeModel == EdgeAIModel.cervicalCancer &&
             manager.activeExaminationId != null &&
+            !_deviceUploadInProgress &&
             {
               EdgeDeviceState.error,
-              EdgeDeviceState.loadingModel,
               EdgeDeviceState.busy,
-              EdgeDeviceState.unsupported,
+              EdgeDeviceState.unsupported
             }.contains(manager.state);
         return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            EdgeDeviceStatusBanner(
-              model: EdgeAIModel.cervicalCancer,
-              state: manager.state,
-              message: manager.readinessMessage ??
-                  'Active model: ${(manager.activeModel ?? manager.observedReadyModel)?.wireValue ?? 'none'}',
-            ),
-            if (unresolved)
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: _reconcileCacxEdgeSession,
-                  icon: const Icon(Icons.sync),
-                  label: const Text('Recheck device session'),
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              EdgeWorkflowStatus(
+                  manager: manager,
+                  model: EdgeAIModel.cervicalCancer,
+                  examinationId: _deviceUploadInProgress
+                      ? manager.activeExaminationId
+                      : null),
+              if (_selectedImage != null && !_isAnalyzing)
+                FilledButton.icon(
+                    onPressed: _localCervicalReady &&
+                            _selectedPatient != null &&
+                            !widget.demonstrationMode
+                        ? () {
+                            setState(() => _isAnalyzing = true);
+                            unawaited(_analyzeImage());
+                          }
+                        : null,
+                    icon: const Icon(Icons.biotech),
+                    label: const Text('Start local cervical analysis')),
+              if (unresolved)
+                TextButton.icon(
+                    onPressed: _reconcileCacxEdgeSession,
+                    icon: const Icon(Icons.sync),
+                    label: const Text('Check interrupted device session')),
+            ]);
+      });
 
   Future<void> _reconcileCacxEdgeSession() async {
-    final manager = EdgeDeviceManager.shared;
+    final manager = _deviceManager;
     if (manager.activeModel != EdgeAIModel.cervicalCancer) {
       if (mounted) {
         showDawaToast(
@@ -2516,7 +2593,12 @@ class _CaCxAppState extends State<CaCxApp> {
                         urgent: patient.status == PatientStatus.suspicious,
                         onTap: () async {
                           setState(() => _selectedPatient = patient);
-                          await _openImageSourcePicker(mode: ScreeningMode.via);
+                          if (_selectedImage == null) {
+                            await _openImageSourcePicker(
+                                mode: ScreeningMode.via);
+                          } else {
+                            setState(() => _activeTab = DashboardTab.home);
+                          }
                         },
                         child: Row(
                           children: [
@@ -2533,7 +2615,7 @@ class _CaCxAppState extends State<CaCxApp> {
                                       style: DawaTextStyles.cardTitle),
                                   const SizedBox(height: 4),
                                   Text(
-                                    '${patient.id} | ${patient.age} yrs | ${patient.contact} | Last screened: ${patient.lastTestDate == null ? 'Not yet' : _formatDate(patient.lastTestDate!)}',
+                                    '${patient.id} | ${patient.age > 0 ? '${patient.age} yrs' : 'Age unavailable'} | ${patient.contact} | Last screened: ${patient.lastTestDate == null ? 'Not yet' : _formatDate(patient.lastTestDate!)}',
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                     style: DawaTextStyles.secondary,

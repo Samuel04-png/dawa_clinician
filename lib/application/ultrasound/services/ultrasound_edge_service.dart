@@ -42,8 +42,7 @@ class UltrasoundEdgeService {
     double? pixelSpacingMm,
   }) async {
     final requestId = deviceManager.activeRequestId;
-    if (!{EdgeDeviceState.ready, EdgeDeviceState.examining}
-            .contains(deviceManager.state) ||
+    if (deviceManager.state != EdgeDeviceState.ready ||
         deviceManager.activeExaminationId != examinationId ||
         deviceManager.activeModel != EdgeAIModel.ultrasound ||
         requestId == null) {
@@ -90,6 +89,7 @@ class UltrasoundEdgeService {
         );
       }
 
+      deviceManager.finishInference(examinationId);
       return UltrasoundAnalysisResult(
         imageUrl: image,
         findings: const [],
