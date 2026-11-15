@@ -1,4 +1,7 @@
+import '/services/clinical_offline_store.dart';
+import 'package:uuid/uuid.dart';
 import '/backend/supabase/supabase_config.dart';
+import '/services/screening_patient_repository.dart';
 import '../models/ultrasound_models.dart';
 
 abstract interface class UltrasoundRepository {
@@ -16,6 +19,16 @@ class SupabaseUltrasoundRepository implements UltrasoundRepository {
 
   @override
   Future<List<PregnantPatient>> loadPatients() async {
+    final uid = _requireUserId();
+    final rows = await ClinicalOfflineStore.read(
+        uid,
+        'ultrasound-patients',
+        () async =>
+            (await _loadOnlinePatients()).map((p) => p.toJson()).toList());
+    return rows.map(PregnantPatient.fromJson).toList();
+  }
+
+  Future<List<PregnantPatient>> _loadOnlinePatients() async {
     _requireUserId();
     final rows = await runSupabaseRequest(
       () => supabaseClient
@@ -47,7 +60,15 @@ class SupabaseUltrasoundRepository implements UltrasoundRepository {
       );
     }
 
-    return rows.map((rawRow) {
+    final validIds = ScreeningPatient.parseRows(rows).map((p) => p.id).toSet();
+    final seen = <String>{};
+    return rows
+        .where((row) =>
+            validIds.contains(row['id']) &&
+            row['name'] is String &&
+            (row['name'] as String).trim().isNotEmpty &&
+            seen.add(row['id'] as String))
+        .map((rawRow) {
       final row = Map<String, dynamic>.from(rawRow);
       final id = row['id']?.toString() ?? '';
       final name = row['name']?.toString().trim() ?? '';
@@ -79,6 +100,17 @@ class SupabaseUltrasoundRepository implements UltrasoundRepository {
 
   @override
   Future<List<UltrasoundScanRecord>> loadScanRecords() async {
+    final uid = _requireUserId();
+    final rows = await ClinicalOfflineStore.read(
+        uid,
+        'ultrasound-history',
+        () async =>
+            (await _loadOnlineScanRecords()).map((r) => r.toJson()).toList(),
+        emptyOffline: true);
+    return rows.map(UltrasoundScanRecord.fromJson).toList();
+  }
+
+  Future<List<UltrasoundScanRecord>> _loadOnlineScanRecords() async {
     final userId = _requireUserId();
     final rows = await runSupabaseRequest(
       () => supabaseClient
@@ -213,42 +245,47 @@ class SupabaseUltrasoundRepository implements UltrasoundRepository {
       throw StateError('A correlated examination ID is required to save.');
     }
 
-    final inserted = await runSupabaseRequest(
-      () => supabaseClient
-          .from('ultrasound_scan_records')
-          .insert({
-            'patient_id': patient.id,
-            'user_id': userId,
-            'examination_id': examinationId,
-            'workflow': scanType == ScanType.aiGuided ? 'ai_guided' : 'manual',
-            'analysis_provider': analysis.provider.name,
-            'model_id': analysis.modelId,
-            'model_version': analysis.modelVersion,
-            'device_id': analysis.deviceId,
-            'overall_assessment': analysis.overallAssessment,
-            'overall_level': analysis.overallLevel?.name,
-            'recommendation': analysis.recommendation.trim().isEmpty
-                ? null
-                : analysis.recommendation,
-            'segmentation': segmentation?.toJson(),
-            'estimated_gestational_age': analysis.estimatedGestationalAge,
-            'measurements': analysis.measurements,
-            'findings': analysis.findings
-                .map(
-                  (finding) => {
-                    'category': finding.category,
-                    'finding': finding.finding,
-                    'level': finding.level.name,
-                    if (finding.note != null) 'note': finding.note,
-                  },
-                )
-                .toList(growable: false),
-          })
-          .select()
-          .single(),
-    );
+    final payload = <String, dynamic>{
+      'patient_id': patient.id,
+      'user_id': userId,
+      'examination_id': examinationId,
+      'workflow': scanType == ScanType.aiGuided ? 'ai_guided' : 'manual',
+      'analysis_provider': analysis.provider.name,
+      'model_id': analysis.modelId,
+      'model_version': analysis.modelVersion,
+      'device_id': analysis.deviceId,
+      'overall_assessment': analysis.overallAssessment,
+      'overall_level': analysis.overallLevel?.name,
+      'recommendation': analysis.recommendation.trim().isEmpty
+          ? null
+          : analysis.recommendation,
+      'segmentation': segmentation?.toJson(),
+      'estimated_gestational_age': analysis.estimatedGestationalAge,
+      'measurements': analysis.measurements,
+      'findings': analysis.findings
+          .map(
+            (finding) => {
+              'category': finding.category,
+              'finding': finding.finding,
+              'level': finding.level.name,
+              if (finding.note != null) 'note': finding.note,
+            },
+          )
+          .toList(growable: false),
+    };
+    final inserted = await ClinicalOfflineStore.persist(
+        uid: userId,
+        kind: 'ultrasound',
+        id: examinationId,
+        payload: payload,
+        localRow: {
+          ...payload,
+          'id': const Uuid().v4(),
+          'created_at': DateTime.now().toUtc().toIso8601String()
+        },
+        upload: () => ClinicalOfflineStore.uploadUltrasound(payload));
     final row = Map<String, dynamic>.from(inserted);
-    return UltrasoundScanRecord(
+    final record = UltrasoundScanRecord(
       id: _requiredString(row, 'id'),
       patientId: patient.id,
       patientName: patient.name,
@@ -268,11 +305,14 @@ class SupabaseUltrasoundRepository implements UltrasoundRepository {
       deviceId: analysis.deviceId,
       segmentation: segmentation,
     );
+    await ClinicalOfflineStore.remember(
+        userId, 'ultrasound-history', record.toJson());
+    return record;
   }
 
   String _requireUserId() {
-    final id = supabaseClient.auth.currentUser?.id;
-    if (id == null || id.isEmpty) {
+    final id = ClinicalOfflineStore.userId;
+    if (id.isEmpty) {
       throw StateError('Sign in before accessing ultrasound patient records.');
     }
     return id;

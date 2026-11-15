@@ -60,50 +60,36 @@ class _ShimmerAnimationWidgetState extends State<ShimmerAnimationWidget>
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.max,
-          children: [
-            Expanded(
-              child: Container(
+    return Container(
+      width: 250,
+      height: 40.0,
+      constraints: BoxConstraints(
+        maxWidth: 250.0,
+      ),
+      decoration: BoxDecoration(
+        color: FlutterFlowTheme.of(context).secondaryBackground,
+        borderRadius: BorderRadius.circular(8.0),
+      ),
+      child: ClipRect(
+        child: ImageFiltered(
+          imageFilter: ImageFilter.blur(
+            sigmaX: 6.0,
+            sigmaY: 6.0,
+          ),
+          child: Transform.rotate(
+            angle: 108.0 * (math.pi / 180),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8.0),
+              child: Image.asset(
+                'assets/images/background.jpg',
                 width: double.infinity,
-                height: 40.0,
-                constraints: BoxConstraints(
-                  maxWidth: 250.0,
-                ),
-                decoration: BoxDecoration(
-                  color: FlutterFlowTheme.of(context).secondaryBackground,
-                  borderRadius: BorderRadius.circular(8.0),
-                ),
-                child: ClipRect(
-                  child: ImageFiltered(
-                    imageFilter: ImageFilter.blur(
-                      sigmaX: 6.0,
-                      sigmaY: 6.0,
-                    ),
-                    child: Transform.rotate(
-                      angle: 108.0 * (math.pi / 180),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8.0),
-                        child: Image.asset(
-                          'assets/images/background.jpg',
-                          width: double.infinity,
-                          height: 60.0,
-                          fit: BoxFit.cover,
-                        ),
-                      ).animateOnPageLoad(
-                          animationsMap['imageOnPageLoadAnimation']!),
-                    ),
-                  ),
-                ),
+                height: 60.0,
+                fit: BoxFit.cover,
               ),
-            ),
-          ],
+            ).animateOnPageLoad(animationsMap['imageOnPageLoadAnimation']!),
+          ),
         ),
-      ].divide(SizedBox(height: 8.0)),
+      ),
     );
   }
 }

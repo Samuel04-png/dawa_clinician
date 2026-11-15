@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:clinician/application/ultrasound/models/ultrasound_models.dart';
 import 'package:clinician/application/ultrasound/repositories/ultrasound_repository.dart';
 import 'package:clinician/application/ultrasound/screens/ultrasound_app.dart';
@@ -21,13 +19,19 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: UltrasoundApp(repository: _EmptyUltrasoundRepository()),
+        home: UltrasoundApp(
+            repository: _EmptyUltrasoundRepository(),
+            edgeDeviceManager: EdgeDeviceManager(
+                client: EdgeDeviceClient(
+                    config: const EdgeDeviceConfig(
+                        baseUrl: 'http://localhost',
+                        modelManagementEnabled: false)))),
       ),
     );
     await tester.pump(const Duration(milliseconds: 600));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Patients').last);
+    await tester.tap(find.text('Patient Records').last);
     await tester.pumpAndSettle();
 
     expect(find.text('No patient records are available.'), findsOneWidget);
@@ -40,13 +44,53 @@ void main() {
     expect(find.textContaining('Sample Patient'), findsNothing);
   });
 
-  testWidgets('image actions remain disabled until ultrasound is ready',
+  testWidgets(
+      'opening the workflow selects Ultrasound before patient selection',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    var selects = 0;
+    final manager = EdgeDeviceManager(
+        client: EdgeDeviceClient(
+      config: const EdgeDeviceConfig(baseUrl: 'http://dawa.local'),
+      httpClient: MockClient((request) async {
+        if (request.url.path == '/api/select') selects++;
+        return http.Response(
+            selects == 0
+                ? '{"active":null,"state":"stopped","ready":false}'
+                : '{"active":"ultrasound","state":"starting","ready":false,"message":"Loading encoder"}',
+            request.url.path == '/api/select' ? 202 : 200);
+      }),
+    ));
+    await tester.pumpWidget(MaterialApp(
+        home: UltrasoundApp(
+            repository: _EmptyUltrasoundRepository(),
+            edgeDeviceManager: manager)));
+    await tester.pump();
+    expect(selects, 1);
+    expect(manager.activeExaminationId, isNull);
+    await tester.pump(const Duration(milliseconds: 600));
+    // Routine model preparation is represented by the shared app-bar device
+    // status rather than a persistent dashboard banner.
+    expect(find.text('Initializing Ultrasound AI'), findsNothing);
+    expect(find.text('Loading encoder'), findsNothing);
+    await tester.tap(find.text('Patient Records').last);
+    await tester.pump();
+    expect(find.text('No patient records are available.'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 3));
+    manager.dispose();
+  });
+
+  testWidgets('image preparation remains available while ultrasound loads',
       (tester) async {
     tester.view.physicalSize = const Size(1200, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final health = Completer<http.Response>();
+    var ready = false;
     final patient = PregnantPatient(
       id: 'test',
       name: 'Test',
@@ -64,12 +108,13 @@ void main() {
           ultrasoundInferenceEnabled: true,
         ),
         httpClient: MockClient((request) async {
-          if (request.url.path == '/health') return health.future;
           if (request.url.path == '/api/exam/start') {
             return http.Response('{"exam_id":"test-lock","ttl_s":120}', 201);
           }
           return http.Response(
-              '{"active":"ultrasound","state":"ready","modules":{"ultrasound":{}}}',
+              ready
+                  ? '{"active":"ultrasound","state":"ready","ready":true,"modules":{"ultrasound":{}}}'
+                  : '{"active":"ultrasound","state":"starting","ready":false}',
               200);
         }),
       ),
@@ -88,11 +133,51 @@ void main() {
     await tester.pump();
     final upload = find.widgetWithText(OutlinedButton, 'Upload Image');
     expect(upload, findsOneWidget);
-    expect(tester.widget<OutlinedButton>(upload).onPressed, isNull);
-    health.complete(http.Response('{"status":"ok","ready":true}', 200));
+    expect(tester.widget<OutlinedButton>(upload).onPressed, isNotNull);
+    expect(manager.observedReadyModel, isNull);
+    ready = true;
+    await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
     expect(tester.widget<OutlinedButton>(upload).onPressed, isNotNull);
     await manager.completeExamination(manager.activeExaminationId!);
+  });
+
+  testWidgets('patient records open a patient-specific ultrasound history',
+      (tester) async {
+    final patient = PregnantPatient(
+      id: 'patient-a',
+      name: 'Amina Banda',
+      age: 28,
+      contact: '',
+      scanStatus: ScanStatus.unscanned,
+      riskLevel: RiskLevel.unknown,
+      pregnancyStatus: PregnancyStatus.unknown,
+    );
+    await tester.pumpWidget(MaterialApp(
+      home: UltrasoundApp(
+        repository: _PatientUltrasoundRepository(patient),
+        edgeDeviceManager: EdgeDeviceManager(
+          client: EdgeDeviceClient(
+            config: const EdgeDeviceConfig(
+              baseUrl: 'http://localhost',
+              modelManagementEnabled: false,
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Patient Records').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Amina Banda'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ultrasound examinations'), findsOneWidget);
+    expect(find.text('No ultrasound examinations recorded for this patient.'),
+        findsOneWidget);
+    expect(find.text('New Ultrasound Scan'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }
 

@@ -1,3 +1,5 @@
+import '/components/clinical_navigation_shell.dart';
+import '/application/cacx/cacx_widget.dart' show CaCxApp;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -139,28 +141,39 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
           builder: (context, params) => CareToolsWidget(),
         ),
         FFRoute(
+          name: 'CervicalCancer',
+          path: '/cervical-cancer',
+          requireAuth: true,
+          builder: (context, params) =>
+              const ClinicalNavigationShell(child: CaCxApp()),
+        ),
+        FFRoute(
           name: HemonixApp.routeName,
           path: HemonixApp.routePath,
           requireAuth: true,
-          builder: (context, params) => HemonixApp(),
+          builder: (context, params) =>
+              ClinicalNavigationShell(child: HemonixApp()),
         ),
         FFRoute(
           name: CtScanApp.routeName,
           path: CtScanApp.routePath,
           requireAuth: true,
-          builder: (context, params) => CtScanApp(),
+          builder: (context, params) =>
+              ClinicalNavigationShell(child: CtScanApp()),
         ),
         FFRoute(
           name: BpMonitorApp.routeName,
           path: BpMonitorApp.routePath,
           requireAuth: true,
-          builder: (context, params) => BpMonitorApp(),
+          builder: (context, params) =>
+              ClinicalNavigationShell(child: BpMonitorApp()),
         ),
         FFRoute(
           name: UltrasoundApp.routeName,
           path: UltrasoundApp.routePath,
           requireAuth: true,
-          builder: (context, params) => UltrasoundApp(),
+          builder: (context, params) =>
+              ClinicalNavigationShell(child: UltrasoundApp()),
         ),
         FFRoute(
           name: MomsWidget.routeName,
@@ -260,7 +273,10 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
           name: ScheduledEncountersWidget.routeName,
           path: ScheduledEncountersWidget.routePath,
           requireAuth: true,
-          builder: (context, params) => ScheduledEncountersWidget(),
+          builder: (context, params) => ScheduledEncountersWidget(
+            initialAppointmentId:
+                params.getParam('appointment', ParamType.String),
+          ),
         ),
         FFRoute(
           name: ResetPasswordWidget.routeName,

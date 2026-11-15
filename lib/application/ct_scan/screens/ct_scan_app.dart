@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '/components/clinical_features.dart';
 
 import '../controllers/ct_scan_controller.dart';
 import '../widgets/ct_scan_module_shell.dart';
@@ -19,17 +20,20 @@ class _CtScanAppState extends State<CtScanApp> {
   @override
   void initState() {
     super.initState();
-    _controller = CtScanController();
+    if (ClinicalFeatures.ctScan) _controller = CtScanController();
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    if (ClinicalFeatures.ctScan) _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (!ClinicalFeatures.ctScan) {
+      return const Center(child: Text('Not available in this release'));
+    }
     return CtScanModuleShell(controller: _controller);
   }
 }

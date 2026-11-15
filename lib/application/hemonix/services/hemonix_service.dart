@@ -10,10 +10,9 @@ class HemonixService {
     return ClinicalToolConfig(
       key: 'hemonix',
       title: 'HemoNix',
-      description:
-          'Monitor haemoglobin results, anaemia risk, and treatment follow-up.',
-      recordName: 'Hb Record',
-      resultsLabel: 'Hb Results',
+      description: 'Local lower-eyelid anemia screening with clinician review.',
+      recordName: 'Anemia screening',
+      resultsLabel: 'Screening results',
       recordLabel: 'Records',
       icon: Icons.bloodtype_outlined,
       color: DawaTokens.brandPrimary,
@@ -26,8 +25,8 @@ class HemonixService {
           : DawaTokens.brandPrimary,
       actions: const [
         ClinicalToolAction(
-          title: 'Add Hb Record',
-          description: 'Create a new haemoglobin record.',
+          title: 'Start anemia screening',
+          description: 'Prepare a patient and lower-eyelid image.',
           icon: Icons.add_circle_outline,
           color: DawaTokens.brandPrimary,
         ),
@@ -38,7 +37,7 @@ class HemonixService {
           color: DawaTokens.brandPrimary,
         ),
         ClinicalToolAction(
-          title: 'View Hb Results',
+          title: 'View screening results',
           description: 'Open searchable and filterable result cards.',
           icon: Icons.fact_check_outlined,
           color: DawaTokens.brandPrimary,

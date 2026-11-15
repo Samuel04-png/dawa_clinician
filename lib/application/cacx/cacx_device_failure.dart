@@ -9,6 +9,7 @@ enum CacxDeviceFailureKind {
   network,
   timeout,
   unauthorized,
+  validation,
   busy,
   modelUnavailable,
   invalidResponse,
@@ -69,6 +70,8 @@ CacxDeviceFailure classifyCacxDeviceFailure(
   }
   if (error is CervicalDeviceHttpException) {
     return switch (error.statusCode) {
+      400 || 422 => const CacxDeviceFailure(CacxDeviceFailureKind.validation,
+          'The image request could not be accepted. Review the image and retry.'),
       401 || 403 => const CacxDeviceFailure(
           CacxDeviceFailureKind.unauthorized,
           'The device rejected the request as unauthorized.',
@@ -143,6 +146,10 @@ CacxDeviceFailure classifyCacxDeviceFailure(
           'The device returned a response the app could not validate.',
         );
       case EdgeDeviceFailure.http:
+        if (error.statusCode == 400 || error.statusCode == 422) {
+          return const CacxDeviceFailure(CacxDeviceFailureKind.validation,
+              'The image request could not be accepted. Review the image and retry.');
+        }
         return CacxDeviceFailure(
           CacxDeviceFailureKind.deviceError,
           'The device returned HTTP ${error.statusCode ?? 'error'}.',

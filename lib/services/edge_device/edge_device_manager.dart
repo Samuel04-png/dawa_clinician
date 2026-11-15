@@ -9,8 +9,8 @@ import 'edge_device_models.dart';
 /// Tracks which edge AI module the clinician's current examination owns.
 ///
 /// Flow: hub `GET /api/status` -> `POST /api/select` -> poll status until the
-/// requested module is `ready` AND its own `/health` affirms the model is
-/// loaded. Once ready, the app takes the device-side examination lock
+/// requested module has matching `active`, `ready:true` and `state:ready`.
+/// The hub confirms readiness after the module warm-up. Once ready, the app takes the device-side examination lock
 /// (`/api/exam/start`), keeps it alive with a heartbeat every 30 s, and
 /// releases it (`/api/exam/end`) when the examination completes. Completing an
 /// examination never stops the module.
@@ -18,15 +18,98 @@ class EdgeDeviceManager extends ChangeNotifier {
   EdgeDeviceManager({
     required this.client,
     bool? modelManagementEnabled,
-  }) : modelManagementEnabled =
+    DateTime Function()? now,
+  })  : _now = now ?? DateTime.now,
+        modelManagementEnabled =
             modelManagementEnabled ?? client.config.modelManagementEnabled;
 
   static final EdgeDeviceManager shared = EdgeDeviceManager(
     client: EdgeDeviceClient(),
   );
 
+  final DateTime Function() _now;
   final EdgeDeviceClient client;
   final bool modelManagementEnabled;
+
+  int _hubObservation = 0;
+  EdgeHubStatus? _hubStatus;
+  bool? _hubConnected;
+  DateTime? _lastSuccessfulCheck;
+  DateTime? _lastStatusAttempt;
+  String? _statusCheckMessage;
+  Future<void>? _statusCheck;
+  EdgeHubStatus? get hubStatus => _hubStatus;
+  bool? get hubConnected => _hubConnected;
+  DateTime? get lastSuccessfulCheck => _lastSuccessfulCheck;
+  String? get statusCheckMessage => _statusCheckMessage;
+  bool get checkingHub => _statusCheck != null;
+  bool get canCheckHub =>
+      _activeExaminationId == null &&
+      _activationFuture == null &&
+      !isPreparingWorkflow;
+
+  /// Observes existing workflow requests as well as manual status checks.
+  /// It never changes the clinical state, model selection or examination lock.
+  Future<EdgeHubStatus> _getHubStatus() async {
+    final observation = ++_hubObservation;
+    _lastStatusAttempt = _now();
+    try {
+      final hub = await client.getHubStatus();
+      if (!_disposed && observation == _hubObservation) {
+        _hubStatus = hub;
+        _hubConnected = true;
+        _lastSuccessfulCheck = _now();
+        _statusCheckMessage = hub.message.isEmpty ? null : hub.message;
+        notifyListeners();
+      }
+      return hub;
+    } on EdgeDeviceException catch (error) {
+      if (!_disposed && observation == _hubObservation) {
+        // Only transport failures establish offline status. A rejected or
+        // malformed response does not confirm a device/model error.
+        _hubConnected = switch (error.failure) {
+          EdgeDeviceFailure.connection || EdgeDeviceFailure.timeout => false,
+          _ => null,
+        };
+        _hubStatus = null;
+        _statusCheckMessage = error.message;
+        notifyListeners();
+      }
+      rethrow;
+    }
+  }
+
+  /// One read-only request on mount/open/retry; no background polling.
+  /// Throttled across app bars and entirely deferred during examinations.
+  Future<void> checkHubConnection({bool retry = false}) {
+    if (_disposed || !canCheckHub) return Future<void>.value();
+    if (_statusCheck != null) return _statusCheck!;
+    final last = _lastStatusAttempt;
+    if (last != null &&
+        _now().difference(last) < Duration(seconds: retry ? 5 : 30))
+      return Future<void>.value();
+    _lastStatusAttempt = _now();
+    final future = () async {
+      try {
+        final problem = client.config.configurationProblem(
+            isWeb: kIsWeb, pageUri: kIsWeb ? Uri.base : null);
+        if (problem != null) {
+          _statusCheckMessage = problem;
+          _hubConnected = null;
+          return;
+        }
+        await _getHubStatus();
+      } on EdgeDeviceException catch (error) {
+        _statusCheckMessage = error.message;
+      }
+    }();
+    _statusCheck = future;
+    notifyListeners();
+    return future.whenComplete(() {
+      _statusCheck = null;
+      if (!_disposed) notifyListeners();
+    });
+  }
 
   EdgeDeviceState _state = EdgeDeviceState.disconnected;
   EdgeAIModel? _activeModel;
@@ -39,7 +122,149 @@ class EdgeDeviceManager extends ChangeNotifier {
   String? _pendingExaminationId;
   EdgeAIModel? _observedReadyModel;
   String? _readinessMessage;
+  EdgeDeviceException? _preparationFailure;
+  EdgeDeviceException? get preparationFailure => _preparationFailure;
   int _readinessGeneration = 0;
+
+  Future<void>? _workflowPreparation;
+  bool _disposed = false;
+  bool _workflowCancelled = false;
+  bool _takingLonger = false;
+  final Set<EdgeAIModel> _previouslyLoaded = {};
+  bool get takingLongerThanExpected => _takingLonger;
+
+  int _workflowRequest = 0;
+  EdgeAIModel? _requestedWorkflow;
+  EdgeAIModel? get requestedWorkflow => _requestedWorkflow;
+  bool get isPreparingWorkflow =>
+      _workflowPreparation != null && !_workflowCancelled;
+
+  /// Serializes switches and discards work from superseded navigation.
+  /// Preparation never takes a device examination lock.
+  Future<void> prepareWorkflow(EdgeAIModel model) {
+    if (_disposed || !modelManagementEnabled) return Future<void>.value();
+    if (_activeExaminationId != null) return Future<void>.value();
+    if (_requestedWorkflow == model &&
+        !_workflowCancelled &&
+        _workflowPreparation != null) return _workflowPreparation!;
+    final request = ++_workflowRequest;
+    _requestedWorkflow = model;
+    _readinessGeneration++;
+    _workflowCancelled = false;
+    final previous = _workflowPreparation;
+    final preparation = () async {
+      if (previous != null) await previous;
+      if (_disposed || request != _workflowRequest) return;
+      final generation = _readinessGeneration;
+      await _prepareWorkflow(
+          model,
+          () =>
+              !_disposed &&
+              request == _workflowRequest &&
+              generation == _readinessGeneration);
+    }();
+    _workflowPreparation = preparation;
+    return preparation.whenComplete(() {
+      if (request == _workflowRequest) {
+        _workflowPreparation = null;
+      }
+    });
+  }
+
+  void cancelWorkflowPreparation(EdgeAIModel model) {
+    if (_requestedWorkflow != model) return;
+    _workflowCancelled = true;
+    _requestedWorkflow = null;
+    _workflowRequest++;
+    _readinessGeneration++;
+    _observedReadyModel = null;
+    _takingLonger = false;
+  }
+
+  Future<void> _prepareWorkflow(
+      EdgeAIModel model, bool Function() current) async {
+    if (!modelManagementEnabled) return;
+    final started = _now();
+    _observedReadyModel = null;
+    _readinessMessage = null;
+    _preparationFailure = null;
+    _takingLonger = false;
+    _setState(EdgeDeviceState.connecting);
+    try {
+      final problem = client.config.configurationProblem(
+          isWeb: kIsWeb, pageUri: kIsWeb ? Uri.base : null);
+      if (problem != null) {
+        throw EdgeDeviceException(
+            failure: EdgeDeviceFailure.invalidConfiguration, message: problem);
+      }
+      var hub = await _getHubStatus();
+      if (!current()) return;
+      final module = client.config.modelId(model);
+      if (hub.hasExamination || hub.busy) {
+        throw const EdgeDeviceException(
+            failure: EdgeDeviceFailure.busy,
+            message:
+                'Another examination is using the device. Prepare the patient and retry when it finishes.');
+      }
+      // Let an accepted switch finish before asking the hub for another one.
+      while (hub.active != null &&
+          hub.active != module &&
+          hub.state == EdgeHubModuleState.starting) {
+        if (_now().difference(started) >= client.config.modelReadyTimeout) {
+          throw const EdgeDeviceException(
+              failure: EdgeDeviceFailure.timeout,
+              message:
+                  'The previous model switch is still in progress. Check again.');
+        }
+        _readinessMessage = hub.message;
+        _setState(EdgeDeviceState.loadingModel);
+        await Future<void>.delayed(client.config.modelPollInterval);
+        if (!current()) return;
+        hub = await _getHubStatus();
+        if (!current()) return;
+        if (hub.hasExamination || hub.busy) {
+          throw const EdgeDeviceException(
+              failure: EdgeDeviceFailure.busy,
+              message:
+                  'Another examination is using the device. Retry when it finishes.');
+        }
+      }
+      if (hub.active != module ||
+          hub.state == EdgeHubModuleState.error ||
+          hub.state == EdgeHubModuleState.stopped) {
+        _setState(EdgeDeviceState.loadingModel);
+        hub = await client.selectModel(model);
+        if (!current()) return;
+        _readinessMessage = hub.message.isEmpty ? null : hub.message;
+        _setState(EdgeDeviceState.loadingModel);
+        if (!current()) return;
+        // A selection response acknowledges the request. Only GET status
+        // can confirm readiness, even if the acknowledgement says ready.
+        await Future<void>.delayed(client.config.modelPollInterval);
+        if (!current()) return;
+        hub = await _getHubStatus();
+      }
+      if (!current()) return;
+      _setState(EdgeDeviceState.loadingModel);
+      await _waitUntilReady(hub,
+          model: model, current: current, startedAt: started);
+      if (!current()) return;
+      _observedReadyModel = model;
+      _takingLonger = false;
+      _setState(EdgeDeviceState.ready);
+    } on EdgeDeviceException catch (error) {
+      if (!current()) return;
+      _preparationFailure = error;
+      _readinessMessage = error.message;
+      _setState(switch (error.failure) {
+        EdgeDeviceFailure.busy ||
+        EdgeDeviceFailure.conflict =>
+          EdgeDeviceState.busy,
+        EdgeDeviceFailure.connection => EdgeDeviceState.disconnected,
+        _ => EdgeDeviceState.error,
+      });
+    }
+  }
 
   EdgeDeviceState get state => _state;
   EdgeAIModel? get activeModel => _activeModel;
@@ -69,39 +294,31 @@ class EdgeDeviceManager extends ChangeNotifier {
           message: problem,
         );
       }
-      final hub = await client.getHubStatus();
+      final hub = await _getHubStatus();
       if (!current()) return;
       final moduleId = client.config.modelId(model);
-      if (hub.active != moduleId || hub.state != EdgeHubModuleState.ready) {
-        _readinessMessage = hub.active == moduleId &&
-                hub.state == EdgeHubModuleState.starting
-            ? 'The requested module is starting; readiness is not yet confirmed.'
-            : 'The requested model is not currently confirmed ready.';
+      if (!hub.isReadyFor(moduleId)) {
+        _readinessMessage = hub.message.isNotEmpty
+            ? hub.message
+            : hub.active == moduleId && hub.state == EdgeHubModuleState.starting
+                ? 'The requested module is starting; readiness is not yet confirmed.'
+                : 'The requested model is not currently confirmed ready.';
         _setState(
             hub.active == moduleId && hub.state == EdgeHubModuleState.starting
                 ? EdgeDeviceState.loadingModel
                 : EdgeDeviceState.unverified);
         return;
       }
-      final health = await client.getModuleHealth(model);
+      final confirmedHub = await _getHubStatus();
       if (!current()) return;
-      if (!health.inferenceReady) {
-        _readinessMessage =
-            'The module has not confirmed that its model is loaded.';
-        _setState(EdgeDeviceState.unverified);
-        return;
-      }
-      final confirmedHub = await client.getHubStatus();
-      if (!current()) return;
-      if (confirmedHub.active != moduleId ||
-          confirmedHub.state != EdgeHubModuleState.ready) {
+      if (!confirmedHub.isReadyFor(moduleId)) {
         _readinessMessage =
             'The active module changed during the readiness check.';
         _setState(EdgeDeviceState.unverified);
         return;
       }
       _observedReadyModel = model;
-      _readinessMessage = 'Hub and module health confirmed readiness.';
+      _readinessMessage = 'The device hub confirmed model readiness.';
       _setState(EdgeDeviceState.ready);
     } on EdgeDeviceException catch (error) {
       if (!current()) return;
@@ -136,6 +353,17 @@ class EdgeDeviceManager extends ChangeNotifier {
         message:
             'Edge-device model management is disabled until the device API is verified.',
       );
+    }
+
+    final warming = _workflowPreparation;
+    if (warming != null) {
+      if (_requestedWorkflow != model) {
+        throw const EdgeDeviceException(
+            failure: EdgeDeviceFailure.conflict,
+            message:
+                'Another model is being prepared. Try again after it finishes.');
+      }
+      await warming;
     }
 
     final pending = _activationFuture;
@@ -203,7 +431,27 @@ class EdgeDeviceManager extends ChangeNotifier {
         message: 'The requested model is not ready for this examination.',
       );
     }
+    final model = _activeModel!;
+    final hub = await _getHubStatus();
+    if (_activeExaminationId != examinationId ||
+        !hub.isReadyFor(client.config.modelId(model))) {
+      _readinessMessage =
+          'The selected AI model is no longer ready. Check the device session.';
+      _setState(EdgeDeviceState.error);
+      throw EdgeDeviceException(
+          failure: EdgeDeviceFailure.conflict, message: _readinessMessage!);
+    }
     _setState(EdgeDeviceState.examining);
+  }
+
+  void finishInference(String examinationId) {
+    if (_activeExaminationId != examinationId ||
+        _state != EdgeDeviceState.examining) {
+      throw const EdgeDeviceException(
+          failure: EdgeDeviceFailure.conflict,
+          message: 'The inference does not match the active examination.');
+    }
+    _setState(EdgeDeviceState.ready);
   }
 
   void markExaminationError(String examinationId) {
@@ -252,22 +500,18 @@ class EdgeDeviceManager extends ChangeNotifier {
 
     final moduleId = client.config.modelId(model);
     try {
-      final hub = await client.getHubStatus();
+      var hub = await _getHubStatus();
       if (hub.active == moduleId &&
           (hub.state == EdgeHubModuleState.starting ||
-              hub.state == EdgeHubModuleState.notReady)) {
+              hub.state == EdgeHubModuleState.notReady ||
+              hub.state == EdgeHubModuleState.ready && !hub.ready)) {
         _setState(EdgeDeviceState.loadingModel);
-        return EdgeDeviceModelStatus(
-          state: EdgeDeviceModelState.loading,
-          activeModelId: moduleId,
-          examinationId: examinationId,
-          requestId: requestId,
-          message: hub.message,
-        );
+        // An explicit Check Again resumes monitoring, without replaying select.
+        await _waitUntilReady(hub, model: model);
+        hub = await _getHubStatus();
       }
-      if (hub.active == moduleId && hub.state == EdgeHubModuleState.ready) {
-        final health = await client.getModuleHealth(model);
-        if (health.inferenceReady) {
+      if (hub.isReadyFor(moduleId)) {
+        {
           // Reconciliation can follow a timed-out select or a lost lock.
           // Resume or reacquire the device lock before allowing an upload.
           _deviceExamId =
@@ -308,6 +552,7 @@ class EdgeDeviceManager extends ChangeNotifier {
     required String requestId,
   }) async {
     final moduleId = client.config.modelId(model);
+    final started = _now();
     var selectSent = false;
     try {
       _setState(EdgeDeviceState.connecting);
@@ -325,7 +570,7 @@ class EdgeDeviceManager extends ChangeNotifier {
       }
       _log('Checking hub status at '
           '${client.config.hubEndpoint(client.config.hubStatusPath)}');
-      final hub = await client.getHubStatus();
+      final hub = await _getHubStatus();
       _log('Hub active=${hub.active} state=${hub.state.name}');
       _setState(EdgeDeviceState.connected);
 
@@ -344,13 +589,17 @@ class EdgeDeviceManager extends ChangeNotifier {
               hub.state == EdgeHubModuleState.notReady)) {
         _log(
             '$moduleId already active; checking readiness without /api/select');
-        await _waitUntilReady(hub, model: model);
+        await _waitUntilReady(hub, model: model, startedAt: started);
       } else {
         selectSent = true;
         _log('Selecting $moduleId');
         final selected = await client.selectModel(model);
+        _readinessMessage = selected.message.isEmpty ? null : selected.message;
+        _setState(EdgeDeviceState.loadingModel);
         _log('Waiting for model (hub state=${selected.state.name})');
-        await _waitUntilReady(selected, model: model);
+        await Future<void>.delayed(client.config.modelPollInterval);
+        await _waitUntilReady(await _getHubStatus(),
+            model: model, startedAt: started);
       }
       _log('Model ready: $moduleId');
       _deviceExamId =
@@ -400,15 +649,29 @@ class EdgeDeviceManager extends ChangeNotifier {
   Future<void> _waitUntilReady(
     EdgeHubStatus initial, {
     required EdgeAIModel model,
+    bool Function()? current,
+    DateTime? startedAt,
   }) async {
     final config = client.config;
     final moduleId = config.modelId(model);
-    final deadline = DateTime.now().add(config.modelReadyTimeout);
+    final started = startedAt ?? _now();
+    final deadline = started.add(config.modelReadyTimeout);
+    // Only Ultrasound has engineer-confirmed expected loading durations.
+    final usual = model == EdgeAIModel.ultrasound
+        ? (_previouslyLoaded.contains(model)
+            ? const Duration(seconds: 30)
+            : const Duration(seconds: 60))
+        : null;
+    _takingLonger = false;
     EdgeHubStatus? status = initial;
     String? healthMessage;
 
-    while (true) {
-      final hub = status ?? await client.getHubStatus();
+    while (!_disposed && (current?.call() ?? true)) {
+      final hub = status ?? await _getHubStatus();
+      if (_disposed || !(current?.call() ?? true)) return;
+      _readinessMessage = hub.message.isEmpty ? null : hub.message;
+      _takingLonger = usual != null && _now().difference(started) >= usual;
+      _setState(EdgeDeviceState.loadingModel);
       status = null;
 
       if (hub.active != moduleId) {
@@ -436,20 +699,18 @@ class EdgeDeviceManager extends ChangeNotifier {
         case EdgeHubModuleState.notReady:
           healthMessage = hub.message;
         case EdgeHubModuleState.ready:
-          try {
-            final health = await client.getModuleHealth(model);
-            if (health.inferenceReady) return;
-            healthMessage = health.message;
-          } on EdgeDeviceException catch (error) {
-            if (error.failure == EdgeDeviceFailure.invalidResponse) rethrow;
-            healthMessage = error.message;
+          if (hub.isReadyFor(moduleId)) {
+            _takingLonger = false;
+            _previouslyLoaded.add(model);
+            return;
           }
+          healthMessage = hub.message;
       }
 
-      if (!DateTime.now().isBefore(deadline)) {
+      if (!_now().isBefore(deadline)) {
         throw EdgeDeviceException(
           failure: EdgeDeviceFailure.timeout,
-          message: (healthMessage?.isNotEmpty ?? false)
+          message: healthMessage.isNotEmpty
               ? 'Timed out waiting for the requested module: $healthMessage'
               : 'Timed out waiting for the requested module to be ready.',
         );
@@ -474,39 +735,55 @@ class EdgeDeviceManager extends ChangeNotifier {
       try {
         await client.examHeartbeat(id);
       } on EdgeDeviceException catch (error) {
+        if (_deviceExamId == id &&
+            (error.failure == EdgeDeviceFailure.connection ||
+                error.failure == EdgeDeviceFailure.timeout)) {
+          _hubObservation++;
+          _hubConnected = false;
+          _statusCheckMessage = error.message;
+        }
         if (error.statusCode == 404 && _deviceExamId == id) {
           timer.cancel();
           _deviceExamId = null;
           _readinessMessage = 'The device examination lock was lost.';
           _setState(EdgeDeviceState.error);
         }
-        // Other failures (a network blip): retry at the next tick; the lock
-        // survives until its 120 s TTL runs out.
+        if (_deviceExamId == id) {
+          _readinessMessage = 'Connection to the device was interrupted. '
+              'Check the device session before continuing AI analysis.';
+          _setState(EdgeDeviceState.error);
+        }
+        // Reconciliation is required before accepting another image.
       } catch (_) {}
     });
   }
 
   Future<void> _releaseDeviceExam() async {
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = null;
     final id = _deviceExamId;
-    _deviceExamId = null;
     if (id == null) return;
     try {
       await client.endExam(id);
-    } catch (_) {
-      // The device expires the lock by itself if this fails.
+    } on EdgeDeviceException catch (error) {
+      if (error.statusCode != 404) {
+        _readinessMessage =
+            'Could not confirm the examination has ended. Check the device session.';
+        _setState(EdgeDeviceState.error);
+        rethrow;
+      }
     }
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+    _deviceExamId = null;
   }
 
   void _clearActiveExamination() {
-    unawaited(_releaseDeviceExam());
     _activeExaminationId = null;
     _activeModel = null;
     _activeRequestId = null;
   }
 
   void _setState(EdgeDeviceState state) {
+    if (_disposed) return;
     _state = state;
     notifyListeners();
   }
@@ -515,6 +792,8 @@ class EdgeDeviceManager extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    _readinessGeneration++;
     _heartbeatTimer?.cancel();
     client.close();
     super.dispose();

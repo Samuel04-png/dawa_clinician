@@ -42,21 +42,27 @@ void main() {
   testWidgets('CaCx and quick access modules do not overflow at tablet width',
       (tester) async {
     await _pumpPlain(tester, const CaCxApp(), const Size(820, 900));
-    expect(find.text('Cervical Cancer Dashboard'), findsOneWidget);
+    expect(find.text('New Screening'), findsOneWidget);
+    expect(find.text('Cervical Cancer Dashboard'), findsNothing);
+    expect(tester.takeException(), isNull);
 
     await _pumpPlain(
       tester,
       const HemonixApp(),
       const Size(820, 900),
     );
-    expect(find.text('HemoNix Dashboard'), findsOneWidget);
+    expect(find.text('New Screening'), findsOneWidget);
+    expect(find.text('HemoNix Dashboard'), findsNothing);
+    expect(tester.takeException(), isNull);
 
     await _pumpPlain(
       tester,
       const CtScanApp(),
       const Size(820, 900),
     );
-    expect(find.text('CT Scan Dashboard'), findsOneWidget);
+    expect(find.text('View sample records'), findsOneWidget);
+    expect(find.text('CT Scan Dashboard'), findsNothing);
+    expect(tester.takeException(), isNull);
 
     await _pumpPlain(
       tester,
@@ -64,7 +70,9 @@ void main() {
       const Size(820, 900),
     );
     await tester.pump(const Duration(milliseconds: 600));
-    expect(find.text('Ultrasound Dashboard'), findsOneWidget);
+    expect(find.text('New Ultrasound Scan'), findsOneWidget);
+    expect(find.text('Ultrasound Dashboard'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 }
 

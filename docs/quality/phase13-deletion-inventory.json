@@ -1,0 +1,3400 @@
+[
+  {
+    "path": "docs/qa/device-offline.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/sidebar-appbar-redesign-qa.md (superseded; consolidated)"
+    ],
+    "classification": "D",
+    "safe_to_remove": true,
+    "reason": "Original shell captures superseded by phase1b fixtures. Current tests reference phase1b or sidebar-interaction, not these root captures.",
+    "bytes": 27331,
+    "sha256": "915052946f82fb24fbf5208ad71d5042d6a6843d2a7127ae1fec1f3a1566d1e8"
+  },
+  {
+    "path": "docs/qa/device-ready.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/sidebar-appbar-redesign-qa.md (superseded; consolidated)"
+    ],
+    "classification": "D",
+    "safe_to_remove": true,
+    "reason": "Original shell captures superseded by phase1b fixtures. Current tests reference phase1b or sidebar-interaction, not these root captures.",
+    "bytes": 29213,
+    "sha256": "d97b6f9d0d817259a1d8c5b326a6602eee6a65c2218853025fd36945f7d70424"
+  },
+  {
+    "path": "docs/qa/sidebar-expanded.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/sidebar-appbar-redesign-qa.md (superseded; consolidated)"
+    ],
+    "classification": "D",
+    "safe_to_remove": true,
+    "reason": "Original shell captures superseded by phase1b fixtures. Current tests reference phase1b or sidebar-interaction, not these root captures.",
+    "bytes": 39485,
+    "sha256": "a8230ea08e1ff6950f29726e1c58517d8191f971ae66ffbf975bc89340d39c07"
+  },
+  {
+    "path": "docs/qa/device-error.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/sidebar-appbar-redesign-qa.md (superseded; consolidated)"
+    ],
+    "classification": "D",
+    "safe_to_remove": true,
+    "reason": "Original shell captures superseded by phase1b fixtures. Current tests reference phase1b or sidebar-interaction, not these root captures.",
+    "bytes": 28263,
+    "sha256": "a00e40640dbf3c35b11008bc11fe8c8bd7faaaa1854b66834689e216d5c85287"
+  },
+  {
+    "path": "docs/qa/device-stopped.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/sidebar-appbar-redesign-qa.md (superseded; consolidated)"
+    ],
+    "classification": "D",
+    "safe_to_remove": true,
+    "reason": "Original shell captures superseded by phase1b fixtures. Current tests reference phase1b or sidebar-interaction, not these root captures.",
+    "bytes": 28771,
+    "sha256": "888ab62172d2a2e03d4ec7fd362c79650a069c6ddbaf8fa315740efada95a411"
+  },
+  {
+    "path": "docs/qa/sidebar-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/sidebar-appbar-redesign-qa.md (superseded; consolidated)"
+    ],
+    "classification": "D",
+    "safe_to_remove": true,
+    "reason": "Original shell captures superseded by phase1b fixtures. Current tests reference phase1b or sidebar-interaction, not these root captures.",
+    "bytes": 34078,
+    "sha256": "1bc8e5ad76df1995c565838a42ca83bd30059af971003ef127842bbfd863ceb3"
+  },
+  {
+    "path": "docs/qa/sidebar-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/sidebar-appbar-redesign-qa.md (superseded; consolidated)"
+    ],
+    "classification": "D",
+    "safe_to_remove": true,
+    "reason": "Original shell captures superseded by phase1b fixtures. Current tests reference phase1b or sidebar-interaction, not these root captures.",
+    "bytes": 12109,
+    "sha256": "bab6ef105b9b2643e21bf77feaaa5feef4d7b30b61cc3a07d960fbb071300d9e"
+  },
+  {
+    "path": "docs/qa/device-starting.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/sidebar-appbar-redesign-qa.md (superseded; consolidated)"
+    ],
+    "classification": "D",
+    "safe_to_remove": true,
+    "reason": "Original shell captures superseded by phase1b fixtures. Current tests reference phase1b or sidebar-interaction, not these root captures.",
+    "bytes": 26741,
+    "sha256": "e0e123205eccc555f1d9d29a299df5204c9d5271d1e38f856c2c97d6824be5e6"
+  },
+  {
+    "path": "docs/qa/ct-review/overview-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/ct-review/report-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/ct-review/report-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/ct-review/report-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/ct-review/overview-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/ct-review/report-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/ct-review/report-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/ct-review/overview-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/ct-review/overview-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/ct-review/overview-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase1b/device-offline.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase1b-navigation-refinement.md",
+      "test/clinician_navigation_test.dart",
+      "test/edge_device_indicator_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase1b/small-mobile-drawer.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase1b-navigation-refinement.md",
+      "test/clinician_navigation_test.dart",
+      "test/edge_device_indicator_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase1b/device-ready.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase1b-navigation-refinement.md",
+      "test/clinician_navigation_test.dart",
+      "test/edge_device_indicator_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase1b/tablet-drawer.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase1b-navigation-refinement.md",
+      "test/clinician_navigation_test.dart",
+      "test/edge_device_indicator_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase1b/desktop-expanded.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase1b-navigation-refinement.md",
+      "test/clinician_navigation_test.dart",
+      "test/edge_device_indicator_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase1b/mobile-drawer.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase1b-navigation-refinement.md",
+      "test/clinician_navigation_test.dart",
+      "test/edge_device_indicator_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase1b/desktop-large-type.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase1b-navigation-refinement.md",
+      "test/clinician_navigation_test.dart",
+      "test/edge_device_indicator_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase1b/device-error.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase1b-navigation-refinement.md",
+      "test/clinician_navigation_test.dart",
+      "test/edge_device_indicator_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase1b/device-stopped.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase1b-navigation-refinement.md",
+      "test/clinician_navigation_test.dart",
+      "test/edge_device_indicator_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase1b/device-starting.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase1b-navigation-refinement.md",
+      "test/clinician_navigation_test.dart",
+      "test/edge_device_indicator_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase1b/desktop-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase1b-navigation-refinement.md",
+      "test/clinician_navigation_test.dart",
+      "test/edge_device_indicator_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/ultrasound-review/overview-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/ultrasound-review/saved-scan-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/ultrasound-review/overview-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/ultrasound-review/saved-scan-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/ultrasound-review/saved-scan-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/ultrasound-review/overview-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/ultrasound-review/overview-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/ultrasound-review/saved-scan-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/ultrasound-review/saved-scan-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/ultrasound-review/overview-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase4/appointments-upcoming.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase4-registry-appointments-review.md",
+      "test/appointments_phase4_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase4/appointments-today.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase4-registry-appointments-review.md",
+      "test/appointments_phase4_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase4/appointments-requests.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase4-registry-appointments-review.md",
+      "test/appointments_phase4_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase4/appointments-history.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase4-registry-appointments-review.md",
+      "test/appointments_phase4_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase4/appointments-tablet.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase4-registry-appointments-review.md",
+      "test/appointments_phase4_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase4/appointments-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase4-registry-appointments-review.md",
+      "test/appointments_phase4_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase4/appointments-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase4-registry-appointments-review.md",
+      "test/appointments_phase4_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase4/appointments-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase4-registry-appointments-review.md",
+      "test/appointments_phase4_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase4/appointments-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/appointments_phase4_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase4/patients-restored-fixture.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase4-registry-appointments-review.md",
+      "test/appointments_phase4_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase3/desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase10-ct-scan-ux.md",
+      "docs/phase11-bp-monitor-ux.md",
+      "docs/phase2-home-dashboard-redesign.md",
+      "docs/phase3-patients-redesign.md",
+      "docs/phase5-clinical-tools-review.md",
+      "docs/phase5-followup-fixes.md",
+      "docs/phase6-clinical-workspace-ux.md",
+      "docs/phase7-cervical-screening-ux.md",
+      "docs/phase9-hemonix-ux.md",
+      "docs/ultrasound-module-ux.md",
+      "test/cacx_second_opinion_flow_test.dart",
+      "test/clinical_phase5_review_test.dart",
+      "test/patient_registry_phase3_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase3/collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase1b-navigation-refinement.md",
+      "docs/phase2-home-dashboard-redesign.md",
+      "docs/phase3-patients-redesign.md",
+      "docs/phase4-registry-appointments-review.md",
+      "docs/phase5-clinical-tools-review.md",
+      "test/patient_registry_phase3_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase3/tablet.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase2-home-dashboard-redesign.md",
+      "docs/phase3-patients-redesign.md",
+      "docs/phase4-registry-appointments-review.md",
+      "test/patient_registry_phase3_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase3/laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase2-home-dashboard-redesign.md",
+      "docs/phase3-patients-redesign.md",
+      "test/patient_registry_phase3_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase3/mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase2-home-dashboard-redesign.md",
+      "docs/phase3-patients-redesign.md",
+      "docs/phase4-registry-appointments-review.md",
+      "docs/phase5-clinical-tools-review.md",
+      "docs/phase6-clinical-workspace-ux.md",
+      "test/patient_registry_phase3_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase3/small-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase2-home-dashboard-redesign.md",
+      "docs/phase3-patients-redesign.md",
+      "test/patient_registry_phase3_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/sidebar-interaction/expanded-default.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinician_navigation_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/sidebar-interaction/selected-hover.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinician_navigation_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/sidebar-interaction/expanded-hover.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinician_navigation_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/sidebar-interaction/collapsed-tooltip.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinician_navigation_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase2/wide-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase2-home-dashboard-redesign.md",
+      "docs/phase3-patients-redesign.md",
+      "test/home_dashboard_phase2_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase2/collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase1b-navigation-refinement.md",
+      "docs/phase2-home-dashboard-redesign.md",
+      "docs/phase3-patients-redesign.md",
+      "docs/phase4-registry-appointments-review.md",
+      "docs/phase5-clinical-tools-review.md",
+      "test/home_dashboard_phase2_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase2/tablet.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase2-home-dashboard-redesign.md",
+      "docs/phase3-patients-redesign.md",
+      "docs/phase4-registry-appointments-review.md",
+      "test/home_dashboard_phase2_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase2/laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase2-home-dashboard-redesign.md",
+      "docs/phase3-patients-redesign.md",
+      "test/home_dashboard_phase2_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase2/mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase2-home-dashboard-redesign.md",
+      "docs/phase3-patients-redesign.md",
+      "docs/phase4-registry-appointments-review.md",
+      "docs/phase5-clinical-tools-review.md",
+      "docs/phase6-clinical-workspace-ux.md",
+      "test/home_dashboard_phase2_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase2/small-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase2-home-dashboard-redesign.md",
+      "docs/phase3-patients-redesign.md",
+      "test/home_dashboard_phase2_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/ultrasound-view-2-scale-2.0.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/anemia-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase5-clinical-tools-review.md",
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/ct-view-1-scale-2.0.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/ct-view-2-scale-2.0.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase5-followup-fixes.md",
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/ultrasound-view-1-scale-2.0.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/anemia-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase5-clinical-tools-review.md",
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/ultrasound-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/ct-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase5-clinical-tools-review.md",
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/ultrasound-view-2-scale-1.0.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/ct-view-1-scale-1.0.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/ultrasound-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase5-clinical-tools-review.md",
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/cacx-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/ct-view-2-scale-1.0.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/bp-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase11-bp-monitor-ux.md",
+      "docs/phase5-clinical-tools-review.md",
+      "docs/phase5-followup-fixes.md",
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/cacx-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase5-clinical-tools-review.md",
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/ct-mobile-keyboard.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase5-followup-fixes.md",
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/bp-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase5-clinical-tools-review.md",
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/ultrasound-view-1-scale-1.0.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/cacx-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase5-clinical-tools-review.md",
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/ct-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase5-clinical-tools-review.md",
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/anemia-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/ct-view-3-scale-1.0.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/cacx-view-2-scale-2.0.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase5-followup-fixes.md",
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/anemia-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase5-clinical-tools-review.md",
+      "docs/phase6-clinical-workspace-ux.md",
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/ct-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/anemia-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase5-clinical-tools-review.md",
+      "docs/phase9-hemonix-ux.md",
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/cacx-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase5-clinical-tools-review.md",
+      "docs/phase6-clinical-workspace-ux.md",
+      "docs/phase7-cervical-screening-ux.md",
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/anemia-view-1-scale-2.0.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/ultrasound-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase5-clinical-tools-review.md",
+      "docs/phase6-clinical-workspace-ux.md",
+      "docs/ultrasound-module-ux.md",
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/ultrasound-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase5-clinical-tools-review.md",
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/bp-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase5-clinical-tools-review.md",
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/bp-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/cacx-view-1-scale-2.0.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase5-followup-fixes.md",
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/cacx-view-2-scale-1.0.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/ct-view-3-scale-2.0.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/ct-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase10-ct-scan-ux.md",
+      "docs/phase5-clinical-tools-review.md",
+      "docs/phase5-followup-fixes.md",
+      "docs/phase6-clinical-workspace-ux.md",
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/anemia-view-1-scale-1.0.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/cacx-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase5-clinical-tools-review.md",
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/ct-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase5-clinical-tools-review.md",
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/bp-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase5-clinical-tools-review.md",
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/cacx-view-1-scale-1.0.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase5/ultrasound-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase5-clinical-tools-review.md",
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/bp-review/history-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/bp-review/entry-changed-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/bp-review/entry-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/bp-review/result-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/bp-review/pregnancy-result-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/bp-review/entry-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/bp-review/result-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/bp-review/result-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/bp-review/result-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/bp-review/validation-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/bp-review/entry-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/bp-review/entry-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/bp-review/history-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/bp-review/result-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/bp-review/entry-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/bp-review/history-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/bp-review/history-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/bp-review/history-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/anemia-flow/review-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/anemia_workflow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/anemia-flow/initial-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/anemia_workflow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/anemia-flow/prepared-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/anemia_workflow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/anemia-flow/prepared-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/anemia_workflow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/anemia-flow/prepared-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/anemia_workflow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/anemia-flow/review-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/anemia_workflow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/anemia-flow/initial-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/anemia_workflow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/anemia-flow/review-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/anemia_workflow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/anemia-flow/initial-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/anemia_workflow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/anemia-flow/analysing-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/anemia_workflow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/anemia-flow/review-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/anemia_workflow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/anemia-flow/review-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/anemia_workflow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/anemia-flow/initial-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/anemia_workflow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/anemia-flow/prepared-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/anemia_workflow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/anemia-flow/offline-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/anemia_workflow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/anemia-flow/initial-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/anemia_workflow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/anemia-flow/prepared-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/anemia_workflow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/anemia-flow/empty-patients-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/anemia_workflow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/foundations/cacx-overview-1440.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/foundations/cacx-overview-1024.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/clinical_phase5_review_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/reliability/notifications-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/global_notifications_test.dart",
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/reliability/notifications-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/global_notifications_test.dart",
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/reliability/notifications-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/global_notifications_test.dart",
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/reliability/notifications-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/global_notifications_test.dart",
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/reliability/maternal-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/global_notifications_test.dart",
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/reliability/maternal-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/global_notifications_test.dart",
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/reliability/maternal-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/global_notifications_test.dart",
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/reliability/maternal-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/global_notifications_test.dart",
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/reliability/maternal-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/global_notifications_test.dart",
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/PatientDetails-populated-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/Login-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/Encounter-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/LoginCopy-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/PatientDetails-populated-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/CreateMom-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/PatientDetails-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/EditEncounter-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/EditEncounter-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/Encounter-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/LoginCopy-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/Profile-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/MomDetails2-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/LoginCopy-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/CompleteClincianReg-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/EditProfile-form-bottom.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/MomDetails2-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/LoginCopy-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/EditProfile-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/CreateMom-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/CompleteClincianReg-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/EncounterDets-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/Encounter-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/PatientDetails-populated-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/ResetPassword-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/LoginCopy-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/Encounter-form-bottom.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/Profile-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/PatientDetails-populated-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/PatientDetails-result-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/Profile-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/MomDetails-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/MomDetails-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/Profile-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/PatientDetails-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/CreateMom-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/Profile-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/EncounterDets-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/EditEncounter-form-bottom.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/AdminCreateAccount-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/AdminCreateAccount-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/EditProfile-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/Encounter-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/MomDetails-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/ResetPassword-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/EditEncounter-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/PatientDetails-result-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/ResetPassword-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/PatientDetails-result-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/MomDetails2-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/MomDetails-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/PatientDetails-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/EditEncounter-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/PatientDetails-result-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/CompleteClincianReg-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/ResetPassword-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/MomDetails2-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/EditEncounter-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/AdminCreateAccount-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/EditProfile-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/CreateMom-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/Login-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/Login-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/MomDetails-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/AdminCreateAccount-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/ResetPassword-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/CreateMom-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/EditProfile-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/Login-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/AdminCreateAccount-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/Login-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/EncounterDets-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/Encounter-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/EncounterDets-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/MomDetails2-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/EncounterDets-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/MomDetails2-form-bottom.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/CompleteClincianReg-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/PatientDetails-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/EditProfile-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/CreateMom-form-bottom.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/PatientDetails-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/patient-audit/CompleteClincianReg-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/settings-review/overview-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/settings-review/sign-out-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/settings-review/sign-out-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/settings-review/administrator-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/settings-review/sign-out-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/settings-review/sign-out-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/settings-review/sign-out-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/settings-review/overview-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/settings-review/support-collapsed.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/settings-review/profile-error-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/settings-review/support-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/settings-review/support-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/settings-review/support-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/settings-review/overview-mobile.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/settings-review/support-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/settings-review/overview-laptop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/settings-review/overview-large-text.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/patient_pages_audit_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/phase7/cacx-screening-workspace-desktop.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/phase7-cervical-screening-ux.md",
+      "test/cacx_second_opinion_flow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/second-opinion/consent-desktop-1.0.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/cacx-second-opinion-and-modal-verification.md",
+      "test/cacx_second_opinion_flow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/second-opinion/image-source-desktop-2.0.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/cacx_second_opinion_flow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/second-opinion/image-source-1.0.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/cacx-second-opinion-and-modal-verification.md",
+      "test/cacx_second_opinion_flow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/second-opinion/consent-2.0.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/cacx-second-opinion-and-modal-verification.md",
+      "test/cacx_second_opinion_flow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/second-opinion/consent-desktop-2.0.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "test/cacx_second_opinion_flow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/second-opinion/image-source-desktop-1.0.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/cacx-second-opinion-and-modal-verification.md",
+      "test/cacx_second_opinion_flow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/second-opinion/image-source-2.0.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/cacx-second-opinion-and-modal-verification.md",
+      "test/cacx_second_opinion_flow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "docs/qa/second-opinion/consent-1.0.png",
+    "type": "PNG",
+    "purpose": "optional golden/capture reference",
+    "tracked": false,
+    "references": [
+      "docs/cacx-second-opinion-and-modal-verification.md",
+      "test/cacx_second_opinion_flow_test.dart"
+    ],
+    "classification": "B",
+    "safe_to_remove": false,
+    "reason": "Retain while referenced"
+  },
+  {
+    "path": "test/failures/patient_registry_training_fixture_maskedDiff.png",
+    "type": "PNG",
+    "purpose": "generated visual audit/failure output",
+    "tracked": false,
+    "references": [],
+    "classification": "D",
+    "safe_to_remove": true,
+    "reason": "Generated output with no code, test or maintained documentation reference",
+    "bytes": 121401,
+    "sha256": "40a2dbc9405212bcd0e043f1488cfd6de47e9ca05c39c9ee3d67edf241f22112"
+  },
+  {
+    "path": "test/failures/patient_registry_training_fixture_masterImage.png",
+    "type": "PNG",
+    "purpose": "generated visual audit/failure output",
+    "tracked": false,
+    "references": [],
+    "classification": "D",
+    "safe_to_remove": true,
+    "reason": "Generated output with no code, test or maintained documentation reference",
+    "bytes": 117999,
+    "sha256": "7a1d32325ab00e94a470da9ffccb40e3df6dcb1370662edbe3cc9b135181fba7"
+  },
+  {
+    "path": "test/failures/patient_registry_training_fixture_testImage.png",
+    "type": "PNG",
+    "purpose": "generated visual audit/failure output",
+    "tracked": false,
+    "references": [],
+    "classification": "D",
+    "safe_to_remove": true,
+    "reason": "Generated output with no code, test or maintained documentation reference",
+    "bytes": 117581,
+    "sha256": "44178d05da52f3d079d3c0aba8e33ad1e7a4036e83b1c099c8b42628ec0ab96d"
+  },
+  {
+    "path": "test/failures/patient_registry_training_fixture_isolatedDiff.png",
+    "type": "PNG",
+    "purpose": "generated visual audit/failure output",
+    "tracked": false,
+    "references": [],
+    "classification": "D",
+    "safe_to_remove": true,
+    "reason": "Generated output with no code, test or maintained documentation reference",
+    "bytes": 14282,
+    "sha256": "d9eb1881db311cfd54717b541c462c50a9d90c11d30268a166691f6d2ed1f6bd"
+  },
+  {
+    "path": "docs/phase1b-navigation-refinement.md",
+    "type": "Markdown",
+    "purpose": "Superseded UI phase implementation report",
+    "tracked": false,
+    "references": [],
+    "classification": "E",
+    "safe_to_remove": true,
+    "reason": "Useful current shell, Home and registry knowledge consolidated in docs/ui-architecture.md; obsolete test totals superseded. No external code/test/build/document reference found.",
+    "bytes": 12223,
+    "sha256": "dce7474bfb4e710ad65bd39aed2610d43bd68f25b99df03b409688ae688e14d6"
+  },
+  {
+    "path": "docs/phase2-home-dashboard-redesign.md",
+    "type": "Markdown",
+    "purpose": "Superseded UI phase implementation report",
+    "tracked": false,
+    "references": [],
+    "classification": "E",
+    "safe_to_remove": true,
+    "reason": "Useful current shell, Home and registry knowledge consolidated in docs/ui-architecture.md; obsolete test totals superseded. No external code/test/build/document reference found.",
+    "bytes": 8942,
+    "sha256": "e2d88be572c750c51c337b37e6ceb8b442e3e24fbc45dde5e0111628e4b09ef6"
+  },
+  {
+    "path": "docs/phase3-patients-redesign.md",
+    "type": "Markdown",
+    "purpose": "Superseded UI phase implementation report",
+    "tracked": false,
+    "references": [],
+    "classification": "E",
+    "safe_to_remove": true,
+    "reason": "Useful current shell, Home and registry knowledge consolidated in docs/ui-architecture.md; obsolete test totals superseded. No external code/test/build/document reference found.",
+    "bytes": 9073,
+    "sha256": "81a2bfb055334b25f151c738037526836037ed65b23d10e1a19fb3559f3b509c"
+  },
+  {
+    "path": "docs/sidebar-appbar-redesign-qa.md",
+    "type": "Markdown",
+    "purpose": "Superseded UI phase implementation report",
+    "tracked": false,
+    "references": [],
+    "classification": "E",
+    "safe_to_remove": true,
+    "reason": "Useful current shell, Home and registry knowledge consolidated in docs/ui-architecture.md; obsolete test totals superseded. No external code/test/build/document reference found.",
+    "bytes": 7888,
+    "sha256": "840b23035def4ef1e9c1c36843b632ed82bb6cd0458363cd9b2d2b542cbf9765"
+  }
+]

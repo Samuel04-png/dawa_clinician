@@ -1,4 +1,5 @@
 import '/backend/backend.dart';
+import '/components/missing_patient_context.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -50,6 +51,9 @@ class _EncounterDetsWidgetState extends State<EncounterDetsWidget> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.momDets == null || widget.encounterDetails == null) {
+      return const MissingPatientContext();
+    }
     context.watch<FFAppState>();
 
     final screenWidth = MediaQuery.of(context).size.width;
@@ -184,7 +188,7 @@ class _EncounterDetsWidgetState extends State<EncounterDetsWidget> {
                                 ),
                                 TextSpan(
                                   text: dateTimeFormat("d/M/y",
-                                      encounterDetsEncounterRecord.date!),
+                                      encounterDetsEncounterRecord.date),
                                   style: TextStyle(),
                                 )
                               ],
@@ -319,8 +323,6 @@ class _EncounterDetsWidgetState extends State<EncounterDetsWidget> {
                                                     .fontStyle,
                                           ),
                                       textAlign: TextAlign.center,
-                                      maxLines: 3,
-                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ),
@@ -684,10 +686,8 @@ class _EncounterDetsWidgetState extends State<EncounterDetsWidget> {
                                   _buildDetailItem(
                                     context: context,
                                     title: 'Next visit',
-                                    value: dateTimeFormat(
-                                        "d/M/y",
-                                        encounterDetsEncounterRecord
-                                            .nextVisit!),
+                                    value: dateTimeFormat("d/M/y",
+                                        encounterDetsEncounterRecord.nextVisit),
                                     isSmallScreen: isSmallScreen,
                                     isMediumScreen: isMediumScreen,
                                   ),
@@ -905,7 +905,9 @@ class _EncounterDetsWidgetState extends State<EncounterDetsWidget> {
         : (isSmallScreen ? 120.0 : (isMediumScreen ? 140.0 : 160.0));
 
     return Container(
-      width: itemWidth,
+      width: MediaQuery.textScalerOf(context).scale(14) > 21
+          ? double.infinity
+          : itemWidth,
       padding: EdgeInsets.all(isSmallScreen ? 4.0 : 6.0),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -926,8 +928,6 @@ class _EncounterDetsWidgetState extends State<EncounterDetsWidget> {
                   fontWeight: FontWeight.w500,
                   fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
                 ),
-            overflow: TextOverflow.ellipsis,
-            maxLines: 2,
           ),
           SizedBox(height: isSmallScreen ? 2.0 : 5.0),
           Text(
@@ -945,8 +945,6 @@ class _EncounterDetsWidgetState extends State<EncounterDetsWidget> {
                   fontWeight: FontWeight.w500,
                   fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
                 ),
-            overflow: TextOverflow.ellipsis,
-            maxLines: isComment ? 3 : 2,
           ),
         ],
       ),

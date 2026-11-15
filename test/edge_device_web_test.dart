@@ -42,7 +42,7 @@ void main() {
           if (request.url.path == '/api/status') {
             if (++statusCalls == 1) return firstStatus.future;
             return http.Response(
-              '{"active":"cervitriage","state":"ready","modules":{"cervitriage":{}}}',
+              '{"active":"cervitriage","state":"ready","ready":true,"modules":{"cervitriage":{}}}',
               200,
             );
           }
@@ -105,13 +105,13 @@ void main() {
           }
           if (request.url.path == '/api/status') {
             return http.Response(
-              '{"active":"cervitriage","state":"ready","modules":{"cervitriage":{}}}',
+              '{"active":"cervitriage","state":"ready","ready":true,"modules":{"cervitriage":{}}}',
               200,
             );
           }
-          if (request.url.path == '/predict') {
+          if (request.url.path == '/upload/cervical') {
             expect(request.method, 'POST');
-            expect(request.url.port, 8085);
+            expect(request.url.port, 80);
             expect(request.headers['content-type'],
                 contains('multipart/form-data'));
             expect(request.body, contains('name="image"'));
@@ -143,11 +143,10 @@ void main() {
       () => manager.refreshObservedReadiness(EdgeAIModel.cervicalCancer),
     );
     await tester.pump();
-    expect(find.text('Model ready'), findsOneWidget);
+    expect(find.text('Cervical AI ready'), findsOneWidget);
     expect(find.text('Model readiness unverified'), findsNothing);
     expect(requests.map((uri) => '${uri.port}${uri.path}'), [
       '80/api/status',
-      '8085/health',
       '80/api/status',
     ]);
 

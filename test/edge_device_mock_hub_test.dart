@@ -514,6 +514,35 @@ void main() {
     }
   });
 
+  test('check again resumes polling after timeout without another selection',
+      () async {
+    final device = await _MockDevice.start()
+      ..neverReady = true;
+    final manager = _manager(device, ready: const Duration(milliseconds: 300));
+    try {
+      await expectLater(
+          manager.beginExamination(
+              model: EdgeAIModel.ultrasound, examinationId: 'us-retry'),
+          throwsA(isA<EdgeDeviceException>()));
+      expect(manager.state, EdgeDeviceState.error);
+      device.neverReady = false;
+      device.hubState = 'starting';
+      final timer = Timer(
+          const Duration(milliseconds: 100), () => device.hubState = 'ready');
+      try {
+        await manager.reconcileActiveExamination();
+        expect(manager.state, EdgeDeviceState.ready);
+        expect(device.selects, ['ultrasound']);
+        await manager.completeExamination('us-retry');
+      } finally {
+        timer.cancel();
+      }
+    } finally {
+      manager.dispose();
+      await device.close();
+    }
+  });
+
   test('active not_ready module is polled until ready without selecting again',
       () async {
     final device = await _MockDevice.start()
@@ -537,7 +566,8 @@ void main() {
       await device.close();
     }
   });
-  test('device lock is taken once the module is ready and released on completion',
+  test(
+      'device lock is taken once the module is ready and released on completion',
       () async {
     final device = await _MockDevice.start();
     final manager = _manager(device);
@@ -608,7 +638,6 @@ void main() {
       await device.close();
     }
   });
-
 }
 
 EdgeDeviceManager _manager(
@@ -709,6 +738,10 @@ class _MockDevice {
                 ? 'starting'
                 : hubState,
         'message': '',
+        'ready': !hubErrors &&
+            !neverReady &&
+            hubState == 'ready' &&
+            (active == 'ultrasound' ? usReady : cervicalReady),
         'health': null,
         'modules': {
           'cervitriage': {'label': 'CerviTriage', 'subtitle': '', 'port': 8085},
@@ -724,6 +757,8 @@ class _MockDevice {
     }
     final path = r.uri.path;
     if (path == '/health') return _json(r, 200, {'status': 'ok', 'hub': true});
+    if (path == '/upload/cervical') return _cervical(r, predict: true);
+    if (path == '/upload/ultrasound') return _ultrasound(r, predict: true);
     if (path == '/api/status') {
       statusPolls += 1;
       return _json(r, 200, _status());
@@ -791,8 +826,8 @@ class _MockDevice {
     return _json(r, 404, {'error': 'not found'});
   }
 
-  Future<void> _cervical(HttpRequest r) async {
-    switch (r.uri.path) {
+  Future<void> _cervical(HttpRequest r, {bool predict = false}) async {
+    switch (predict ? '/predict' : r.uri.path) {
       case '/health':
         return _json(r, 200, {
           'status': 'ok',
@@ -835,7 +870,7 @@ class _MockDevice {
     return _json(r, 404, {'error': 'not found'});
   }
 
-  Future<void> _ultrasound(HttpRequest r) async {
+  Future<void> _ultrasound(HttpRequest r, {bool predict = false}) async {
     if (r.uri.path == '/health') {
       return _json(r, 200, {
         'status': usReady ? 'ok' : 'waiting_for_model',
@@ -844,7 +879,7 @@ class _MockDevice {
         'message': usReady ? 'ok' : 'Waiting for the model files',
       });
     }
-    if (r.uri.path == '/predict') {
+    if (predict || r.uri.path == '/predict') {
       final raw = latin1.decode(
         await r.fold<List<int>>([], (a, b) => a..addAll(b)),
       );

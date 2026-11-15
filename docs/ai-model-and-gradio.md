@@ -1,6 +1,6 @@
 # AI Model And Gradio
 
-The project has multiple AI paths. CaCx uses Hugging Face/Gradio-style image analysis for online second opinion, and ultrasound uses a Supabase Edge Function that can call Gemini.
+The project has multiple AI paths. CaCx uses Hugging Face/Gradio-style image analysis for online second opinion, Anemia supports its NiADA Space fallback, and legacy Ultrasound service code includes a Supabase Edge Function that can call Gemini.
 
 ## CaCx Active Online Path
 
@@ -41,7 +41,7 @@ It posts raw image bytes to Hugging Face Inference API. I did not confirm that t
 
 ## Ultrasound AI
 
-The ultrasound module calls:
+The repository contains this older Ultrasound cloud service call:
 
 ```dart
 supabaseClient.functions.invoke(
@@ -59,7 +59,9 @@ The Edge Function:
 - Reads `GEMINI_API_KEY`.
 - Uses `GEMINI_ULTRASOUND_MODEL`, `GEMINI_MODEL`, or a default model.
 - Requests JSON-only structured findings.
-- Returns a fallback clinician-review response if no Gemini key is configured.
+- Returns HTTP 503 with an unavailable-provider response if no Gemini key is configured.
+
+The active `UltrasoundApp._runAnalysis` uses `UltrasoundEdgeService`, not this cloud call. No Ultrasound Hugging Face Space is configured. Public `kmunzwa` and `dawahealth` Space listings checked on 14 November 2026 contained no Ultrasound Space; private or differently owned deployments remain unverified. No Ultrasound routing was changed.
 
 ## Result Interpretation
 
@@ -89,3 +91,12 @@ Ultrasound maps AI outputs into:
 - Prompt and response parsing should be versioned.
 - Online model calls should ideally go through an Edge Function for secret management, audit, and consistent error handling.
 - The app should record model name/version with every AI interpretation.
+
+## Anemia active online fallback
+
+See [Anemia online fallback](anemia-online-fallback.md). The verified public Space
+is [kmunzwa/anemia_screening](https://huggingface.co/spaces/kmunzwa/anemia_screening),
+using `dawahealth/anemia_screeniing`. Its public API advertises
+`/predict_anaemia` and returns Gradio LabelData with the four class probabilities.
+The Flutter service completed one synthetic-image live call on 14 November 2026.
+This confirms transport and parsing, not clinical accuracy.

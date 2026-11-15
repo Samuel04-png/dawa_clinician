@@ -1,6 +1,5 @@
 import 'package:clinician/application/cacx/cacx_widget.dart';
 import 'package:clinician/application/ct_scan/ct_scan_module.dart';
-import 'package:clinician/application/hemonix/hemonix_module.dart';
 import 'package:clinician/backend/supabase/supabase_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,37 +17,30 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets('Cervical Cancer renders full desktop dashboard with sidebar',
-      (tester) async {
+  testWidgets('Cervical Cancer renders full desktop dashboard', (tester) async {
     await _pumpQuickAccess(
       tester,
-      const CaCxApp(),
+      const CaCxApp(demonstrationMode: true),
       size: const Size(1200, 900),
     );
 
-    expect(find.text('Cervical Cancer Dashboard'), findsOneWidget);
-    expect(find.textContaining('Welcome, Clinician'), findsOneWidget);
-    expect(find.text('Dawa CaCx'), findsOneWidget);
-    expect(find.text('Add Screening Record'), findsOneWidget);
-    expect(find.text('View Patient Records'), findsOneWidget);
-    expect(find.text('View Screening Results'), findsOneWidget);
-    expect(find.text('Find Patient'), findsOneWidget);
+    expect(find.text('New Screening'), findsOneWidget);
+    expect(find.text('Patient Records'), findsWidgets);
+    expect(find.text('Screening History'), findsWidgets);
+    expect(find.text('Available patients'), findsOneWidget);
     expect(find.textContaining('Coming soon'), findsNothing);
   });
 
-  testWidgets('Cervical Cancer renders mobile dashboard with navbar',
-      (tester) async {
+  testWidgets('Cervical Cancer renders mobile dashboard', (tester) async {
     await _pumpQuickAccess(
       tester,
-      const CaCxApp(),
+      const CaCxApp(demonstrationMode: true),
       size: const Size(390, 820),
     );
 
-    expect(find.text('Cervical Cancer Dashboard'), findsOneWidget);
-    expect(find.text('Dawa CaCx'), findsOneWidget);
-    expect(find.text('Home'), findsWidgets);
-    expect(find.text('Patients'), findsOneWidget);
-    expect(find.text('History'), findsOneWidget);
+    expect(find.text('New Screening'), findsOneWidget);
+    expect(find.text('Patient Records'), findsWidgets);
+    expect(find.text('Screening History'), findsWidgets);
     expect(find.textContaining('Coming soon'), findsNothing);
   });
 
@@ -61,9 +53,8 @@ void main() {
         size: const Size(1180, 860),
       );
 
-      expect(find.text('${moduleCase.title} Dashboard'), findsOneWidget);
-      expect(find.textContaining('Welcome, Clinician'), findsOneWidget);
-      expect(find.byKey(ValueKey('${moduleCase.key}-sidebar')), findsOneWidget);
+      expect(find.text(moduleCase.primaryAction), findsOneWidget);
+      expect(find.text('Overview'), findsOneWidget);
       for (final action in moduleCase.actions) {
         expect(find.text(action), findsAtLeastNWidgets(1));
       }
@@ -78,10 +69,8 @@ void main() {
         size: const Size(390, 820),
       );
 
-      expect(find.text('${moduleCase.title} Dashboard'), findsOneWidget);
-      expect(find.text('Home'), findsOneWidget);
+      expect(find.text('Overview'), findsOneWidget);
       expect(find.text('Records'), findsOneWidget);
-      expect(find.text('Results'), findsOneWidget);
       expect(find.text('Search'), findsOneWidget);
       expect(find.textContaining('Coming soon'), findsNothing);
     });
@@ -108,87 +97,16 @@ void main() {
     });
   }
 
-  testWidgets('HemoNix results search matches patient and AI text',
-      (tester) async {
-    await _pumpQuickAccess(
-      tester,
-      const HemonixApp(),
-      size: const Size(1180, 860),
-    );
-
-    await tester.tap(find.text('Hb Results').first);
-    await tester.pump(const Duration(milliseconds: 100));
-    await tester.enterText(
-      find.byKey(const ValueKey('hemonix-results-search')),
-      'Grace',
-    );
-    await tester.pump(const Duration(milliseconds: 100));
-
-    expect(find.text('Grace Mwape'), findsOneWidget);
-    expect(find.text('Beatrice Zulu'), findsNothing);
-
-    await tester.enterText(
-      find.byKey(const ValueKey('hemonix-results-search')),
-      'confidence 90',
-    );
-    await tester.pump(const Duration(milliseconds: 100));
-
-    expect(find.text('Grace Mwape'), findsOneWidget);
-  });
-
-  testWidgets('HemoNix needs review filter narrows results', (tester) async {
-    await _pumpQuickAccess(
-      tester,
-      const HemonixApp(),
-      size: const Size(1180, 860),
-    );
-
-    await tester.tap(find.text('Hb Results').first);
-    await tester.pump(const Duration(milliseconds: 100));
-    await tester.tap(
-      find.byKey(
-        const ValueKey('hemonix-filter-needsReview'),
-      ),
-    );
-    await tester.pump(const Duration(milliseconds: 100));
-
-    expect(find.text('Grace Mwape'), findsOneWidget);
-    expect(find.text('Beatrice Zulu'), findsNothing);
-    expect(find.text('Mary Soko'), findsNothing);
-  });
-
-  testWidgets('HemoNix open patient navigates to the records tab',
-      (tester) async {
-    await _pumpQuickAccess(
-      tester,
-      const HemonixApp(),
-      size: const Size(1180, 860),
-    );
-
-    final openPatient = find.text('Open patient').first;
-    await tester.ensureVisible(openPatient);
-    await tester.pumpAndSettle();
-    await tester.tap(openPatient);
-    await tester.pumpAndSettle();
-
-    expect(
-      find.textContaining('Ready to add hb record for '),
-      findsOneWidget,
-    );
-    expect(find.text('Patient-linked hb record entries are ready for review.'),
-        findsNothing);
-  });
-
   testWidgets('Cervical Cancer results search and filter are usable',
       (tester) async {
     await _pumpQuickAccess(
       tester,
-      const CaCxApp(),
+      const CaCxApp(demonstrationMode: true),
       size: const Size(1200, 900),
     );
 
-    await tester.tap(find.text('View Screening Results'));
-    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(find.text('Screening History').first);
+    await tester.pump(const Duration(milliseconds: 200));
     expect(find.text('Screening Results'), findsOneWidget);
 
     await tester.enterText(
@@ -227,6 +145,7 @@ class _ModuleCase {
     required this.key,
     required this.title,
     required this.resultsLabel,
+    required this.primaryAction,
     required this.actions,
   });
 
@@ -234,32 +153,21 @@ class _ModuleCase {
   final String key;
   final String title;
   final String resultsLabel;
+  final String primaryAction;
   final List<String> actions;
 }
 
 const _moduleCases = [
   _ModuleCase(
-    widget: HemonixApp(),
-    key: 'hemonix',
-    title: 'HemoNix',
-    resultsLabel: 'Hb Results',
-    actions: [
-      'Add Hb Record',
-      'View Patient Records',
-      'View Hb Results',
-      'Search Results',
-    ],
-  ),
-  _ModuleCase(
     widget: CtScanApp(),
     key: 'ct-scan',
     title: 'CT Scan',
     resultsLabel: 'CT Results',
+    primaryAction: 'View sample records',
     actions: [
-      'Add CT Record',
-      'View Patient Records',
-      'View CT Results',
-      'Search Results',
+      'Records',
+      'CT Results',
+      'Search',
     ],
   ),
 ];

@@ -1,24 +1,22 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/backend/supabase/supabase_config.dart';
-import '/components/clinician_bottom_nav/clinician_bottom_nav_widget.dart';
 import '/components/dawa_design_system.dart';
-import '/components/small_side_nav/small_side_nav_widget.dart';
-import '/flutter_flow/flutter_flow_theme.dart';
+import '/components/clinical_workspace_components.dart';
+import 'package:flutter/services.dart';
+import '/components/navigation_design_system.dart';
+import '/components/clinical_navigation_shell.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/index.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'profile_model.dart';
 export 'profile_model.dart';
 
 class ProfileWidget extends StatefulWidget {
   const ProfileWidget({super.key});
-
   static String routeName = 'Profile';
   static String routePath = '/profile';
-
   @override
   State<ProfileWidget> createState() => _ProfileWidgetState();
 }
@@ -27,622 +25,455 @@ class _ProfileWidgetState extends State<ProfileWidget> {
   late ProfileModel _model;
   late final Future<bool> _adminFuture;
 
-  final scaffoldKey = GlobalKey<ScaffoldState>();
-
   @override
   void initState() {
     super.initState();
     _model = createModel(context, () => ProfileModel());
     _adminFuture = _isAdmin();
     FFAppState().selectedPage = 'Settings';
-
-    WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
   }
 
   @override
   void dispose() {
     _model.dispose();
-
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     context.watch<FFAppState>();
-
     final doctorRef = FFAppState().doctor;
-    if (doctorRef == null) {
-      return _buildMissingProfileState(context);
-    }
-
+    if (doctorRef == null) return _missingProfile(context);
     return StreamBuilder<DoctorRecord>(
       stream: DoctorRecord.getDocument(doctorRef),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return Scaffold(
-            backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
-            body: Center(
-              child: SizedBox(
-                width: 50.0,
-                height: 50.0,
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    FlutterFlowTheme.of(context).primary,
-                  ),
-                ),
-              ),
-            ),
+        if (snapshot.hasError ||
+            (snapshot.hasData && snapshot.data!.snapshotData.isEmpty)) {
+          return _profileNotice(
+            icon: Icons.cloud_off_outlined,
+            title: 'Unable to load your profile',
+            message: 'Check your connection and try again.',
+            actionLabel: 'Retry',
+            onAction: () => setState(() {}),
           );
         }
-
-        final profileDoctorRecord = snapshot.data!;
-
-        return GestureDetector(
-          onTap: () {
-            FocusScope.of(context).unfocus();
-            FocusManager.instance.primaryFocus?.unfocus();
-          },
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final showDesktopSidebar = constraints.maxWidth >= 768.0;
-
-              return Scaffold(
-                key: scaffoldKey,
-                backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
-                bottomNavigationBar: showDesktopSidebar
-                    ? null
-                    : const ClinicianBottomNavWidget(
-                        currentPage: 'Settings',
-                      ),
-                body: SafeArea(
-                  top: true,
-                  child: Row(
-                    children: [
-                      if (showDesktopSidebar) _buildDesktopSidebar(context),
-                      Expanded(
-                        child: _buildSettingsContent(
-                          context,
-                          profileDoctorRecord,
-                          showDesktopSidebar,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        );
+        return ClinicalNavigationShell(
+            child: snapshot.hasData
+                ? _content(context, snapshot.data!)
+                : const Center(
+                    child: CircularProgressIndicator(
+                        semanticsLabel: 'Loading clinician profile')));
       },
     );
   }
 
-  Widget _buildMissingProfileState(BuildContext context) {
-    return Scaffold(
-      backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
-      bottomNavigationBar: const ClinicianBottomNavWidget(
-        currentPage: 'Settings',
-      ),
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.cloud_off_rounded,
-                  color: DawaTokens.statusWarning,
-                  size: 44,
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  'Profile unavailable offline',
-                  style: DawaTextStyles.cardTitle.copyWith(fontSize: 18),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Log in online once so Dawa can cache your clinician profile for offline use.',
-                  textAlign: TextAlign.center,
-                  style: DawaTextStyles.secondary,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+  Widget _content(BuildContext context, DoctorRecord doctor) => LayoutBuilder(
+        builder: (context, constraints) {
+          final padding = constraints.maxWidth < 600 ? 16.0 : 24.0;
+          return SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(padding, 12, padding, 32),
+            child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                      maxWidth: DawaTokens.workspaceMaxWidth),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const ClinicalPageHeader(
+                            subtitle:
+                                'Manage your clinician account and access help for your workspace.'),
+                        const SizedBox(height: 12),
+                        LayoutBuilder(builder: (context, constraints) {
+                          final wide = constraints.maxWidth >= 700 &&
+                              MediaQuery.textScalerOf(context).scale(14) <= 21;
+                          final account = _profileSummary(context, doctor);
+                          final options = Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                FutureBuilder<bool>(
+                                    future: _adminFuture,
+                                    builder: (context, snapshot) => snapshot
+                                                .data ==
+                                            true
+                                        ? Padding(
+                                            padding: const EdgeInsets.only(
+                                                bottom: 16),
+                                            child: _panel(
+                                                'Workspace administration', [
+                                              _row(
+                                                  icon: Icons
+                                                      .price_change_outlined,
+                                                  label: 'Services & Pricing',
+                                                  description:
+                                                      'Manage services available in your workspace.',
+                                                  onTap: () => context.pushNamed(
+                                                      ClinicianServiceCatalogAdminWidget
+                                                          .routeName)),
+                                            ]))
+                                        : const SizedBox.shrink()),
+                                _panel('Help & legal', [
+                                  _row(
+                                      icon: Icons.help_outline_rounded,
+                                      label: 'Support',
+                                      description:
+                                          'Contact the Dawa support team.',
+                                      onTap: () => _support(context)),
+                                  _row(
+                                      icon: Icons.description_outlined,
+                                      label: 'Terms of Service',
+                                      description:
+                                          'Review the terms for authorized clinical use.',
+                                      onTap: () => _terms(context)),
+                                ]),
+                                const SizedBox(height: 16),
+                                DawaCard(
+                                    child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                      Text('Session',
+                                          style: DawaTextStyles.cardTitle),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                          'End this clinician session on this device.',
+                                          style: DawaTextStyles.secondary
+                                              .copyWith(
+                                                  color: DawaTokens
+                                                      .textSecondary)),
+                                      const SizedBox(height: 12),
+                                      OutlinedButton.icon(
+                                          style: OutlinedButton.styleFrom(
+                                              foregroundColor:
+                                                  NavigationTokens.brand,
+                                              side: const BorderSide(
+                                                  color:
+                                                      DawaTokens.borderStrong),
+                                              shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          10))),
+                                          onPressed: _confirmSignOut,
+                                          icon: const Icon(Icons.logout_rounded,
+                                              size: 18),
+                                          label: const Text('Sign out')),
+                                    ])),
+                              ]);
+                          return wide
+                              ? Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                      SizedBox(
+                                          width: (constraints.maxWidth * .35)
+                                              .clamp(280.0, 360.0)
+                                              .toDouble(),
+                                          child: account),
+                                      const SizedBox(width: 20),
+                                      Expanded(child: options),
+                                    ])
+                              : Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                      account,
+                                      const SizedBox(height: 16),
+                                      options
+                                    ]);
+                        }),
+                        const SizedBox(height: 24),
+                        Text('Dawa Clinician v1.0.0',
+                            style: DawaTextStyles.secondary.copyWith(
+                                color: DawaTokens.textMuted, fontSize: 12)),
+                      ]),
+                )),
+          );
+        },
+      );
+
+  Widget _profileSummary(BuildContext context, DoctorRecord doctor) {
+    final name =
+        doctor.name.trim().isEmpty ? currentUserDisplayName : doctor.name;
+    final role =
+        doctor.speciality.trim().isEmpty ? 'Clinician' : doctor.speciality;
+    return DawaCard(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Clinician account', style: DawaTextStyles.cardTitle),
+      const SizedBox(height: 20),
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _avatar(name),
+        const SizedBox(width: 12),
+        Expanded(
+            child: Text(name.isEmpty ? 'Clinician account' : name,
+                style: DawaTextStyles.pageTitle.copyWith(fontSize: 20))),
+      ]),
+      const SizedBox(height: 20),
+      _accountField('Specialty', role),
+      if (doctor.clinicName.trim().isNotEmpty)
+        _accountField('Clinic', doctor.clinicName),
+      if (currentUserEmail.isNotEmpty) _accountField('Email', currentUserEmail),
+      const SizedBox(height: 8),
+      FilledButton.icon(
+          style: FilledButton.styleFrom(
+              backgroundColor: NavigationTokens.brand,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(0, 42),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10))),
+          onPressed: () => context.pushNamed(EditProfileWidget.routeName),
+          icon: const Icon(Icons.edit_outlined, size: 18),
+          label: const Text('Edit profile')),
+    ]));
   }
 
-  Widget _buildDesktopSidebar(BuildContext context) {
-    return Container(
-      key: const ValueKey('settings-desktop-sidebar'),
-      width: 240.0,
-      decoration: BoxDecoration(
-        color: FlutterFlowTheme.of(context).secondaryBackground,
-        border: Border(
-          right: BorderSide(
-            color: FlutterFlowTheme.of(context).alternate,
-            width: 1.0,
-          ),
-        ),
-      ),
-      child: const SmallSideNavWidget(),
-    );
-  }
+  Widget _accountField(String label, String value) => Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label,
+              style: DawaTextStyles.secondary
+                  .copyWith(color: DawaTokens.textMuted)),
+          const SizedBox(height: 4),
+          SelectableText(value,
+              style:
+                  DawaTextStyles.body.copyWith(color: DawaTokens.textPrimary)),
+        ]),
+      );
 
-  Widget _buildSettingsContent(
-    BuildContext context,
-    DoctorRecord doctor,
-    bool showDesktopSidebar,
-  ) {
-    return SingleChildScrollView(
-      padding: EdgeInsetsDirectional.fromSTEB(
-        16.0,
-        showDesktopSidebar ? 24.0 : 16.0,
-        16.0,
-        showDesktopSidebar ? 32.0 : 96.0,
-      ),
-      child: Align(
-        alignment: AlignmentDirectional.topCenter,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: 680.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _settingsHeader(context),
-              SizedBox(height: 24.0),
-              _buildProfileCard(context, doctor),
-              SizedBox(height: 24.0),
-              _sectionHeader(context, 'Account'),
-              SizedBox(height: 8.0),
-              _settingsGroup(
-                context,
-                children: [
-                  _settingsRow(
-                    context: context,
-                    icon: Icons.account_circle_outlined,
-                    label: 'Edit Profile',
-                    iconKind: _SettingIconKind.profile,
-                    onTap: () async {
-                      context.pushNamed(
-                        EditProfileWidget.routeName,
-                        extra: <String, dynamic>{
-                          kTransitionInfoKey: TransitionInfo(
-                            hasTransition: true,
-                            transitionType: PageTransitionType.fade,
-                            duration: Duration(milliseconds: 0),
-                          ),
-                        },
-                      );
-                    },
-                  ),
-                  FutureBuilder<bool>(
-                    future: _adminFuture,
-                    builder: (context, snapshot) {
-                      if (snapshot.data != true) {
-                        return const SizedBox.shrink();
-                      }
-                      return _settingsRow(
-                        context: context,
-                        icon: Icons.price_change_outlined,
-                        label: 'Services & Pricing',
-                        iconKind: _SettingIconKind.profile,
-                        onTap: () async {
-                          context.pushNamed(
-                            ClinicianServiceCatalogAdminWidget.routeName,
-                            extra: <String, dynamic>{
-                              kTransitionInfoKey: TransitionInfo(
-                                hasTransition: true,
-                                transitionType: PageTransitionType.fade,
-                                duration: Duration(milliseconds: 0),
-                              ),
-                            },
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ],
-              ),
-              SizedBox(height: 20.0),
-              _sectionHeader(context, 'General'),
-              SizedBox(height: 8.0),
-              _settingsGroup(
-                context,
-                children: [
-                  _settingsRow(
-                    context: context,
-                    icon: Icons.help_outline_rounded,
-                    label: 'Support',
-                    iconKind: _SettingIconKind.support,
-                    onTap: () => _showSupportDialog(context),
-                  ),
-                  _settingsRow(
-                    context: context,
-                    icon: Icons.privacy_tip_rounded,
-                    label: 'Terms of Service',
-                    iconKind: _SettingIconKind.terms,
-                    onTap: () => _showTermsDialog(context),
-                  ),
-                ],
-              ),
-              SizedBox(height: 20.0),
-              _sectionHeader(context, 'Session'),
-              SizedBox(height: 8.0),
-              _settingsGroup(
-                context,
-                children: [
-                  _logoutRow(context),
-                ],
-              ),
-              Padding(
-                padding: EdgeInsetsDirectional.only(top: 24.0, bottom: 8.0),
-                child: Center(
-                  child: Text(
-                    'Dawa Clinician v1.0.0',
-                    style: DawaTextStyles.secondary.copyWith(
-                      color: DawaTokens.textMuted,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<bool> _isAdmin() async {
-    final result = await runSupabaseRequest(
-      () => supabaseClient.rpc('current_clinician_is_admin'),
-    );
-    return result == true;
-  }
-
-  Widget _settingsHeader(BuildContext context) {
-    return Row(
-      children: [
-        Material(
-          color: DawaTokens.surfaceTertiary,
-          shape: const CircleBorder(),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: _goHome,
-            child: SizedBox(
-              width: 36.0,
-              height: 36.0,
-              child: Icon(
-                Icons.arrow_back_rounded,
-                color: DawaTokens.textPrimary,
-                size: 20.0,
-              ),
-            ),
-          ),
-        ),
-        SizedBox(width: 12.0),
-        Text(
-          'Settings',
-          style: DawaTextStyles.pageTitle,
-        ),
-      ],
-    );
-  }
-
-  Widget _settingsGroup(
-    BuildContext context, {
-    required List<Widget> children,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: DawaTokens.surface,
-        borderRadius: BorderRadius.circular(DawaTokens.radiusLg),
-        border: Border.all(color: DawaTokens.border),
-        boxShadow: DawaTokens.shadowSm,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          for (var i = 0; i < children.length; i++) ...[
-            children[i],
-            if (i != children.length - 1)
-              const Divider(height: 1, color: DawaTokens.border),
-          ],
-        ],
-      ),
-    );
-  }
-
-  void _goHome() {
-    context.goNamed(
-      HomeWidget.routeName,
-      extra: <String, dynamic>{
-        kTransitionInfoKey: TransitionInfo(
-          hasTransition: true,
-          transitionType: PageTransitionType.fade,
-          duration: Duration(milliseconds: 0),
-        ),
-      },
-    );
-  }
-
-  Future<void> _showSupportDialog(BuildContext context) {
-    return showDialog(
-      context: context,
-      builder: (alertDialogContext) {
-        return AlertDialog(
-          title: Text('Contact support'),
-          content: Text(
-            'If you have a question or are experiencing a problem, please email developer@thestackone.com or call +260779406330 for assistance.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(alertDialogContext),
-              child: Text('Ok'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _showTermsDialog(BuildContext context) {
-    return showDialog(
-      context: context,
-      builder: (alertDialogContext) {
-        return AlertDialog(
-          title: const Text('Terms of Service'),
-          content: const Text(
-            'Dawa Clinician is intended for authorized clinical users. Use patient data only according to your facility policies, consent requirements, and applicable health privacy regulations.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(alertDialogContext),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildProfileCard(BuildContext context, DoctorRecord doctor) {
-    final initials = _initialsFor(doctor.name);
-    final role = doctor.speciality.isNotEmpty ? doctor.speciality : 'Clinician';
-
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(20.0),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            DawaTokens.brandPrimary,
-            DawaTokens.brandPrimaryLight,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16.0),
-        boxShadow: DawaTokens.shadowMd,
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 56.0,
-            height: 56.0,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: Colors.white.withOpacity(0.4),
-                width: 2.0,
-              ),
-            ),
-            alignment: AlignmentDirectional.center,
-            child: Text(
-              initials,
-              style: GoogleFonts.dmSans(
-                color: Colors.white,
-                fontSize: 22.0,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          SizedBox(width: 16.0),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  doctor.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.dmSans(
-                    color: Colors.white,
-                    fontSize: 18.0,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                SizedBox(height: 3.0),
-                Text(
-                  role,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.dmSans(
-                    color: Colors.white.withOpacity(0.82),
-                    fontSize: 13.0,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                if (doctor.clinicName.isNotEmpty) ...[
-                  SizedBox(height: 2.0),
-                  Text(
-                    doctor.clinicName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.dmSans(
-                      color: Colors.white.withOpacity(0.68),
-                      fontSize: 12.0,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _sectionHeader(BuildContext context, String label) {
-    return Text(
-      label.toUpperCase(),
-      style: GoogleFonts.dmSans(
-        color: DawaTokens.textMuted,
-        fontSize: 11.0,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 0.88,
-      ),
-    );
-  }
-
-  Widget _settingsRow({
-    required BuildContext context,
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    _SettingIconKind iconKind = _SettingIconKind.profile,
-    Color? color,
-  }) {
-    final rowColor = color ?? DawaTokens.textPrimary;
-    final spec = _settingIconSpec(iconKind, color);
-
-    return InkWell(
-      onTap: onTap,
+  Widget _avatar(String name) {
+    final initials = _initials(name);
+    return Semantics(
+      label: name.isEmpty ? 'Clinician avatar' : '$name avatar',
       child: Container(
-        constraints: BoxConstraints(minHeight: 62.0),
-        padding: EdgeInsetsDirectional.fromSTEB(16.0, 12.0, 14.0, 12.0),
-        child: Row(
-          children: [
-            Container(
-              width: 34.0,
-              height: 34.0,
-              decoration: BoxDecoration(
-                color: spec.$1,
-                borderRadius: BorderRadius.circular(8.0),
-              ),
-              child: Icon(
-                icon,
-                color: spec.$2,
-                size: 18.0,
-              ),
-            ),
-            SizedBox(width: 14.0),
-            Expanded(
-              child: Text(
-                label,
-                style: GoogleFonts.dmSans(
-                  color: rowColor,
-                  fontSize: 15.0,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            Icon(
-              Icons.chevron_right_rounded,
-              color: color ?? DawaTokens.textMuted,
-              size: 24.0,
-            ),
-          ],
+        width: 48,
+        height: 48,
+        alignment: Alignment.center,
+        decoration: const BoxDecoration(
+            color: NavigationTokens.selected, shape: BoxShape.circle),
+        child: currentUserPhoto.isEmpty
+            ? Text(initials,
+                style: DawaTextStyles.cardTitle
+                    .copyWith(color: NavigationTokens.brand))
+            : ClipOval(
+                child: Image.network(currentUserPhoto,
+                    width: 48,
+                    height: 48,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Text(initials,
+                        style: DawaTextStyles.cardTitle
+                            .copyWith(color: NavigationTokens.brand)))),
+      ),
+    );
+  }
+
+  Widget _panel(String title, List<Widget> children) => DawaCard(
+        padding: EdgeInsets.zero,
+        child: ClipRRect(
+            borderRadius: BorderRadius.circular(DawaTokens.radiusLg),
+            child: Material(
+              color: Colors.transparent,
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+                        child: Text(title, style: DawaTextStyles.cardTitle)),
+                    for (var i = 0; i < children.length; i++) ...[
+                      if (i > 0)
+                        const Divider(
+                            height: 1,
+                            indent: 20,
+                            endIndent: 20,
+                            color: DawaTokens.border),
+                      children[i],
+                    ],
+                  ]),
+            )),
+      );
+
+  Widget _row(
+      {required IconData icon,
+      required String label,
+      required String description,
+      required VoidCallback onTap}) {
+    return Semantics(
+      button: true,
+      child: InkWell(
+        onTap: onTap,
+        hoverColor: NavigationTokens.hover,
+        focusColor: NavigationTokens.selected,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 72),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Row(children: [
+              Icon(icon, size: 20, color: DawaTokens.textSecondary),
+              const SizedBox(width: 14),
+              Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text(label,
+                        style: DawaTextStyles.cardTitle
+                            .copyWith(color: DawaTokens.textPrimary)),
+                    const SizedBox(height: 2),
+                    Text(description,
+                        style: DawaTextStyles.secondary
+                            .copyWith(color: DawaTokens.textSecondary))
+                  ])),
+              Icon(Icons.chevron_right_rounded, color: DawaTokens.textMuted),
+            ]),
+          ),
         ),
       ),
     );
   }
 
-  (Color, Color) _settingIconSpec(_SettingIconKind kind, Color? overrideColor) {
-    if (overrideColor != null) {
-      return (DawaTokens.statusDangerBg, overrideColor);
-    }
+  Future<bool> _isAdmin() async =>
+      (await runSupabaseRequest(
+          () => supabaseClient.rpc('current_clinician_is_admin'))) ==
+      true;
 
-    return switch (kind) {
-      _SettingIconKind.profile => (
-          DawaTokens.statusInfoBg,
-          DawaTokens.statusInfo
+  Future<void> _support(BuildContext context) => showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: DawaTokens.surface,
+          surfaceTintColor: Colors.transparent,
+          title: Text('Contact support', style: DawaTextStyles.pageTitle),
+          content: SizedBox(
+              width: 480,
+              child: SingleChildScrollView(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text('Get help with Dawa Clinician.',
+                          style: DawaTextStyles.secondary),
+                      const SizedBox(height: 20),
+                      _contact('Email', 'developer@thestackone.com',
+                          'Copy support email'),
+                      const SizedBox(height: 16),
+                      _contact('Phone', '+260779406330',
+                          'Copy support phone number'),
+                    ]),
+              )),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Close'))
+          ],
         ),
-      _SettingIconKind.support => (
-          DawaTokens.statusSuccessBg,
-          DawaTokens.statusSuccessText
+      );
+
+  Widget _contact(String label, String value, String tooltip) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: DawaTextStyles.secondary
+                  .copyWith(color: DawaTokens.textMuted)),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: SelectableText(value, style: DawaTextStyles.body)),
+            IconButton(
+                tooltip: tooltip,
+                icon: const Icon(Icons.copy_outlined, size: 18),
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: value));
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(SnackBar(content: Text('$label copied')));
+                }),
+          ]),
+        ],
+      );
+
+  Future<void> _terms(BuildContext context) => showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: DawaTokens.surface,
+          surfaceTintColor: Colors.transparent,
+          title: Text('Terms of Service', style: DawaTextStyles.pageTitle),
+          content: const SizedBox(
+              width: 520,
+              child: SingleChildScrollView(
+                  child: Text(
+                      'Dawa Clinician is intended for authorized clinical users. Use patient data only according to your facility policies, consent requirements, and applicable health privacy regulations.'))),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Close'))
+          ],
         ),
-      _SettingIconKind.terms => (
-          DawaTokens.statusWarningBg,
-          DawaTokens.statusWarning
-        ),
-      _SettingIconKind.logout => (
-          DawaTokens.statusDangerBg,
-          DawaTokens.statusDanger
-        ),
-    };
+      );
+
+  Future<void> _confirmSignOut() async {
+    final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+              backgroundColor: DawaTokens.surface,
+              surfaceTintColor: Colors.transparent,
+              title: Text('Sign out of Dawa Clinician?',
+                  style: DawaTextStyles.pageTitle),
+              content: const SingleChildScrollView(
+                  child: Text(
+                      'End your clinician session on this device. You will need to sign in to continue.')),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Cancel')),
+                FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('Sign out')),
+              ],
+            ));
+    if (confirmed == true && mounted) await _signOut();
   }
 
-  Widget _logoutRow(BuildContext context) {
-    return _settingsRow(
-      context: context,
-      icon: Icons.logout,
-      label: 'Log Out',
-      iconKind: _SettingIconKind.logout,
-      color: DawaTokens.statusDanger,
-      onTap: () async {
-        GoRouter.of(context).prepareAuthEvent();
-        await authManager.signOut();
-        GoRouter.of(context).clearRedirectLocation();
+  Future<void> _signOut() async {
+    GoRouter.of(context).prepareAuthEvent();
+    await authManager.signOut();
+    GoRouter.of(context).clearRedirectLocation();
+    if (mounted) context.goNamedAuth(LoginWidget.routeName, mounted);
+  }
 
-        if (!context.mounted) {
-          return;
-        }
+  Widget _missingProfile(BuildContext context) => _profileNotice(
+        icon: Icons.person_outline_rounded,
+        title: 'Clinician profile unavailable',
+        message: 'Your clinician profile is not available for this session.',
+        actionLabel: 'Return Home',
+        onAction: () => context.goNamed(HomeWidget.routeName),
+      );
 
-        context.goNamedAuth(
-          LoginWidget.routeName,
-          context.mounted,
-          extra: <String, dynamic>{
-            kTransitionInfoKey: TransitionInfo(
-              hasTransition: true,
-              transitionType: PageTransitionType.fade,
-              duration: Duration(milliseconds: 0),
+  Widget _profileNotice(
+          {required IconData icon,
+          required String title,
+          required String message,
+          required String actionLabel,
+          required VoidCallback onAction}) =>
+      ClinicalNavigationShell(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: SizedBox(
+                  width: double.infinity,
+                  child: ClinicalEmptyState(
+                      icon: icon,
+                      title: title,
+                      message: message,
+                      actionLabel: actionLabel,
+                      onAction: onAction)),
             ),
-          },
-        );
-      },
-    );
-  }
+          ),
+        ),
+      );
 
-  String _initialsFor(String name) {
-    final parts = name
+  String _initials(String name) {
+    final words = name
         .trim()
         .split(RegExp(r'\s+'))
-        .where((part) => part.isNotEmpty)
+        .where((word) => word.isNotEmpty)
         .toList();
-    if (parts.isEmpty) {
-      return 'CL';
-    }
-    if (parts.length == 1) {
-      return parts.first.substring(0, 1).toUpperCase();
-    }
-    return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'
-        .toUpperCase();
-  }
-
-  List<BoxShadow> _cardShadow() {
-    return const [
-      BoxShadow(
-        blurRadius: 8.0,
-        color: Color(0x0F000000),
-        offset: Offset(0.0, 2.0),
-      ),
-    ];
+    if (words.isEmpty) return 'CL';
+    if (words.length == 1) return words.first.substring(0, 1).toUpperCase();
+    return '${words.first[0]}${words.last[0]}'.toUpperCase();
   }
 }
-
-enum _SettingIconKind { profile, support, terms, logout }

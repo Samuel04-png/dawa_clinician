@@ -1,4 +1,7 @@
+import '/components/navigation_design_system.dart';
 import '/backend/backend.dart';
+import '/components/responsive_form_row.dart';
+import '/components/missing_patient_context.dart';
 import '/components/appbar_nav/appbar_nav_widget.dart';
 import '/components/no_data_comp/no_data_comp_widget.dart';
 import '/components/shimmer_animation/shimmer_animation_widget.dart';
@@ -71,6 +74,9 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.momDetails == null || widget.encounterDetails == null) {
+      return const MissingPatientContext();
+    }
     context.watch<FFAppState>();
 
     return StreamBuilder<MotherRecord>(
@@ -105,7 +111,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
             key: scaffoldKey,
             backgroundColor: FlutterFlowTheme.of(context).secondaryBackground,
             drawer: Container(
-              width: 100.0,
+              width: NavigationTokens.expandedWidth,
               child: Drawer(
                 elevation: 16.0,
                 child: Container(
@@ -121,6 +127,8 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
               ),
             ),
             appBar: AppBar(
+              toolbarHeight: NavigationTokens.appBarHeight,
+              surfaceTintColor: Colors.transparent,
               backgroundColor: FlutterFlowTheme.of(context).secondaryBackground,
               automaticallyImplyLeading: false,
               title: wrapWithModel(
@@ -181,7 +189,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                   Padding(
                                     padding: EdgeInsetsDirectional.fromSTEB(
                                         16.0, 0.0, 16.0, 20.0),
-                                    child: Row(
+                                    child: ResponsiveFormRow(
                                       mainAxisSize: MainAxisSize.max,
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
@@ -853,7 +861,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                                   text: dateTimeFormat(
                                                                       "d/M/y",
                                                                       columnFirstEncounterRecord
-                                                                          .lnmp!),
+                                                                          .lnmp),
                                                                   style:
                                                                       TextStyle(
                                                                     color: FlutterFlowTheme.of(
@@ -930,7 +938,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                                   text: dateTimeFormat(
                                                                       "d/M/y",
                                                                       columnFirstEncounterRecord
-                                                                          .estimatedDueDate!),
+                                                                          .estimatedDueDate),
                                                                   style:
                                                                       TextStyle(
                                                                     color: FlutterFlowTheme.of(
@@ -1186,7 +1194,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
@@ -1376,7 +1384,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
@@ -1565,7 +1573,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
@@ -1863,7 +1871,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
@@ -2161,7 +2169,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
@@ -2503,7 +2511,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
@@ -2695,7 +2703,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
@@ -2885,7 +2893,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
@@ -3078,7 +3086,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
@@ -3271,7 +3279,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
@@ -3465,7 +3473,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
@@ -3659,7 +3667,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
@@ -3858,7 +3866,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
@@ -4051,7 +4059,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
@@ -4244,7 +4252,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
@@ -4440,7 +4448,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
@@ -4633,7 +4641,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
@@ -4822,7 +4830,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
@@ -5012,7 +5020,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
@@ -5242,7 +5250,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
@@ -5535,7 +5543,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
@@ -5834,7 +5842,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
@@ -6020,7 +6028,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
@@ -6318,7 +6326,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
@@ -6410,7 +6418,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         return dateTimeFormat(
                                                             "yMMMd",
                                                             containerEncounterRecord
-                                                                .nextVisit!);
+                                                                .nextVisit);
                                                       } else if (dateTimeFormat(
                                                               "yMMMd",
                                                               _model
@@ -6543,7 +6551,7 @@ class _EditEncounterWidgetState extends State<EditEncounterWidget> {
                                                         milliseconds: 1500),
                                                     triggerMode:
                                                         TooltipTriggerMode.tap,
-                                                    child: Row(
+                                                    child: ResponsiveFormRow(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [

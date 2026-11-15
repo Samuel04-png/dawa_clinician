@@ -1,5 +1,4 @@
 import '/backend/backend.dart';
-import '/components/appbar_nav/appbar_nav_widget.dart';
 import '/components/create_mother_button/create_mother_button_widget.dart';
 import '/components/small_side_nav/small_side_nav_widget.dart';
 import '/flutter_flow/flutter_flow_calendar.dart';
@@ -17,8 +16,6 @@ class HomeModel extends FlutterFlowModel<HomeWidget> {
   DateTimeRange? calendarSelectedDay;
   // Model for createMotherButton component.
   late CreateMotherButtonModel createMotherButtonModel;
-  // Model for AppbarNav component.
-  late AppbarNavModel appbarNavModel;
   // Model for SmallSideNav component.
   late SmallSideNavModel smallSideNavModel;
 
@@ -30,14 +27,12 @@ class HomeModel extends FlutterFlowModel<HomeWidget> {
     );
     createMotherButtonModel =
         createModel(context, () => CreateMotherButtonModel());
-    appbarNavModel = createModel(context, () => AppbarNavModel());
     smallSideNavModel = createModel(context, () => SmallSideNavModel());
   }
 
   @override
   void dispose() {
     createMotherButtonModel.dispose();
-    appbarNavModel.dispose();
     smallSideNavModel.dispose();
   }
 }

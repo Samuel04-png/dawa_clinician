@@ -262,6 +262,7 @@ class _ResetPasswordWidgetState extends State<ResetPasswordWidget> {
                                           .fontStyle,
                                     ),
                                     letterSpacing: 0.0,
+                                    color: Colors.white,
                                     fontWeight: FlutterFlowTheme.of(context)
                                         .titleSmall
                                         .fontWeight,

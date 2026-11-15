@@ -27,6 +27,7 @@ class ClinicalToolConfig {
     required this.actions,
     this.recordBadgeFor,
     this.followUpColorFor,
+    this.showAnalysis = true,
   });
 
   final String key;
@@ -40,6 +41,7 @@ class ClinicalToolConfig {
   final List<ClinicalToolAction> actions;
   final ClinicalToolBadge? Function(ClinicalToolRecord record)? recordBadgeFor;
   final Color Function(ClinicalToolRecord record)? followUpColorFor;
+  final bool showAnalysis;
 }
 
 class ClinicalToolRecord {

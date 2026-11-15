@@ -1,6 +1,8 @@
+import '/components/navigation_design_system.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/api_requests/api_calls.dart';
 import '/backend/backend.dart';
+import '/components/responsive_form_row.dart';
 import '/components/appbar_nav/appbar_nav_widget.dart';
 import '/components/dawa_design_system.dart';
 import '/components/small_side_nav/small_side_nav_widget.dart';
@@ -90,7 +92,7 @@ class _CreateMomWidgetState extends State<CreateMomWidget> {
         drawer: widget.embedded
             ? null
             : Container(
-                width: 280.0,
+                width: NavigationTokens.expandedWidth,
                 child: Drawer(
                   elevation: 16.0,
                   child: Container(
@@ -108,13 +110,15 @@ class _CreateMomWidgetState extends State<CreateMomWidget> {
         appBar: widget.embedded
             ? null
             : AppBar(
+                toolbarHeight: NavigationTokens.appBarHeight,
+                surfaceTintColor: Colors.transparent,
                 backgroundColor:
                     FlutterFlowTheme.of(context).secondaryBackground,
                 automaticallyImplyLeading: false,
                 leading: IconButton(
                   tooltip: 'Open navigation',
                   icon: Icon(
-                    Icons.menu_rounded,
+                    NavigationIcon.data(NavigationSymbol.menu, false),
                     color: FlutterFlowTheme.of(context).primary,
                   ),
                   onPressed: () => scaffoldKey.currentState?.openDrawer(),
@@ -133,9 +137,10 @@ class _CreateMomWidgetState extends State<CreateMomWidget> {
           top: !widget.embedded,
           child: Row(
             children: [
-              if (!widget.embedded && MediaQuery.sizeOf(context).width >= 768.0)
+              if (!widget.embedded &&
+                  MediaQuery.sizeOf(context).width >=
+                      NavigationTokens.desktopBreakpoint)
                 Container(
-                  width: 240.0,
                   decoration: BoxDecoration(
                     color: FlutterFlowTheme.of(context).secondaryBackground,
                     border: Border(
@@ -546,7 +551,7 @@ class _CreateMomWidgetState extends State<CreateMomWidget> {
                                             .textController2Validator
                                             .asValidator(context),
                                       ),
-                                      Row(
+                                      ResponsiveFormRow(
                                         mainAxisSize: MainAxisSize.max,
                                         children: [
                                           Expanded(
@@ -1024,7 +1029,7 @@ class _CreateMomWidgetState extends State<CreateMomWidget> {
                                           showDuration:
                                               Duration(milliseconds: 1500),
                                           triggerMode: TooltipTriggerMode.tap,
-                                          child: Row(
+                                          child: ResponsiveFormRow(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
                                               Text(
@@ -1089,7 +1094,7 @@ class _CreateMomWidgetState extends State<CreateMomWidget> {
                                         ),
                                         child: Padding(
                                           padding: EdgeInsets.all(20.0),
-                                          child: Row(
+                                          child: ResponsiveFormRow(
                                             mainAxisSize: MainAxisSize.max,
                                             children: [
                                               Expanded(
@@ -1438,7 +1443,7 @@ class _CreateMomWidgetState extends State<CreateMomWidget> {
                                           ),
                                         ),
                                       ),
-                                      Row(
+                                      ResponsiveFormRow(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           FFButtonWidget(
@@ -1649,7 +1654,6 @@ class _CreateMomWidgetState extends State<CreateMomWidget> {
                                             },
                                             text: 'Create Patient Record',
                                             options: FFButtonOptions(
-                                              width: double.infinity,
                                               height: 50.0,
                                               padding: EdgeInsetsDirectional
                                                   .fromSTEB(

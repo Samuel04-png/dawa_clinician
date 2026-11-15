@@ -1,11 +1,14 @@
+import '/components/navigation_design_system.dart';
+import '/components/clinical_navigation_shell.dart';
+import '/components/clinical_workspace_components.dart';
 import '/backend/backend.dart';
+import '/components/responsive_form_row.dart';
+import '/components/missing_patient_context.dart';
 import '/components/anc_component/anc_component_widget.dart';
-import '/components/appbar_nav/appbar_nav_widget.dart';
 import '/components/dawa_design_system.dart';
 import '/components/no_data_comp/no_data_comp_widget.dart';
 import '/components/parity_input_component/parity_input_component_widget.dart';
 import '/components/shimmer_animation/shimmer_animation_widget.dart';
-import '/components/small_side_nav/small_side_nav_widget.dart';
 import '/flutter_flow/flutter_flow_drop_down.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
@@ -81,184 +84,114 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
   }
 
   Widget _buildPatientHero(BuildContext context, MotherRecord patient) {
+    final ref = patient.motherId.trim().isEmpty
+        ? patient.reference.id
+        : patient.motherId;
+    final shortRef = ref.length > 18
+        ? '${ref.substring(0, 8)}…${ref.substring(ref.length - 4)}'
+        : ref;
     final age = patient.dateOfBirth == null
-        ? 'N/A'
-        : functions.calculateAge(patient.dateOfBirth!).toString();
-    final hasPregnancyData = patient.firstEncounterId != null;
-    final phone =
-        patient.phoneNumber.trim().isEmpty ? 'No phone' : patient.phoneNumber;
-    final address =
-        patient.address.trim().isEmpty ? 'No address' : patient.address;
-
-    return DawaCard(
-      padding: EdgeInsets.all(MediaQuery.sizeOf(context).width < 560 ? 16 : 22),
-      urgent: !hasPregnancyData,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 680;
-          final identity = Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        ? 'Not recorded'
+        : '${functions.calculateAge(patient.dateOfBirth!)} years';
+    return DawaCard(child: LayoutBuilder(builder: (context, constraints) {
+      final width = constraints.maxWidth < 600 ||
+              MediaQuery.textScalerOf(context).scale(14) > 21
+          ? constraints.maxWidth
+          : (constraints.maxWidth - 32) / 3;
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Wrap(
+            spacing: 16,
+            runSpacing: 12,
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Wrap(
-                spacing: 10,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text(
-                    patient.name.isNotEmpty ? patient.name : 'Unnamed patient',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: DawaTextStyles.pageTitle.copyWith(fontSize: 24),
-                  ),
-                  DawaStatusBadge(
-                    status: hasPregnancyData
-                        ? 'had_first_encounter'
-                        : 'missing_data',
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _patientHeroPill(
-                      Icons.badge_outlined,
-                      patient.motherId.isEmpty
-                          ? 'No patient ID'
-                          : patient.motherId),
-                  _patientHeroPill(Icons.cake_outlined, 'Age $age'),
-                  _patientHeroPill(Icons.phone_outlined, phone),
-                  _patientHeroPill(Icons.location_on_outlined, address),
-                ],
-              ),
-            ],
-          );
-
-          final metrics = Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _patientHeroMetric(
-                'DOB',
-                patient.dateOfBirth == null
-                    ? 'N/A'
-                    : dateTimeFormat('d/M/y', patient.dateOfBirth!),
-              ),
-              _patientHeroMetric(
-                'Occupation',
-                patient.occupation.isEmpty ? 'N/A' : patient.occupation,
-              ),
-              _patientHeroMetric(
-                'Pregnancy data',
-                hasPregnancyData ? 'Recorded' : 'Missing',
-              ),
-            ],
-          );
-
-          if (compact) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+              Text('Full maternal record', style: DawaTextStyles.pageTitle),
+              TextButton.icon(
+                  onPressed: () {
+                    if (context.canPop())
+                      context.pop();
+                    else
+                      context.goNamed(MomsWidget.routeName);
+                  },
+                  icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                  label: const Text('Back to patient')),
+            ]),
+        const SizedBox(height: 16),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          DawaAvatarCircle(
+              name: patient.name,
+              size: 44,
+              moduleColor: DawaTokens.brandPrimary),
+          const SizedBox(width: 12),
+          Expanded(
+              child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    DawaAvatarCircle(
-                      name: patient.name,
-                      size: 54,
-                      moduleColor: DawaTokens.brandPrimary,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(child: identity),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                metrics,
-              ],
-            );
-          }
-
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              DawaAvatarCircle(
-                name: patient.name,
-                size: 64,
-                moduleColor: DawaTokens.brandPrimary,
-              ),
-              const SizedBox(width: 16),
-              Expanded(child: identity),
-              const SizedBox(width: 16),
-              SizedBox(width: 300, child: metrics),
-            ],
-          );
-        },
-      ),
-    );
+                Text(
+                    patient.name.trim().isEmpty
+                        ? 'Name not recorded'
+                        : patient.name,
+                    style: DawaTextStyles.cardTitle.copyWith(fontSize: 18)),
+                Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
+                  Text('Ref $shortRef', style: DawaTextStyles.secondary),
+                  IconButton(
+                      tooltip: 'Copy full patient reference',
+                      icon: const Icon(Icons.copy_outlined, size: 16),
+                      onPressed: () =>
+                          Clipboard.setData(ClipboardData(text: ref))),
+                ]),
+              ])),
+        ]),
+        const SizedBox(height: 8),
+        ClinicalStatusChip(
+            label: patient.firstEncounterId == null
+                ? 'Pregnancy not recorded'
+                : 'Pregnancy recorded'),
+        const SizedBox(height: 16),
+        Wrap(spacing: 16, runSpacing: 16, children: [
+          _recordField('Age', age, width),
+          _recordField(
+              'Date of birth',
+              patient.dateOfBirth == null
+                  ? 'Not recorded'
+                  : dateTimeFormat('d MMM y', patient.dateOfBirth!),
+              width),
+          _recordField(
+              'Phone',
+              patient.phoneNumber.trim().isEmpty
+                  ? 'Not recorded'
+                  : patient.phoneNumber,
+              width),
+          _recordField(
+              'Location',
+              patient.address.trim().isEmpty ? 'Not recorded' : patient.address,
+              width),
+          _recordField(
+              'Occupation',
+              patient.occupation.trim().isEmpty
+                  ? 'Not recorded'
+                  : patient.occupation,
+              width),
+        ]),
+      ]);
+    }));
   }
 
-  Widget _patientHeroPill(IconData icon, String label) {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 260),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: DawaTokens.surfaceTertiary,
-        borderRadius: BorderRadius.circular(99),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon,
-              size: 14, color: FlutterFlowTheme.of(context).secondaryText),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: DawaTextStyles.secondary.copyWith(fontSize: 12),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _patientHeroMetric(String label, String value) {
-    return Container(
-      width: 140,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: DawaTokens.surfaceTertiary,
-        borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
-        border: Border.all(color: FlutterFlowTheme.of(context).alternate),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: DawaTextStyles.label.copyWith(
-              color: FlutterFlowTheme.of(context).secondaryText,
-              fontSize: 10,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: DawaTextStyles.cardTitle,
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _recordField(String label, String value, double width) => SizedBox(
+      width: width,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label,
+            style:
+                DawaTextStyles.secondary.copyWith(color: DawaTokens.textMuted)),
+        const SizedBox(height: 4),
+        SelectableText(value, style: DawaTextStyles.body),
+      ]));
 
   @override
   Widget build(BuildContext context) {
+    if (widget.momDetails == null) {
+      return const MissingPatientContext();
+    }
     context.watch<FFAppState>();
 
     return StreamBuilder<MotherRecord>(
@@ -299,65 +232,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
             FocusScope.of(context).unfocus();
             FocusManager.instance.primaryFocus?.unfocus();
           },
-          child: Scaffold(
-            key: scaffoldKey,
-            backgroundColor: FlutterFlowTheme.of(context).secondaryBackground,
-            drawer: Container(
-              width: 280.0,
-              child: Drawer(
-                elevation: 16.0,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: FlutterFlowTheme.of(context).secondaryBackground,
-                  ),
-                  child: wrapWithModel(
-                    model: _model.smallSideNavModel,
-                    updateCallback: () => safeSetState(() {}),
-                    child: SmallSideNavWidget(),
-                  ),
-                ),
-              ),
-            ),
-            appBar: AppBar(
-              backgroundColor: FlutterFlowTheme.of(context).secondaryBackground,
-              automaticallyImplyLeading: false,
-              leading: IconButton(
-                tooltip: Navigator.of(context).canPop()
-                    ? 'Back to patients'
-                    : 'Open navigation',
-                icon: Icon(
-                  Navigator.of(context).canPop()
-                      ? Icons.arrow_back_rounded
-                      : Icons.menu_rounded,
-                  color: FlutterFlowTheme.of(context).primary,
-                ),
-                onPressed: () {
-                  if (Navigator.of(context).canPop()) {
-                    Navigator.of(context).pop();
-                  } else {
-                    scaffoldKey.currentState?.openDrawer();
-                  }
-                },
-              ),
-              title: wrapWithModel(
-                model: _model.appbarNavModel,
-                updateCallback: () => safeSetState(() {}),
-                child: AppbarNavWidget(),
-              ),
-              actions: [
-                IconButton(
-                  tooltip: 'Patients',
-                  icon: Icon(
-                    Icons.people_alt_rounded,
-                    color: FlutterFlowTheme.of(context).primary,
-                  ),
-                  onPressed: () => context.goNamed(MomsWidget.routeName),
-                ),
-              ],
-              centerTitle: false,
-              elevation: 0.0,
-            ),
-            body: SafeArea(
+          child: ClinicalNavigationShell(
+            child: SafeArea(
               top: true,
               child: LayoutBuilder(
                 builder: (context, constraints) {
@@ -382,7 +258,6 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                             children: [
                               _buildPatientHero(
                                   context, momDetailsMotherRecord),
-                              SizedBox(height: 16.0),
                               Container(
                                 width: double.infinity,
                                 decoration: BoxDecoration(
@@ -406,499 +281,16 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                             CrossAxisAlignment.start,
                                         children: [
                                           Padding(
-                                            padding:
-                                                EdgeInsetsDirectional.fromSTEB(
-                                                    16.0, 0.0, 16.0, 20.0),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.max,
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Container(
-                                                  width: 100.0,
-                                                  height: 100.0,
-                                                  clipBehavior: Clip.antiAlias,
-                                                  decoration: BoxDecoration(
-                                                    shape: BoxShape.circle,
-                                                  ),
-                                                  child: Image.asset(
-                                                    'assets/images/Frame_41.png',
-                                                    fit: BoxFit.cover,
-                                                  ),
-                                                ),
-                                                SizedBox(width: 12.0),
-                                                // <-- Make the text column take remaining space so the Row won't overflow
-                                                Expanded(
-                                                  child: Column(
-                                                    mainAxisSize:
-                                                        MainAxisSize.max,
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
-                                                    children: [
-                                                      // limit name height so very long names won't blow out layout
-                                                      Text(
-                                                        momDetailsMotherRecord
-                                                            .name,
-                                                        style:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .headlineSmall
-                                                                .override(
-                                                                  font: GoogleFonts
-                                                                      .dmSans(
-                                                                    fontWeight: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .headlineSmall
-                                                                        .fontWeight,
-                                                                    fontStyle: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .headlineSmall
-                                                                        .fontStyle,
-                                                                  ),
-                                                                  letterSpacing:
-                                                                      0.0,
-                                                                ),
-                                                        maxLines: 2,
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
-                                                      ),
-                                                      Wrap(
-                                                        spacing: 20.0,
-                                                        runSpacing: 10.0,
-                                                        alignment:
-                                                            WrapAlignment.start,
-                                                        crossAxisAlignment:
-                                                            WrapCrossAlignment
-                                                                .start,
-                                                        direction:
-                                                            Axis.horizontal,
-                                                        runAlignment:
-                                                            WrapAlignment.start,
-                                                        verticalDirection:
-                                                            VerticalDirection
-                                                                .down,
-                                                        clipBehavior: Clip.none,
-                                                        children: [
-                                                          Column(
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .max,
-                                                            crossAxisAlignment:
-                                                                CrossAxisAlignment
-                                                                    .start,
-                                                            children: [
-                                                              RichText(
-                                                                textScaler: MediaQuery.of(
-                                                                        context)
-                                                                    .textScaler,
-                                                                text: TextSpan(
-                                                                  children: [
-                                                                    TextSpan(
-                                                                      text:
-                                                                          'Date of Birth: ',
-                                                                      style: FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .bodyMedium
-                                                                          .override(
-                                                                            font:
-                                                                                GoogleFonts.dmSans(
-                                                                              fontWeight: FontWeight.w600,
-                                                                              fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                            ),
-                                                                            color:
-                                                                                FlutterFlowTheme.of(context).secondaryText,
-                                                                            letterSpacing:
-                                                                                0.0,
-                                                                          ),
-                                                                    ),
-                                                                    TextSpan(
-                                                                      text: momDetailsMotherRecord.dateOfBirth ==
-                                                                              null
-                                                                          ? 'N/A'
-                                                                          : dateTimeFormat(
-                                                                              "d/M/y",
-                                                                              momDetailsMotherRecord.dateOfBirth!),
-                                                                      style:
-                                                                          TextStyle(
-                                                                        color: FlutterFlowTheme.of(context)
-                                                                            .primaryText,
-                                                                        fontWeight:
-                                                                            FontWeight.bold,
-                                                                      ),
-                                                                    )
-                                                                  ],
-                                                                  style: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .bodyMedium,
-                                                                ),
-                                                              ),
-                                                              // Age
-                                                              RichText(
-                                                                textScaler: MediaQuery.of(
-                                                                        context)
-                                                                    .textScaler,
-                                                                text: TextSpan(
-                                                                  children: [
-                                                                    TextSpan(
-                                                                      text:
-                                                                          'Age: ',
-                                                                      style: FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .bodyMedium
-                                                                          .override(
-                                                                            font:
-                                                                                GoogleFonts.dmSans(
-                                                                              fontWeight: FontWeight.w600,
-                                                                              fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                            ),
-                                                                            color:
-                                                                                FlutterFlowTheme.of(context).secondaryText,
-                                                                            letterSpacing:
-                                                                                0.0,
-                                                                          ),
-                                                                    ),
-                                                                    TextSpan(
-                                                                      text: momDetailsMotherRecord.dateOfBirth ==
-                                                                              null
-                                                                          ? 'N/A'
-                                                                          : functions
-                                                                              .calculateAge(momDetailsMotherRecord.dateOfBirth!)
-                                                                              .toString(),
-                                                                      style:
-                                                                          TextStyle(
-                                                                        color: FlutterFlowTheme.of(context)
-                                                                            .primaryText,
-                                                                        fontWeight:
-                                                                            FontWeight.bold,
-                                                                      ),
-                                                                    )
-                                                                  ],
-                                                                  style: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .bodyMedium,
-                                                                ),
-                                                              ),
-                                                              // Occupation
-                                                              RichText(
-                                                                textScaler: MediaQuery.of(
-                                                                        context)
-                                                                    .textScaler,
-                                                                text: TextSpan(
-                                                                  children: [
-                                                                    TextSpan(
-                                                                      text:
-                                                                          'Occupation: ',
-                                                                      style: FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .bodyMedium
-                                                                          .override(
-                                                                            font:
-                                                                                GoogleFonts.dmSans(
-                                                                              fontWeight: FontWeight.w600,
-                                                                              fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                            ),
-                                                                            color:
-                                                                                FlutterFlowTheme.of(context).secondaryText,
-                                                                            letterSpacing:
-                                                                                0.0,
-                                                                          ),
-                                                                    ),
-                                                                    TextSpan(
-                                                                      text: momDetailsMotherRecord
-                                                                          .occupation,
-                                                                      style:
-                                                                          TextStyle(
-                                                                        color: FlutterFlowTheme.of(context)
-                                                                            .primaryText,
-                                                                        fontWeight:
-                                                                            FontWeight.bold,
-                                                                      ),
-                                                                    )
-                                                                  ],
-                                                                  style: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .bodyMedium,
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                          Column(
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .max,
-                                                            crossAxisAlignment:
-                                                                CrossAxisAlignment
-                                                                    .start,
-                                                            children: [
-                                                              RichText(
-                                                                textScaler: MediaQuery.of(
-                                                                        context)
-                                                                    .textScaler,
-                                                                text: TextSpan(
-                                                                  children: [
-                                                                    TextSpan(
-                                                                      text:
-                                                                          'Phone Number: ',
-                                                                      style: FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .bodyMedium
-                                                                          .override(
-                                                                            font:
-                                                                                GoogleFonts.dmSans(
-                                                                              fontWeight: FontWeight.w600,
-                                                                              fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                            ),
-                                                                            color:
-                                                                                FlutterFlowTheme.of(context).secondaryText,
-                                                                            letterSpacing:
-                                                                                0.0,
-                                                                          ),
-                                                                    ),
-                                                                    TextSpan(
-                                                                      text: momDetailsMotherRecord
-                                                                          .phoneNumber,
-                                                                      style:
-                                                                          TextStyle(
-                                                                        color: FlutterFlowTheme.of(context)
-                                                                            .primaryText,
-                                                                        fontWeight:
-                                                                            FontWeight.bold,
-                                                                      ),
-                                                                    )
-                                                                  ],
-                                                                  style: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .bodyMedium,
-                                                                ),
-                                                              ),
-                                                              RichText(
-                                                                textScaler: MediaQuery.of(
-                                                                        context)
-                                                                    .textScaler,
-                                                                text: TextSpan(
-                                                                  children: [
-                                                                    TextSpan(
-                                                                      text:
-                                                                          'Address: ',
-                                                                      style: FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .bodyMedium
-                                                                          .override(
-                                                                            font:
-                                                                                GoogleFonts.dmSans(
-                                                                              fontWeight: FontWeight.w600,
-                                                                              fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                            ),
-                                                                            color:
-                                                                                FlutterFlowTheme.of(context).secondaryText,
-                                                                            letterSpacing:
-                                                                                0.0,
-                                                                          ),
-                                                                    ),
-                                                                    TextSpan(
-                                                                      text: momDetailsMotherRecord
-                                                                          .address,
-                                                                      style:
-                                                                          TextStyle(
-                                                                        color: FlutterFlowTheme.of(context)
-                                                                            .primaryText,
-                                                                        fontWeight:
-                                                                            FontWeight.bold,
-                                                                      ),
-                                                                    )
-                                                                  ],
-                                                                  style: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .bodyMedium,
-                                                                ),
-                                                              ),
-                                                              if (momDetailsMotherRecord
-                                                                      .firstEncounterId ==
-                                                                  null)
-                                                                Container(
-                                                                  decoration:
-                                                                      BoxDecoration(
-                                                                    color: Color(
-                                                                        0xFFFF3A1C),
-                                                                    borderRadius:
-                                                                        BorderRadius.circular(
-                                                                            16.0),
-                                                                  ),
-                                                                  child:
-                                                                      Padding(
-                                                                    padding:
-                                                                        EdgeInsets.all(
-                                                                            6.0),
-                                                                    child: Text(
-                                                                      'Missing Data',
-                                                                      style: FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .bodyMedium
-                                                                          .override(
-                                                                            font:
-                                                                                GoogleFonts.dmSans(
-                                                                              fontWeight: FontWeight.w500,
-                                                                              fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                            ),
-                                                                            color:
-                                                                                FlutterFlowTheme.of(context).secondaryBackground,
-                                                                            letterSpacing:
-                                                                                0.0,
-                                                                          ),
-                                                                    ),
-                                                                  ),
-                                                                ),
-                                                            ],
-                                                          ),
-                                                          if (momDetailsMotherRecord
-                                                                  .firstEncounterId !=
-                                                              null)
-                                                            StreamBuilder<
-                                                                FirstEncounterRecord>(
-                                                              stream: FirstEncounterRecord
-                                                                  .getDocument(
-                                                                      momDetailsMotherRecord
-                                                                          .firstEncounterId!),
-                                                              builder: (context,
-                                                                  snapshot) {
-                                                                if (!snapshot
-                                                                        .hasData ||
-                                                                    snapshot.data ==
-                                                                        null) {
-                                                                  return ShimmerAnimationWidget();
-                                                                }
-
-                                                                final columnFirstEncounterRecord =
-                                                                    snapshot
-                                                                        .data!;
-
-                                                                return Column(
-                                                                  mainAxisSize:
-                                                                      MainAxisSize
-                                                                          .max,
-                                                                  crossAxisAlignment:
-                                                                      CrossAxisAlignment
-                                                                          .start,
-                                                                  children: [
-                                                                    RichText(
-                                                                      textScaler:
-                                                                          MediaQuery.of(context)
-                                                                              .textScaler,
-                                                                      text:
-                                                                          TextSpan(
-                                                                        children: [
-                                                                          TextSpan(
-                                                                            text:
-                                                                                'Parity: ',
-                                                                            style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                                                                  font: GoogleFonts.dmSans(
-                                                                                    fontWeight: FontWeight.w600,
-                                                                                    fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                                  ),
-                                                                                  color: FlutterFlowTheme.of(context).secondaryText,
-                                                                                  letterSpacing: 0.0,
-                                                                                ),
-                                                                          ),
-                                                                          TextSpan(
-                                                                            text:
-                                                                                columnFirstEncounterRecord.parity.toString(),
-                                                                            style:
-                                                                                TextStyle(
-                                                                              color: FlutterFlowTheme.of(context).primaryText,
-                                                                              fontWeight: FontWeight.bold,
-                                                                            ),
-                                                                          )
-                                                                        ],
-                                                                        style: FlutterFlowTheme.of(context)
-                                                                            .bodyMedium,
-                                                                      ),
-                                                                    ),
-                                                                    RichText(
-                                                                      textScaler:
-                                                                          MediaQuery.of(context)
-                                                                              .textScaler,
-                                                                      text:
-                                                                          TextSpan(
-                                                                        children: [
-                                                                          TextSpan(
-                                                                            text:
-                                                                                'LMNP: ',
-                                                                            style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                                                                  font: GoogleFonts.dmSans(
-                                                                                    fontWeight: FontWeight.w600,
-                                                                                    fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                                  ),
-                                                                                  color: FlutterFlowTheme.of(context).secondaryText,
-                                                                                  letterSpacing: 0.0,
-                                                                                ),
-                                                                          ),
-                                                                          TextSpan(
-                                                                            text: columnFirstEncounterRecord.lnmp == null
-                                                                                ? 'N/A'
-                                                                                : columnFirstEncounterRecord.lnmp != null
-                                                                                    ? dateTimeFormat("d/M/y", columnFirstEncounterRecord.lnmp!)
-                                                                                    : 'N/A',
-                                                                            style:
-                                                                                TextStyle(
-                                                                              color: FlutterFlowTheme.of(context).primaryText,
-                                                                              fontWeight: FontWeight.bold,
-                                                                            ),
-                                                                          )
-                                                                        ],
-                                                                        style: FlutterFlowTheme.of(context)
-                                                                            .bodyMedium,
-                                                                      ),
-                                                                    ),
-                                                                    RichText(
-                                                                      textScaler:
-                                                                          MediaQuery.of(context)
-                                                                              .textScaler,
-                                                                      text:
-                                                                          TextSpan(
-                                                                        children: [
-                                                                          TextSpan(
-                                                                            text:
-                                                                                'Estimated Date of Delivery: ',
-                                                                            style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                                                                  font: GoogleFonts.dmSans(
-                                                                                    fontWeight: FontWeight.w600,
-                                                                                    fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                                  ),
-                                                                                  color: FlutterFlowTheme.of(context).secondaryText,
-                                                                                  letterSpacing: 0.0,
-                                                                                ),
-                                                                          ),
-                                                                          TextSpan(
-                                                                            text: columnFirstEncounterRecord.estimatedDueDate == null
-                                                                                ? 'N/A'
-                                                                                : dateTimeFormat(
-                                                                                    "d/M/y",
-                                                                                    columnFirstEncounterRecord.estimatedDueDate!,
-                                                                                  ),
-                                                                            style:
-                                                                                TextStyle(
-                                                                              color: FlutterFlowTheme.of(context).primaryText,
-                                                                              fontWeight: FontWeight.bold,
-                                                                            ),
-                                                                          )
-                                                                        ],
-                                                                        style: FlutterFlowTheme.of(context)
-                                                                            .bodyMedium,
-                                                                      ),
-                                                                    ),
-                                                                  ],
-                                                                );
-                                                              },
-                                                            ),
-                                                        ],
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
+                                              padding:
+                                                  const EdgeInsets.fromLTRB(
+                                                      20, 16, 20, 12),
+                                              child: Align(
+                                                  alignment:
+                                                      Alignment.centerLeft,
+                                                  child: Text(
+                                                      'Pregnancy and clinical record',
+                                                      style: DawaTextStyles
+                                                          .cardTitle))),
                                           Divider(
                                             thickness: 1.0,
                                             color: FlutterFlowTheme.of(context)
@@ -1037,7 +429,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                               triggerMode:
                                                                   TooltipTriggerMode
                                                                       .tap,
-                                                              child: Row(
+                                                              child:
+                                                                  ResponsiveFormRow(
                                                                 mainAxisSize:
                                                                     MainAxisSize
                                                                         .min,
@@ -1244,7 +637,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                                     triggerMode:
                                                                         TooltipTriggerMode
                                                                             .tap,
-                                                                    child: Row(
+                                                                    child:
+                                                                        ResponsiveFormRow(
                                                                       mainAxisSize:
                                                                           MainAxisSize
                                                                               .min,
@@ -1473,7 +867,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                                     triggerMode:
                                                                         TooltipTriggerMode
                                                                             .tap,
-                                                                    child: Row(
+                                                                    child:
+                                                                        ResponsiveFormRow(
                                                                       mainAxisSize:
                                                                           MainAxisSize
                                                                               .min,
@@ -1652,7 +1047,7 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                     SingleChildScrollView(
                                                       scrollDirection:
                                                           Axis.horizontal,
-                                                      child: Row(
+                                                      child: ResponsiveFormRow(
                                                         mainAxisSize:
                                                             MainAxisSize.max,
                                                         crossAxisAlignment:
@@ -1718,7 +1113,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                             triggerMode:
                                                                 TooltipTriggerMode
                                                                     .tap,
-                                                            child: Row(
+                                                            child:
+                                                                ResponsiveFormRow(
                                                               mainAxisSize:
                                                                   MainAxisSize
                                                                       .min,
@@ -2334,7 +1730,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                               triggerMode:
                                                                   TooltipTriggerMode
                                                                       .tap,
-                                                              child: Row(
+                                                              child:
+                                                                  ResponsiveFormRow(
                                                                 mainAxisSize:
                                                                     MainAxisSize
                                                                         .min,
@@ -2621,7 +2018,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                               triggerMode:
                                                                   TooltipTriggerMode
                                                                       .tap,
-                                                              child: Row(
+                                                              child:
+                                                                  ResponsiveFormRow(
                                                                 mainAxisSize:
                                                                     MainAxisSize
                                                                         .min,
@@ -2813,7 +2211,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                               triggerMode:
                                                                   TooltipTriggerMode
                                                                       .tap,
-                                                              child: Row(
+                                                              child:
+                                                                  ResponsiveFormRow(
                                                                 mainAxisSize:
                                                                     MainAxisSize
                                                                         .min,
@@ -3006,7 +2405,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                               triggerMode:
                                                                   TooltipTriggerMode
                                                                       .tap,
-                                                              child: Row(
+                                                              child:
+                                                                  ResponsiveFormRow(
                                                                 mainAxisSize:
                                                                     MainAxisSize
                                                                         .min,
@@ -3200,7 +2600,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                               triggerMode:
                                                                   TooltipTriggerMode
                                                                       .tap,
-                                                              child: Row(
+                                                              child:
+                                                                  ResponsiveFormRow(
                                                                 mainAxisSize:
                                                                     MainAxisSize
                                                                         .min,
@@ -3426,7 +2827,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                               triggerMode:
                                                                   TooltipTriggerMode
                                                                       .tap,
-                                                              child: Row(
+                                                              child:
+                                                                  ResponsiveFormRow(
                                                                 mainAxisSize:
                                                                     MainAxisSize
                                                                         .min,
@@ -3717,7 +3119,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                               triggerMode:
                                                                   TooltipTriggerMode
                                                                       .tap,
-                                                              child: Row(
+                                                              child:
+                                                                  ResponsiveFormRow(
                                                                 mainAxisSize:
                                                                     MainAxisSize
                                                                         .min,
@@ -3912,7 +3315,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                                 triggerMode:
                                                                     TooltipTriggerMode
                                                                         .tap,
-                                                                child: Row(
+                                                                child:
+                                                                    ResponsiveFormRow(
                                                                   mainAxisSize:
                                                                       MainAxisSize
                                                                           .min,
@@ -4191,7 +3595,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                               triggerMode:
                                                                   TooltipTriggerMode
                                                                       .tap,
-                                                              child: Row(
+                                                              child:
+                                                                  ResponsiveFormRow(
                                                                 mainAxisSize:
                                                                     MainAxisSize
                                                                         .min,
@@ -4531,7 +3936,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                               triggerMode:
                                                                   TooltipTriggerMode
                                                                       .tap,
-                                                              child: Row(
+                                                              child:
+                                                                  ResponsiveFormRow(
                                                                 mainAxisSize:
                                                                     MainAxisSize
                                                                         .min,
@@ -4920,7 +4326,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                               triggerMode:
                                                                   TooltipTriggerMode
                                                                       .tap,
-                                                              child: Row(
+                                                              child:
+                                                                  ResponsiveFormRow(
                                                                 mainAxisSize:
                                                                     MainAxisSize
                                                                         .min,
@@ -5113,7 +4520,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                               triggerMode:
                                                                   TooltipTriggerMode
                                                                       .tap,
-                                                              child: Row(
+                                                              child:
+                                                                  ResponsiveFormRow(
                                                                 mainAxisSize:
                                                                     MainAxisSize
                                                                         .min,
@@ -5305,7 +4713,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                               triggerMode:
                                                                   TooltipTriggerMode
                                                                       .tap,
-                                                              child: Row(
+                                                              child:
+                                                                  ResponsiveFormRow(
                                                                 mainAxisSize:
                                                                     MainAxisSize
                                                                         .min,
@@ -5497,7 +4906,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                               triggerMode:
                                                                   TooltipTriggerMode
                                                                       .tap,
-                                                              child: Row(
+                                                              child:
+                                                                  ResponsiveFormRow(
                                                                 mainAxisSize:
                                                                     MainAxisSize
                                                                         .min,
@@ -5692,7 +5102,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                               triggerMode:
                                                                   TooltipTriggerMode
                                                                       .tap,
-                                                              child: Row(
+                                                              child:
+                                                                  ResponsiveFormRow(
                                                                 mainAxisSize:
                                                                     MainAxisSize
                                                                         .min,
@@ -5889,7 +5300,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                               triggerMode:
                                                                   TooltipTriggerMode
                                                                       .tap,
-                                                              child: Row(
+                                                              child:
+                                                                  ResponsiveFormRow(
                                                                 mainAxisSize:
                                                                     MainAxisSize
                                                                         .min,
@@ -6143,7 +5555,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                               triggerMode:
                                                                   TooltipTriggerMode
                                                                       .tap,
-                                                              child: Row(
+                                                              child:
+                                                                  ResponsiveFormRow(
                                                                 mainAxisSize:
                                                                     MainAxisSize
                                                                         .min,
@@ -6333,7 +5746,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                                     triggerMode:
                                                                         TooltipTriggerMode
                                                                             .tap,
-                                                                    child: Row(
+                                                                    child:
+                                                                        ResponsiveFormRow(
                                                                       mainAxisSize:
                                                                           MainAxisSize
                                                                               .min,
@@ -6667,7 +6081,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                               triggerMode:
                                                                   TooltipTriggerMode
                                                                       .tap,
-                                                              child: Row(
+                                                              child:
+                                                                  ResponsiveFormRow(
                                                                 mainAxisSize:
                                                                     MainAxisSize
                                                                         .min,
@@ -6861,7 +6276,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                               triggerMode:
                                                                   TooltipTriggerMode
                                                                       .tap,
-                                                              child: Row(
+                                                              child:
+                                                                  ResponsiveFormRow(
                                                                 mainAxisSize:
                                                                     MainAxisSize
                                                                         .min,
@@ -7053,7 +6469,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                               triggerMode:
                                                                   TooltipTriggerMode
                                                                       .tap,
-                                                              child: Row(
+                                                              child:
+                                                                  ResponsiveFormRow(
                                                                 mainAxisSize:
                                                                     MainAxisSize
                                                                         .min,
@@ -7245,7 +6662,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                               triggerMode:
                                                                   TooltipTriggerMode
                                                                       .tap,
-                                                              child: Row(
+                                                              child:
+                                                                  ResponsiveFormRow(
                                                                 mainAxisSize:
                                                                     MainAxisSize
                                                                         .min,
@@ -8130,109 +7548,24 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                       .makingFIrstEncounter ==
                                                   false))
                                             Padding(
-                                              padding: EdgeInsets.all(20.0),
-                                              child: Column(
-                                                mainAxisSize: MainAxisSize.max,
-                                                children: [
-                                                  Row(
-                                                    mainAxisSize:
-                                                        MainAxisSize.max,
-                                                    children: [
-                                                      Expanded(
-                                                        child: wrapWithModel(
-                                                          model: _model
-                                                              .noDataCompModel,
-                                                          updateCallback: () =>
-                                                              safeSetState(
-                                                                  () {}),
-                                                          child:
-                                                              NoDataCompWidget(
-                                                            message:
-                                                                'No Pregnancy Data Found',
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                  Padding(
-                                                    padding:
-                                                        EdgeInsetsDirectional
-                                                            .fromSTEB(0.0, 8.0,
-                                                                0.0, 0.0),
-                                                    child: FFButtonWidget(
-                                                      onPressed: () async {
-                                                        FFAppState()
-                                                                .makingFIrstEncounter =
-                                                            true;
-                                                        safeSetState(() {});
-                                                      },
-                                                      text:
-                                                          'Add Pregnancy Data',
-                                                      options: FFButtonOptions(
-                                                        height: 40.0,
-                                                        padding:
-                                                            EdgeInsetsDirectional
-                                                                .fromSTEB(
-                                                                    24.0,
-                                                                    0.0,
-                                                                    24.0,
-                                                                    0.0),
-                                                        iconPadding:
-                                                            EdgeInsetsDirectional
-                                                                .fromSTEB(
-                                                                    0.0,
-                                                                    0.0,
-                                                                    0.0,
-                                                                    0.0),
-                                                        color:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .primary,
-                                                        textStyle:
-                                                            FlutterFlowTheme.of(
-                                                                    context)
-                                                                .titleSmall
-                                                                .override(
-                                                                  font: GoogleFonts
-                                                                      .dmSans(
-                                                                    fontWeight: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .titleSmall
-                                                                        .fontWeight,
-                                                                    fontStyle: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .titleSmall
-                                                                        .fontStyle,
-                                                                  ),
-                                                                  color: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .secondaryBackground,
-                                                                  letterSpacing:
-                                                                      0.0,
-                                                                  fontWeight: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .titleSmall
-                                                                      .fontWeight,
-                                                                  fontStyle: FlutterFlowTheme.of(
-                                                                          context)
-                                                                      .titleSmall
-                                                                      .fontStyle,
-                                                                ),
-                                                        elevation: 0.0,
-                                                        borderSide: BorderSide(
-                                                          color: Colors
-                                                              .transparent,
-                                                          width: 1.0,
-                                                        ),
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(8.0),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
+                                                padding:
+                                                    const EdgeInsets.all(20),
+                                                child: ClinicalEmptyState(
+                                                  surface: false,
+                                                  icon:
+                                                      Icons.assignment_outlined,
+                                                  title: 'No pregnancy record',
+                                                  message:
+                                                      'Add the pregnancy history to complete this maternal record.',
+                                                  actionLabel:
+                                                      'Add Pregnancy Data',
+                                                  onAction: () {
+                                                    FFAppState()
+                                                            .makingFIrstEncounter =
+                                                        true;
+                                                    safeSetState(() {});
+                                                  },
+                                                )),
                                           if (momDetailsMotherRecord
                                                   .firstEncounterId !=
                                               null)
@@ -9277,7 +8610,7 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                                 dateTimeFormat(
                                                                     "d/M/y",
                                                                     columnFirstEncounterRecord
-                                                                        .lnmp!),
+                                                                        .lnmp),
                                                                 style: FlutterFlowTheme.of(
                                                                         context)
                                                                     .bodyMedium
@@ -9347,7 +8680,7 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                                 dateTimeFormat(
                                                                     "d/M/y",
                                                                     columnFirstEncounterRecord
-                                                                        .estimatedDueDate!),
+                                                                        .estimatedDueDate),
                                                                 style: FlutterFlowTheme.of(
                                                                         context)
                                                                     .bodyMedium
@@ -9488,7 +8821,7 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                                       ? dateTimeFormat(
                                                                           "d/M/y",
                                                                           columnFirstEncounterRecord
-                                                                              .cacxDateOfScreen!)
+                                                                              .cacxDateOfScreen)
                                                                       : 'Not recorded',
                                                                   style: FlutterFlowTheme.of(
                                                                           context)
@@ -10719,7 +10052,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                         alignment:
                                                             AlignmentDirectional(
                                                                 1.0, -1.0),
-                                                        child: Row(
+                                                        child:
+                                                            ResponsiveFormRow(
                                                           mainAxisSize:
                                                               MainAxisSize.max,
                                                           children: [
@@ -10983,7 +10317,7 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                           padding:
                                               EdgeInsetsDirectional.fromSTEB(
                                                   0.0, 0.0, 0.0, 10.0),
-                                          child: Row(
+                                          child: ResponsiveFormRow(
                                             mainAxisSize: MainAxisSize.max,
                                             mainAxisAlignment:
                                                 MainAxisAlignment.spaceBetween,
@@ -11143,7 +10477,7 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                             color: FlutterFlowTheme.of(context)
                                                 .primaryBackground,
                                           ),
-                                          child: Row(
+                                          child: ResponsiveFormRow(
                                             mainAxisSize: MainAxisSize.max,
                                             mainAxisAlignment:
                                                 MainAxisAlignment.start,
@@ -11479,7 +10813,8 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                               safeSetState(
                                                                   () {});
                                                             },
-                                                            child: Row(
+                                                            child:
+                                                                ResponsiveFormRow(
                                                               mainAxisSize:
                                                                   MainAxisSize
                                                                       .max,
@@ -11493,7 +10828,7 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                                     dateTimeFormat(
                                                                         "MMMEd",
                                                                         listViewEncounterRecord
-                                                                            .date!),
+                                                                            .date),
                                                                     style: FlutterFlowTheme.of(
                                                                             context)
                                                                         .bodyMedium
@@ -11569,7 +10904,7 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                                                             ''
                                                                         ? dateTimeFormat(
                                                                             "MMMEd",
-                                                                            listViewEncounterRecord.nextVisit!)
+                                                                            listViewEncounterRecord.nextVisit)
                                                                         : 'No date available',
                                                                     style: FlutterFlowTheme.of(
                                                                             context)
@@ -11676,8 +11011,7 @@ class _MomDetailsWidgetState extends State<MomDetailsWidget> {
                                   ),
                                 ),
                             ]
-                                .divide(SizedBox(height: 20.0))
-                                .addToStart(SizedBox(height: 16.0))
+                                .divide(SizedBox(height: 16.0))
                                 .addToEnd(SizedBox(height: 16.0)),
                           ),
                         ),

@@ -8,14 +8,15 @@ class EdgeDeviceConfig {
   const EdgeDeviceConfig({
     required this.baseUrl,
     this.baseUrlExplicit = true,
-    this.modelManagementEnabled = false,
-    this.ultrasoundInferenceEnabled = false,
+    this.modelManagementEnabled = true,
+    this.ultrasoundInferenceEnabled = true,
     this.apiVersion = '',
     this.healthPath = '/health',
     this.cervicalUploadPath = '/upload/cervical',
     this.hubPort = 80,
     this.cervicalPort = 8085,
     this.ultrasoundPort = 8086,
+    this.anemiaPort = 8087,
     this.hubSelectPath = '/api/select',
     this.hubStatusPath = '/api/status',
     this.moduleHealthPath = '/health',
@@ -24,13 +25,14 @@ class EdgeDeviceConfig {
     this.ultrasoundModelId = 'ultrasound',
     this.cervicalHealthReadyField = 'ready',
     this.ultrasoundHealthReadyField = 'ready',
+    this.anemiaHealthReadyField = 'ready',
     this.supportedImageMimeTypes = const {'image/jpeg', 'image/png'},
     this.requestTimeout = const Duration(seconds: 5),
     this.uploadTimeout = const Duration(seconds: 120),
     this.inferenceTimeout = const Duration(seconds: 120),
     this.modelRequestTimeout = const Duration(seconds: 30),
     this.modelReadyTimeout = const Duration(seconds: 300),
-    this.modelPollInterval = const Duration(seconds: 1),
+    this.modelPollInterval = const Duration(seconds: 3),
     this.moduleHealthGrace = const Duration(seconds: 10),
   });
 
@@ -89,11 +91,11 @@ class EdgeDeviceConfig {
               : piUrl.trim(),
       modelManagementEnabled: const bool.fromEnvironment(
         'EDGE_DEVICE_MODEL_MANAGEMENT_ENABLED',
-        defaultValue: false,
+        defaultValue: true,
       ),
       ultrasoundInferenceEnabled: const bool.fromEnvironment(
         'EDGE_DEVICE_ULTRASOUND_INFERENCE_ENABLED',
-        defaultValue: false,
+        defaultValue: true,
       ),
       apiVersion: const String.fromEnvironment(
         'EDGE_DEVICE_API_VERSION',
@@ -119,6 +121,8 @@ class EdgeDeviceConfig {
         'EDGE_DEVICE_ULTRASOUND_PORT',
         defaultValue: 8086,
       ),
+      anemiaPort: const int.fromEnvironment('EDGE_DEVICE_ANEMIA_PORT',
+          defaultValue: 8087),
       hubSelectPath: const String.fromEnvironment(
         'EDGE_DEVICE_HUB_SELECT_PATH',
         defaultValue: '/api/select',
@@ -182,7 +186,7 @@ class EdgeDeviceConfig {
       modelPollInterval: Duration(
         milliseconds: const int.fromEnvironment(
           'EDGE_DEVICE_MODEL_POLL_INTERVAL_MILLISECONDS',
-          defaultValue: 1000,
+          defaultValue: 3000,
         ),
       ),
       moduleHealthGrace: Duration(
@@ -196,8 +200,8 @@ class EdgeDeviceConfig {
 
   final String baseUrl;
 
-  /// False when no `--dart-define` supplied a device URL and the built-in
-  /// legacy default is in effect.
+  /// Whether a build-time override supplied the hostname. The default
+  /// http://dawa.local is a valid deployment configuration.
   final bool baseUrlExplicit;
   final bool modelManagementEnabled;
   final bool ultrasoundInferenceEnabled;
@@ -207,6 +211,7 @@ class EdgeDeviceConfig {
   final int hubPort;
   final int cervicalPort;
   final int ultrasoundPort;
+  final int anemiaPort;
   final String hubSelectPath;
   final String hubStatusPath;
   final String moduleHealthPath;
@@ -215,6 +220,7 @@ class EdgeDeviceConfig {
   final String ultrasoundModelId;
   final String cervicalHealthReadyField;
   final String ultrasoundHealthReadyField;
+  final String anemiaHealthReadyField;
   final Set<String> supportedImageMimeTypes;
   final Duration requestTimeout;
   final Duration uploadTimeout;
@@ -233,16 +239,19 @@ class EdgeDeviceConfig {
   String modelId(EdgeAIModel model) => switch (model) {
         EdgeAIModel.cervicalCancer => cervicalModelId,
         EdgeAIModel.ultrasound => ultrasoundModelId,
+        EdgeAIModel.anemia => 'anemia',
       };
 
   int modulePort(EdgeAIModel model) => switch (model) {
         EdgeAIModel.cervicalCancer => cervicalPort,
         EdgeAIModel.ultrasound => ultrasoundPort,
+        EdgeAIModel.anemia => anemiaPort,
       };
 
   String healthReadyField(EdgeAIModel model) => switch (model) {
         EdgeAIModel.cervicalCancer => cervicalHealthReadyField,
         EdgeAIModel.ultrasound => ultrasoundHealthReadyField,
+        EdgeAIModel.anemia => anemiaHealthReadyField,
       };
 
   /// A human-readable reason the configuration cannot work with the real
@@ -250,12 +259,6 @@ class EdgeDeviceConfig {
   String? configurationProblem({bool isWeb = false, Uri? pageUri}) {
     if (!modelManagementEnabled) return null;
     final base = Uri.tryParse(baseUrl.trim());
-    if (!baseUrlExplicit) {
-      return 'No device URL was supplied at build time. --dart-define values '
-          'are compile-time: stop the app and re-run it with '
-          '--dart-define=EDGE_DEVICE_BASE_URL=http://<device-host> '
-          '(a hot restart does not apply them).';
-    }
     if (base != null && base.scheme == 'https') {
       return 'The Dawa device hub and modules speak plain HTTP. Use '
           'EDGE_DEVICE_BASE_URL=http://<device-host> (without a port).';
@@ -283,6 +286,13 @@ class EdgeDeviceConfig {
         'connect=${requestTimeout.inSeconds}s select=${modelRequestTimeout.inSeconds}s '
         'ready=${modelReadyTimeout.inSeconds}s inference=${inferenceTimeout.inSeconds}s';
   }
+
+  /// Verified hub upload routes; module ports need not be reachable by clients.
+  Uri inferenceEndpoint(EdgeAIModel model) => hubEndpoint(switch (model) {
+        EdgeAIModel.cervicalCancer => '/upload/cervical',
+        EdgeAIModel.ultrasound => '/upload/ultrasound',
+        EdgeAIModel.anemia => '/upload/anemia',
+      });
 
   Uri hubEndpoint(String path) => endpoint(path, port: hubPort);
 

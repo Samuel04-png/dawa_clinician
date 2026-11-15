@@ -10,7 +10,7 @@ import 'edge_device_models.dart';
 
 /// Shared HTTP client for the Dawa edge device.
 ///
-/// Hub (dawa/main.py, default port 8080): `GET /api/status`, `POST /api/select`.
+/// Hub (dawa/main.py, default port 80): `GET /api/status`, `POST /api/select`.
 /// Modules (default ports 8085 cervitriage, 8086 ultrasound):
 /// `GET /health`, `POST /predict`.
 /// Legacy CaCx deployments keep `POST /upload/cervical` on the base URL.
@@ -131,16 +131,15 @@ class EdgeDeviceClient {
   /// Cervitriage `POST /predict`. HTTP 422 (gatekeeper rejection) is returned
   /// to the caller as a normal outcome rather than thrown.
   Future<http.Response> predictCervical({
+    Duration? timeout,
+    Future<void>? abortTrigger,
     required List<int> imageBytes,
     required String filename,
     required String mimeType,
   }) {
     _ensureModelManagementEnabled();
     return _postMultipart(
-      _resolve(() => config.moduleEndpoint(
-            EdgeAIModel.cervicalCancer,
-            config.predictPath,
-          )),
+      _resolve(() => config.inferenceEndpoint(EdgeAIModel.cervicalCancer)),
       fields: const {},
       imageBytes: imageBytes,
       filename: filename,
@@ -181,10 +180,7 @@ class EdgeDeviceClient {
       );
     }
     return await _postMultipart(
-      _resolve(() => config.moduleEndpoint(
-            EdgeAIModel.ultrasound,
-            config.predictPath,
-          )),
+      _resolve(() => config.inferenceEndpoint(EdgeAIModel.ultrasound)),
       fields: {
         if (box != null) 'box': box.join(','),
         if (pixelSpacingMm != null) 'pixel_spacing_mm': '$pixelSpacingMm',
@@ -196,8 +192,27 @@ class EdgeDeviceClient {
     );
   }
 
+  /// Verified hub forwards the lower-eyelid image to the active anemia model.
+  Future<http.Response> predictAnemia({
+    required List<int> imageBytes,
+    required String filename,
+    required String mimeType,
+  }) {
+    _ensureModelManagementEnabled();
+    return _postMultipart(
+      _resolve(() => config.inferenceEndpoint(EdgeAIModel.anemia)),
+      fields: const {},
+      imageBytes: imageBytes,
+      filename: filename,
+      mimeType: mimeType,
+      timeout: config.inferenceTimeout,
+    );
+  }
+
   /// Legacy CaCx upload (`/upload/cervical` on the base URL).
   Future<http.Response> uploadCervicalImage({
+    Duration? timeout,
+    Future<void>? abortTrigger,
     required List<int> imageBytes,
     required String filename,
     required String mimeType,
@@ -248,22 +263,34 @@ class EdgeDeviceClient {
     required String mimeType,
     Set<int> acceptedStatusCodes = const {},
     Duration? timeout,
+    Future<void>? abortTrigger,
   }) async {
     final limit = timeout ?? config.uploadTimeout;
-    final request = http.MultipartRequest('POST', uri)
-      ..headers.addAll(_versionHeaders)
-      ..fields.addAll(fields)
-      ..files.add(
-        http.MultipartFile.fromBytes(
-          'image',
-          imageBytes,
-          filename: filename,
-          contentType: MediaType.parse(mimeType),
-        ),
-      );
+    final abort = Completer<void>();
+    abortTrigger?.then((_) {
+      if (!abort.isCompleted) abort.complete();
+    });
+    final request =
+        http.AbortableMultipartRequest('POST', uri, abortTrigger: abort.future)
+          ..headers.addAll(_versionHeaders)
+          ..fields.addAll(fields)
+          ..files.add(
+            http.MultipartFile.fromBytes(
+              'image',
+              imageBytes,
+              filename: filename,
+              contentType: MediaType.parse(mimeType),
+            ),
+          );
     try {
-      final streamed = await _httpClient.send(request).timeout(limit);
-      final response = await http.Response.fromStream(streamed).timeout(limit);
+      final response = await (() async {
+        final streamed = await _httpClient.send(request);
+        return http.Response.fromStream(streamed);
+      })()
+          .timeout(limit, onTimeout: () {
+        if (!abort.isCompleted) abort.complete();
+        throw TimeoutException('Device image upload timed out.');
+      });
       if (!acceptedStatusCodes.contains(response.statusCode)) {
         _ensureSuccess(response);
       }

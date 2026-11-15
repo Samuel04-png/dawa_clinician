@@ -1,7 +1,13 @@
+import '/services/clinical_offline_store.dart';
 import '/auth/firebase_auth/auth_util.dart';
 import '/reset_password/reset_password_widget.dart';
 import '/components/image_source_picker_dialog/image_source_picker_dialog_widget.dart';
 import '/components/dawa_design_system.dart';
+import '/components/clinical_screening_layout.dart';
+import '/components/clinical_workspace_components.dart';
+import '/components/clinical_page_intro.dart';
+import '/components/clinical_tab_bar.dart';
+import '/components/navigation_design_system.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,258 +15,22 @@ import 'dart:ui' as ui;
 import 'package:image_picker/image_picker.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/services/offline_connectivity_service.dart';
-import '/components/edge_device_status_banner.dart';
+import '/components/edge_workflow_status.dart';
+import '/services/screening_patient_repository.dart';
+import '/backend/supabase/supabase_config.dart';
 import '/services/edge_device/edge_device_models.dart';
 import 'cacx_upload_service.dart';
 import 'cacx_device_failure.dart';
+import 'cacx_analysis_policy.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import '/services/edge_device/edge_device_manager.dart';
 import '/services/edge_device/edge_device_exceptions.dart';
 import 'cacx_model.dart';
+import 'cacx_scan_drafts.dart';
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart';
-
-// ─── HUGGING FACE / GRADIO SERVICE ────────────────────────────────────────────
-class HuggingFaceService {
-  static const String _spaceBaseUrl = 'https://kmunzwa-medsiglip-demo.hf.space';
-
-  static Future<AnalysisResult> analyzeVIAImage(String base64Image) async {
-    try {
-      final rawBase64 =
-          base64Image.contains(',') ? base64Image.split(',').last : base64Image;
-      final imageBytes = base64Decode(rawBase64);
-
-      String mimeType = 'image/jpeg';
-      String extension = 'jpg';
-      if (base64Image.startsWith('data:image/png')) {
-        mimeType = 'image/png';
-        extension = 'png';
-      } else if (base64Image.startsWith('data:image/webp')) {
-        mimeType = 'image/webp';
-        extension = 'webp';
-      }
-
-      // ── Step 1: Upload — note the new /gradio_api/upload path ──────────────
-      final uploadUri = Uri.parse('$_spaceBaseUrl/gradio_api/upload');
-      final uploadRequest = http.MultipartRequest('POST', uploadUri)
-        ..files.add(
-          http.MultipartFile.fromBytes(
-            'files',
-            imageBytes,
-            filename: 'image.$extension',
-            contentType: MediaType.parse(mimeType),
-          ),
-        );
-
-      final uploadStreamedResponse =
-          await uploadRequest.send().timeout(const Duration(seconds: 20));
-      final uploadBody = await uploadStreamedResponse.stream.bytesToString();
-
-      if (uploadStreamedResponse.statusCode != 200) {
-        throw Exception(
-            'Upload failed ${uploadStreamedResponse.statusCode}: $uploadBody');
-      }
-
-      final List<dynamic> uploadedPaths =
-          jsonDecode(uploadBody) as List<dynamic>;
-      final String serverFilePath = uploadedPaths.first as String;
-      debugPrint('Gradio uploaded file path: $serverFilePath');
-
-      // ── Step 2: POST to /gradio_api/call/predict — returns an event_id ─────
-      final predictUri = Uri.parse('$_spaceBaseUrl/gradio_api/call/predict');
-      final predictResponse = await http
-          .post(
-            predictUri,
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'data': [
-                {
-                  'path': serverFilePath,
-                  'orig_name': 'image.$extension',
-                  'meta': {'_type': 'gradio.FileData'},
-                }
-              ],
-            }),
-          )
-          .timeout(const Duration(seconds: 20));
-
-      if (predictResponse.statusCode != 200) {
-        throw Exception(
-            'Predict failed ${predictResponse.statusCode}: ${predictResponse.body}');
-      }
-
-      final Map<String, dynamic> predictJson =
-          jsonDecode(predictResponse.body) as Map<String, dynamic>;
-      final String eventId = predictJson['event_id'] as String;
-      debugPrint('Gradio event_id: $eventId');
-
-      // ── Step 3: GET the result via SSE ─────────────────────────────────────
-      final resultUri =
-          Uri.parse('$_spaceBaseUrl/gradio_api/call/predict/$eventId');
-      final resultResponse =
-          await http.get(resultUri).timeout(const Duration(seconds: 60));
-
-      if (resultResponse.statusCode != 200) {
-        throw Exception(
-            'Result fetch failed ${resultResponse.statusCode}: ${resultResponse.body}');
-      }
-
-      // SSE body looks like:
-      //   event: complete
-      //   data: [{"label": "CIN1", "confidences": [...]}]
-      // ── Step 4: Parse the SSE body ─────────────────────────────────────────────
-      final String sseBody = resultResponse.body;
-      debugPrint('Gradio SSE response: $sseBody');
-
-// Find the "data:" line that follows "event: complete"
-      final lines = sseBody.split('\n');
-      String dataLine = '';
-      for (int i = 0; i < lines.length; i++) {
-        if (lines[i].trim() == 'event: complete' && i + 1 < lines.length) {
-          final next = lines[i + 1];
-          if (next.startsWith('data:')) {
-            dataLine = next;
-            break;
-          }
-        }
-      }
-
-      if (dataLine.isEmpty) {
-        throw Exception(
-            'No complete event data found in SSE response: $sseBody');
-      }
-
-      final dynamic resultData =
-          (jsonDecode(dataLine.substring(5).trim()) as List<dynamic>).first;
-
-      // ── Step 4: Parse (same logic as before) ───────────────────────────────
-      final breakdown = extractPredictionBreakdown(resultData);
-      String mappedLabel = breakdown.isNotEmpty
-          ? canonicalCacxBaseLabel(breakdown.first.label)
-          : '';
-      double confidence = breakdown.isNotEmpty ? breakdown.first.confidence : 0;
-
-      if (mappedLabel.isEmpty) {
-        if (resultData is Map<String, dynamic>) {
-          final String rawLabel =
-              (resultData['label'] ?? resultData['prediction'] ?? '')
-                  .toString();
-          mappedLabel = canonicalCacxBaseLabel(rawLabel);
-          confidence = normalizeCacxConfidence(
-            resultData['confidence'] ??
-                resultData['confidence_percent'] ??
-                resultData['probability'] ??
-                resultData['score'],
-          );
-        } else if (resultData is List<dynamic> && resultData.isNotEmpty) {
-          final top = resultData.reduce(
-            (a, b) {
-              final aScore = normalizeCacxConfidence(
-                a is Map ? a['score'] ?? a['confidence'] ?? 0 : 0,
-              );
-              final bScore = normalizeCacxConfidence(
-                b is Map ? b['score'] ?? b['confidence'] ?? 0 : 0,
-              );
-              return aScore >= bScore ? a : b;
-            },
-          );
-          final rawLabel =
-              (top is Map ? top['label'] ?? top['class'] ?? '' : '')
-                  .toString()
-                  .trim();
-          mappedLabel = canonicalCacxBaseLabel(rawLabel);
-          confidence = normalizeCacxConfidence(
-            top is Map ? top['score'] ?? top['confidence'] ?? 0 : 0,
-          );
-        } else {
-          throw Exception('Unexpected Gradio response shape: $resultData');
-        }
-      }
-
-      debugPrint(
-          'Gradio -> label: $mappedLabel confidence: ${confidence.toStringAsFixed(1)}% breakdown=${breakdown.length}');
-      return _processResult(
-        base64Image,
-        mappedLabel,
-        confidence,
-        predictionBreakdown: breakdown,
-      );
-    } catch (e) {
-      debugPrint('Gradio Error: $e');
-      return AnalysisResult(
-        imageUrl: base64Image,
-        label: 'Analysis Failed',
-        confidence: 0,
-        suspicionLevel: SuspicionLevel.low,
-        recommendation:
-            'Could not connect to AI model. Please check your connection and try again.',
-        predictionBreakdown: const [],
-        error: e.toString(),
-      );
-    }
-  }
-
-  static AnalysisResult _processResult(
-    String imageUrl,
-    String label,
-    double confidence, {
-    List<PredictionBreakdownItem> predictionBreakdown = const [],
-  }) {
-    SuspicionLevel suspicion;
-    String displayLabel;
-    String recommendation;
-    final key = canonicalCacxBaseLabel(label);
-
-    switch (key) {
-      case 'negative':
-        suspicion = SuspicionLevel.low;
-        displayLabel = 'Normal / Negative VIA';
-        recommendation =
-            'No acetowhite lesion or other abnormality seen. Routine follow-up: repeat VIA in 3 years per national MoH guidelines. Provide patient education on cervical cancer warning signs (e.g., post-coital bleeding, intermenstrual bleeding, foul discharge). Document findings in patient record. No referral needed.';
-        break;
-      case 'cin1':
-        suspicion = SuspicionLevel.medium;
-        displayLabel = 'Low Grade Lesion (CIN1)';
-        recommendation =
-            'Well-defined, faint/thin acetowhite lesions. Management: Repeat VIA in 12 months. Counsel patient on likely regression, but emphasize importance of returning for repeat screening. Advise smoking cessation if applicable, and discuss HPV transmission. Schedule recall appointment before discharge. No immediate colposcopy unless patient is HIV-positive, immunocompromised, or persistent at 12-24 months.';
-        break;
-      case 'cin2':
-        suspicion = SuspicionLevel.high;
-        displayLabel = 'High Grade Lesion (CIN2)';
-        recommendation =
-            "Distinct, dense, opaque acetowhite lesions with irregular borders. Action: Refer for colposcopy and directed biopsy within 4 weeks. If colposcopy confirms CIN2+ and patient has completed childbearing or lesion is fully visible, proceed with LEEP/cryotherapy same day. Document lesion size, location, and extension onto fornices. Offer HPV testing if available. Exclude pregnancy before treatment.";
-        break;
-      case 'cin3':
-        suspicion = SuspicionLevel.high;
-        displayLabel = 'High Grade Lesion (CIN3)';
-        recommendation =
-            "Dense, acetowhite epithelium with sharp borders. May involve crypts. Action: Urgent colposcopy referral within 2 weeks. Biopsy mandatory. 'See and Treat' acceptable if colposcopy suspicious for invasion. Do not delay for results if lesion is large or concerning. Check HIV status — treat earlier if positive. Discuss risk of progression if untreated. Prepare for possible LEEP or cone biopsy.";
-        break;
-      case 'positive':
-        suspicion = SuspicionLevel.high;
-        displayLabel = 'Positive - Cancer Suspected';
-        recommendation =
-            "Abnormal vessel patterns, irregular surface, ulceration, or friable mass. Likely invasive cancer. Action: URGENT referral — complete oncological referral form immediately. Do not perform LEEP/cryotherapy. Perform guided punch biopsy only if haemorrhage can be controlled. Send biopsy with 'suspicious for invasive cancer' noted. Contact gynaecology oncology team by phone within 24 hours. Advise patient not to wait. Document exam under anaesthesia status and any renal function if contrast imaging planned.";
-        break;
-      default:
-        suspicion = SuspicionLevel.low;
-        displayLabel = 'Inconclusive - ${canonicalCacxDisplayLabel(label)}';
-        recommendation =
-            'Image quality insufficient or interpretation unclear. Likely causes: excess mucus, poor illumination, incomplete acetic acid application, or blurred image. Action: Repeat VIA with clearer visualization. Clean cervix with saline-soaked swab, reapply 5% acetic acid, wait 60 seconds, and reassess. If repeatedly inconclusive, refer for colposcopy. Document reason for inconclusive result in chart.';
-    }
-
-    return AnalysisResult(
-      imageUrl: imageUrl,
-      label: displayLabel,
-      confidence: double.parse(confidence.toStringAsFixed(1)),
-      suspicionLevel: suspicion,
-      recommendation: recommendation,
-      predictionBreakdown: predictionBreakdown,
-    );
-  }
-}
+import 'cacx_second_opinion_service.dart';
+export 'cacx_second_opinion_service.dart';
 
 // ??? IMAGE SOURCE PICKER ??????????????????????????????????????????????????????
 /// Shows a bottom sheet that lets the user choose between camera and gallery.
@@ -315,8 +85,22 @@ class CaCxApp extends StatefulWidget {
     this.initialPatient,
     this.autoStartScreening = false,
     this.returnToPreviousOnSave = false,
+    this.deviceManager,
+    this.patientRepository,
+    this.demonstrationMode = false,
+    this.pickImage,
+    this.requestSecondOpinion,
+    this.checkConnectivity,
+    this.allowOnlineFallback = CacxAnalysisConfig.allowOnlineFallback,
   });
 
+  final Future<String?> Function()? pickImage;
+  final Future<AnalysisResult> Function(String image)? requestSecondOpinion;
+  final Future<OfflineConnectivitySnapshot> Function()? checkConnectivity;
+  final EdgeDeviceManager? deviceManager;
+  final ScreeningPatientRepository? patientRepository;
+  final bool demonstrationMode;
+  final bool allowOnlineFallback;
   final Patient? initialPatient;
   final bool autoStartScreening;
   final bool returnToPreviousOnSave;
@@ -326,6 +110,16 @@ class CaCxApp extends StatefulWidget {
 }
 
 class _CaCxAppState extends State<CaCxApp> {
+  final _analysisAttempt = CacxAnalysisAttempt();
+  bool? _onlineAvailable;
+  bool _savingDraft = false;
+  bool _resultQueued = false;
+  String? _draftId;
+  List<Map<String, dynamic>> _scanDrafts = [];
+  late final EdgeDeviceManager _deviceManager;
+  bool _loadingPatients = true;
+  bool _patientsLoaded = false, _historyLoaded = false;
+  String? _patientLoadError;
   AppState _appState = AppState.dashboard;
   DashboardTab _activeTab = DashboardTab.home;
 
@@ -336,12 +130,12 @@ class _CaCxAppState extends State<CaCxApp> {
   String? _flowWarningMessage;
   String? _screeningRecordId;
   int? _deviceSecondsRemaining;
-  int _deviceRetryCount = 0;
   Timer? _deviceCountdownTimer;
   bool _deviceUploadInProgress = false;
   bool _cloudFallbackRequested = false;
   CacxDeviceFailure? _lastDeviceFailure;
   bool _cloudFallbackInProgress = false;
+  bool _onlineRequestInProgress = false;
   String? _currentScanImagePath;
   String? _currentScanPatientId;
   String? _currentScanUserId;
@@ -357,13 +151,17 @@ class _CaCxAppState extends State<CaCxApp> {
   AnalysisResult? _analysisResult;
   CervicalDeviceInterpretation? _primaryDeviceResult;
   AnalysisResult? _secondOpinionResult;
-  String _patientSearchText = '';
+  final _patientSearchController = TextEditingController();
+  String get _patientSearchText => _patientSearchController.text;
+  String _screeningPatientQuery = '';
   bool _patientNeedsReviewOnly = false;
   bool _showAllPredictionClasses = false;
 
   // UI States
   bool _isAnalyzing = false;
   bool _secondOpinionRequired = false;
+  bool _secondOpinionPersisted = false;
+  bool _savingOpinionResult = false;
   String _secondOpinionStatus = 'not_required';
   String _resultExplanationLanguage = 'English';
   QuickAccessResultsFilter _resultsFilter = QuickAccessResultsFilter.all;
@@ -378,19 +176,34 @@ class _CaCxAppState extends State<CaCxApp> {
   @override
   void initState() {
     super.initState();
-    _loadMockData();
+    _deviceManager = widget.deviceManager ?? EdgeDeviceManager.shared;
+    _loadScreeningData();
+    unawaited(_reloadScanDrafts());
+    OfflineConnectivityService.statusNotifier.addListener(_onConnectionChanged);
     if (widget.initialPatient != null) {
       _selectedPatient = widget.initialPatient;
-      _patientSearchText = widget.initialPatient!.name;
+      _patientSearchController.text = widget.initialPatient!.name;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.allowOnlineFallback) {
+        unawaited(() async {
+          try {
+            final connection = await (widget.checkConnectivity?.call() ??
+                OfflineConnectivityService.refreshStatus());
+            if (mounted)
+              setState(() => _onlineAvailable = connection.internetAvailable);
+          } catch (_) {
+            if (mounted) setState(() => _onlineAvailable = false);
+          }
+        }());
+      }
       _trySyncPendingCacx();
-      final manager = EdgeDeviceManager.shared;
+      final manager = _deviceManager;
       if (kDebugMode) {
         debugPrint('[Device] CaCx configuration: '
             '${manager.client.config.diagnosticSummary()}');
       }
-      unawaited(manager.refreshObservedReadiness(EdgeAIModel.cervicalCancer));
+      unawaited(manager.prepareWorkflow(EdgeAIModel.cervicalCancer));
     });
     if (widget.autoStartScreening) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -402,26 +215,148 @@ class _CaCxAppState extends State<CaCxApp> {
 
   @override
   void dispose() {
+    OfflineConnectivityService.statusNotifier
+        .removeListener(_onConnectionChanged);
+    _deviceManager.cancelWorkflowPreparation(EdgeAIModel.cervicalCancer);
     _deviceCountdownTimer?.cancel();
     _nameController.dispose();
     _ageController.dispose();
     _phoneController.dispose();
     _resultsSearchController.dispose();
+    _patientSearchController.dispose();
     super.dispose();
   }
 
-  void _loadMockData() {
-    setState(() {
-      _patients = MockData.getPatients();
-      _historyRecords = MockData.getHistoryRecords();
-      _screeningData = MockData.getScreeningData();
-      final seededPatient = widget.initialPatient;
-      if (seededPatient != null &&
-          !_patients.any((patient) => patient.id == seededPatient.id)) {
-        _patients = [seededPatient, ..._patients];
-      }
-    });
+  Future<void> _loadScreeningData() async {
+    if (widget.demonstrationMode) {
+      setState(() {
+        _patients = MockData.getPatients();
+        _historyRecords = MockData.getHistoryRecords();
+        _screeningData = MockData.getScreeningData();
+        _loadingPatients = false;
+        _patientsLoaded = true;
+        _historyLoaded = true;
+      });
+      return;
+    }
+    if (mounted)
+      setState(() {
+        _loadingPatients = true;
+        _patientsLoaded = false;
+        _historyLoaded = false;
+        _patientLoadError = null;
+      });
+    try {
+      final patients = await (widget.patientRepository ??
+              const SupabaseScreeningPatientRepository())
+          .loadPatients();
+      if (!mounted) return;
+      setState(() {
+        _patients = patients
+            .map((p) => Patient(
+                id: p.id,
+                name: p.name,
+                age: p.age ?? 0,
+                contact: p.contact,
+                status: PatientStatus.untested,
+                riskLevel: RiskLevel.low))
+            .toList();
+        _loadingPatients = false;
+        _patientsLoaded = true;
+        final selectedId = _selectedPatient?.id;
+        final matches = _patients.where((p) => p.id == selectedId);
+        _selectedPatient = matches.isEmpty ? null : matches.first;
+      });
+      if (widget.patientRepository == null) await _loadSavedScreenings();
+    } catch (_) {
+      if (mounted)
+        setState(() {
+          _loadingPatients = false;
+          _patientLoadError =
+              'Patient records could not be loaded. For offline scans, connect once and open cervical screening to cache your patient list, then keep the local Dawa device connected. Retry when connected.';
+        });
+    }
   }
+
+  Future<void> _loadSavedScreenings() async {
+    final userId = currentUserUid;
+    if (userId.isEmpty) return;
+    try {
+      final savedRows = await ClinicalOfflineStore.read(
+          userId,
+          'cervical-history',
+          () => runSupabaseRequest(() => supabaseClient
+              .from(CacxScreeningResultsRepository.table)
+              .select()
+              .eq('user_id', userId)
+              .order('created_at', ascending: false)
+              .limit(100)),
+          emptyOffline: true);
+      final pending = await CacxScreeningResultsRepository.pendingRows(userId);
+      final rows = [
+        ...pending,
+        ...savedRows.where((row) => !pending.any((p) => p['id'] == row['id']))
+      ];
+      final byId = {for (final patient in _patients) patient.id: patient.name};
+      final history = <VIATestRecord>[];
+      for (final row in rows) {
+        final date = DateTime.tryParse(row['created_at']?.toString() ?? '');
+        final patientId = row['patient_id'];
+        final id = row['id'];
+        final onlineCompleted = row['second_opinion_status'] == 'completed' &&
+            row['second_opinion_result'] is String;
+        final label = onlineCompleted
+            ? row['second_opinion_result']
+            : row['primary_result'];
+        final confidence = onlineCompleted
+            ? row['second_opinion_confidence']
+            : row['primary_confidence'];
+        if (date == null ||
+            patientId is! String ||
+            id is! String ||
+            label is! String ||
+            !byId.containsKey(patientId)) continue;
+        history.add(VIATestRecord(
+            id: id,
+            patientId: patientId,
+            patientName: byId[patientId]!,
+            date: date,
+            result: label,
+            notes: onlineCompleted
+                ? (row['device_status'] == 'success'
+                    ? 'Analysed online'
+                    : 'Analysed online (device unavailable)')
+                : row['device_status'] == 'success'
+                    ? 'Analysed on Dawa device'
+                    : 'Analysis did not complete',
+            aiAnalysis:
+                confidence is num ? 'Model confidence: $confidence%' : null));
+      }
+      if (mounted)
+        setState(() {
+          _historyRecords = history;
+          _historyLoaded = true;
+          _screeningData = [];
+        });
+    } catch (_) {
+      // History availability must never block selection of cached patients.
+      if (mounted) setState(() => _historyLoaded = false);
+    }
+  }
+
+  bool get _scanOffline =>
+      _onlineAvailable == false ||
+      OfflineConnectivityService.statusNotifier.value?.isOffline == true;
+
+  bool get _canTryLocal =>
+      _deviceManager.activeExaminationId == null &&
+      _deviceManager.state != EdgeDeviceState.busy;
+
+  bool get _localCervicalReady =>
+      _deviceManager.state == EdgeDeviceState.ready &&
+      _deviceManager.hubConnected != false &&
+      _deviceManager.observedReadyModel == EdgeAIModel.cervicalCancer &&
+      _deviceManager.activeExaminationId == null;
 
   void _handleTabChange(DashboardTab tab) => setState(() => _activeTab = tab);
 
@@ -539,7 +474,7 @@ class _CaCxAppState extends State<CaCxApp> {
     }
     setState(() {
       _selectedPatient = patient;
-      _patientSearchText = record.patientName;
+      _patientSearchController.text = record.patientName;
       _activeTab = DashboardTab.patients;
     });
   }
@@ -556,7 +491,7 @@ class _CaCxAppState extends State<CaCxApp> {
 
     setState(() {
       _selectedPatient = patient;
-      _patientSearchText = record.patientName;
+      _patientSearchController.text = record.patientName;
       _patientNeedsReviewOnly = needsReview;
       _activeTab = needsReview ? DashboardTab.patients : DashboardTab.history;
     });
@@ -571,23 +506,27 @@ class _CaCxAppState extends State<CaCxApp> {
   }
 
   Future<void> _trySyncPendingCacx() async {
-    final connectivity = await OfflineConnectivityService.refreshStatus();
+    final connectivity = await (widget.checkConnectivity?.call() ??
+        OfflineConnectivityService.refreshStatus());
     if (!connectivity.supabaseReachable) {
       return;
     }
     await CacxScreeningResultsRepository.syncPending();
+    await CacxScanDrafts.sync();
+    await _reloadScanDrafts();
   }
 
   void _resetScreeningFlow() {
     _flowWarningMessage = null;
     _screeningRecordId = null;
+    _resultQueued = false;
     _primaryDeviceResult = null;
     _secondOpinionResult = null;
+    _secondOpinionPersisted = false;
     _secondOpinionRequired = false;
     _secondOpinionStatus = 'not_required';
     _analyzingStatus = 'Ready for cervical device interpretation';
     _deviceSecondsRemaining = null;
-    _deviceRetryCount = 0;
     _deviceCountdownTimer?.cancel();
     _deviceCountdownTimer = null;
     _deviceUploadInProgress = false;
@@ -601,7 +540,10 @@ class _CaCxAppState extends State<CaCxApp> {
   }
 
   // ?? Unified image-picker entry point ????????????????????????????????????????
-  Future<void> _openImageSourcePicker({required ScreeningMode mode}) async {
+  Future<void> _openImageSourcePicker({
+    required ScreeningMode mode,
+    bool startAnalysisAfterSelection = true,
+  }) async {
     if (_isAnalyzing || _deviceUploadInProgress || _cloudFallbackInProgress) {
       showDawaToast(
         context,
@@ -610,7 +552,14 @@ class _CaCxAppState extends State<CaCxApp> {
       return;
     }
 
-    final image = await showImageSourcePicker(context);
+    if (widget.demonstrationMode) {
+      showDawaToast(context,
+          'Training data cannot be used for a real screening. Open a patient record in the clinical workflow.');
+      return;
+    }
+    final image =
+        await (widget.pickImage?.call() ?? showImageSourcePicker(context));
+    if (!mounted) return;
     if (image == null) {
       if (widget.autoStartScreening &&
           widget.returnToPreviousOnSave &&
@@ -624,126 +573,125 @@ class _CaCxAppState extends State<CaCxApp> {
     setState(() {
       _selectedImage = image;
       _screeningMode = mode;
-      _isAnalyzing = true;
-      _appState = AppState.dashboard;
+      _isAnalyzing = startAnalysisAfterSelection;
+      _appState =
+          startAnalysisAfterSelection ? AppState.dashboard : AppState.viaTest;
       _resetScreeningFlow();
     });
 
-    await _analyzeImage();
+    if (startAnalysisAfterSelection) await _analyzeImage();
   }
 
-  Future<void> _analyzeImage() async {
-    if (_selectedImage == null) return;
-
-    final image = _selectedImage!;
-    _lastDeviceFailure = null;
-    final patientId = _selectedPatient?.id;
-    final userId = currentUserUid.isEmpty ? null : currentUserUid;
-    final imagePath = CacxScreeningResultsRepository.buildImagePath(
-      userId: userId,
-      patientId: patientId,
-    );
-    _currentScanImagePath = imagePath;
-    _currentScanPatientId = patientId;
-    _currentScanUserId = userId;
-
-    // Probe the local device as part of the decision. Local availability must
-    // win over the internet/Supabase state so a clinic can work LAN-only.
-    final connectivity = await OfflineConnectivityService.refreshStatus(
-      checkDevice: true,
-    );
-    final route = OfflineConnectivityService.cacxRouteFor(
-      deviceReachable: connectivity.deviceReachable,
-      internetAvailable: connectivity.internetAvailable,
-    );
-    if (route == CacxRoutingDecision.offline) {
-      await _analyzeImageOfflineOnly(
-        image: image,
-        patientId: patientId,
-        userId: userId,
-        imagePath: imagePath,
-      );
-      return;
-    }
-
-    await _trySyncPendingCacx();
-
-    final primary = await _sendImageToDeviceOnce(image, patientId);
-
-    if (_lastDeviceFailure?.isApplicationError == true) {
-      _showApplicationFailure();
-      return;
-    }
-
-    final secondRequired = primary.deviceStatus != 'rejected' &&
-        (primary.deviceStatus != 'success' || primary.requiresSecondOpinion);
-    final initialSecondStatus = secondRequired ? 'pending' : 'not_required';
-    final recordId = await _savePrimaryResultForCurrentScan(
-      primary: primary,
-      secondOpinionRequired: secondRequired,
-      secondOpinionStatus: initialSecondStatus,
-    );
-
-    if (!mounted) return;
-    setState(() {
-      _screeningRecordId = recordId;
-      _primaryDeviceResult = primary;
-      if (!_cloudFallbackRequested) {
-        _secondOpinionRequired = secondRequired;
-        _secondOpinionStatus = initialSecondStatus;
-      }
-    });
-
-    if (_cloudFallbackRequested) {
-      _setFlowStatus(
-        'Online scan in progress',
-        warning:
-            'The offline device response was recorded. The online scan result remains active.',
-      );
-      return;
-    }
-
-    _setFlowStatus(
-      cacxOutcomeStatus(primary, saved: recordId != null),
-      warning: recordId == null
-          ? 'The screening flow continued, but the screening result row could not be saved.'
-          : _flowWarningMessage,
-    );
-
-    if (primary.deviceStatus == 'rejected') {
-      _setFlowStatus(
-        'Image rejected — retake the photo',
-        warning: primary.error ??
-            'The image is not suitable for screening. Please retake the photo.',
-      );
-      setState(() {
-        _deviceSecondsRemaining = null;
-        _isAnalyzing = false;
-        _appState = AppState.dashboard;
+  Future<void> _analyzeImage() => _analysisAttempt.run(() async {
+        if (_selectedImage == null || widget.demonstrationMode) {
+          if (mounted) setState(() => _isAnalyzing = false);
+          return;
+        }
+        final patient = _selectedPatient;
+        if (patient == null || !_patients.any((p) => p.id == patient.id)) {
+          setState(() => _isAnalyzing = false);
+          showDawaToast(
+              context, 'Select an existing patient before starting analysis.');
+          return;
+        }
+        if (_deviceManager.activeExaminationId != null ||
+            _deviceManager.state == EdgeDeviceState.busy) {
+          setState(() => _isAnalyzing = false);
+          showDawaToast(context,
+              'Finish or reconcile the current device examination before starting another scan.');
+          return;
+        }
+        final image = _selectedImage!;
+        _resetScreeningFlow();
+        setState(() {
+          _analysisResult = null;
+          _isAnalyzing = true;
+        });
+        _currentScanPatientId = patient.id;
+        _currentScanUserId = currentUserUid.isEmpty ? null : currentUserUid;
+        _currentScanImagePath = CacxScreeningResultsRepository.buildImagePath(
+            userId: _currentScanUserId, patientId: patient.id);
+        try {
+          // Await local preparation before considering any online provider.
+          // Never start a competing provider while a local request is outstanding.
+          if (!_localCervicalReady &&
+              _deviceManager.activeExaminationId == null &&
+              _deviceManager.state != EdgeDeviceState.busy) {
+            _setFlowStatus('Connecting to the local Dawa device…');
+            await _deviceManager.prepareWorkflow(EdgeAIModel.cervicalCancer);
+            if (!mounted) return;
+          }
+          final preparationFailure = _deviceManager.preparationFailure;
+          if (!_localCervicalReady && preparationFailure != null) {
+            _lastDeviceFailure = classifyCacxDeviceFailure(preparationFailure);
+          }
+          final primary = _localCervicalReady
+              ? await _sendImageToDeviceOnce(image, patient.id)
+              : CervicalDeviceInterpretation.failure(
+                  label: 'Device unavailable',
+                  message: 'Local analysis is unavailable.',
+                  rawResponse: const {'status': 'unavailable'},
+                  deviceStatus: 'failed');
+          if (!mounted) return;
+          final fallback = cacxAllowsAutomaticFallback(
+              enabled: widget.allowOnlineFallback &&
+                  _onlineAvailable != false &&
+                  OfflineConnectivityService
+                          .statusNotifier.value?.internetAvailable !=
+                      false,
+              deviceStatus: primary.deviceStatus,
+              failure: _lastDeviceFailure?.kind);
+          _primaryDeviceResult = primary;
+          _secondOpinionRequired = fallback;
+          _secondOpinionStatus = fallback ? 'pending' : 'not_required';
+          _setFlowStatus(fallback
+              ? 'Device unavailable — analysing online'
+              : 'Device result received');
+          _screeningRecordId = await _savePrimaryResultForCurrentScan(
+              primary: primary,
+              secondOpinionRequired: fallback,
+              secondOpinionStatus: _secondOpinionStatus);
+          if (!mounted) return;
+          if (primary.deviceStatus == 'success') {
+            if (_draftId != null && _currentScanUserId != null) {
+              await CacxScanDrafts.markAnalyzed(_currentScanUserId!, _draftId!);
+              await _reloadScanDrafts();
+              if (!mounted) return;
+            }
+            setState(() {
+              _analysisResult = primary.toAnalysisResult(image);
+              _appState = AppState.results;
+            });
+          } else if (fallback) {
+            await _runCloudFallbackForCurrentScan(
+                primary: primary,
+                statusMessage: 'Device unavailable — analysing online',
+                warning:
+                    'The selected image is being sent to the online analysis service.');
+            if (mounted && _analysisResult == null) {
+              setState(() => _appState = AppState.viaTest);
+            }
+          } else {
+            _setFlowStatus(
+                primary.deviceStatus == 'rejected'
+                    ? 'Image could not be analysed. Retake or replace the image.'
+                    : 'Analysis failed — try again',
+                warning:
+                    'Your patient and image are retained. Review them before retrying.');
+            setState(() => _appState = AppState.viaTest);
+          }
+        } catch (error, stack) {
+          debugPrint('[CaCx] Analysis attempt failed: ${error.runtimeType}');
+          debugPrintStack(stackTrace: stack);
+          if (mounted) {
+            _setFlowStatus('Analysis failed — try again',
+                warning: 'Your patient and image are retained.');
+            setState(() => _appState = AppState.viaTest);
+          }
+        } finally {
+          if (mounted) setState(() => _isAnalyzing = false);
+        }
       });
-      return;
-    }
-
-    if (!secondRequired) {
-      setState(() {
-        _deviceSecondsRemaining = null;
-        _analysisResult = primary.toAnalysisResult(image);
-        _isAnalyzing = false;
-        _appState = AppState.results;
-      });
-      return;
-    }
-
-    await _runCloudFallbackForCurrentScan(
-      primary: primary,
-      statusMessage: primary.deviceStatus == 'timeout'
-          ? 'Device did not respond in time. Sending for second opinion.'
-          : primary.deviceStatus == 'rejected'
-              ? 'Device rejected the image quality. Sending for second opinion.'
-              : 'Device failed. Sending for second opinion.',
-      warning: 'The online scan is using the same uploaded image.',
-    );
-  }
 
   Future<void> _analyzeImageOfflineOnly({
     required String image,
@@ -872,15 +820,15 @@ class _CaCxAppState extends State<CaCxApp> {
     _setFlowStatus('Connecting to Dawa Device...');
     _startDeviceCountdown(deadline);
 
-    final manager = EdgeDeviceManager.shared;
+    final manager = _deviceManager;
     void syncDeviceStatus() {
       if (!mounted || !_deviceUploadInProgress) return;
       final status = switch (manager.state) {
         EdgeDeviceState.connecting ||
         EdgeDeviceState.connected =>
           'Connecting to Dawa Device...',
-        EdgeDeviceState.loadingModel =>
-          'Preparing Cervical AI: waiting for the model to load (usually about a minute, up to 3 minutes)...',
+        EdgeDeviceState.loadingModel => manager.readinessMessage ??
+            'Preparing Cervical AI. Patient and image preparation remain available.',
         EdgeDeviceState.ready => 'Cervical AI ready',
         EdgeDeviceState.examining => 'Sending image for device processing...',
         EdgeDeviceState.busy => 'Device busy',
@@ -893,8 +841,7 @@ class _CaCxAppState extends State<CaCxApp> {
 
     var inferenceCompleted = false;
     try {
-      if (!skipHealthCheck &&
-          !EdgeDeviceManager.shared.modelManagementEnabled) {
+      if (!skipHealthCheck && !_deviceManager.modelManagementEnabled) {
         await CervicalDeviceService.checkHealth();
       }
 
@@ -911,10 +858,16 @@ class _CaCxAppState extends State<CaCxApp> {
         image,
         patientId,
         timeout: remaining,
+        deviceManager: manager,
       );
 
       inferenceCompleted = true;
       if (result.failed) {
+        if (result.deviceStatus != 'rejected') {
+          _lastDeviceFailure = const CacxDeviceFailure(
+              CacxDeviceFailureKind.invalidResponse,
+              'The image could not be analysed. Review the image and retry.');
+        }
         debugPrint('[Device] Unrecoverable error: ${result.error}');
       } else {
         debugPrint('[Device] Success');
@@ -932,16 +885,8 @@ class _CaCxAppState extends State<CaCxApp> {
       debugPrint('[Device] Fallback reason: ${failure.kind.name} '
           '(${error.runtimeType})');
       _lastDeviceFailure = failure;
-      _setFlowStatus(
-        allowCloudFallbackMessages
-            ? failure.isApplicationError
-                ? 'Application error: ${failure.message}'
-                : 'Device unavailable: ${failure.message}'
-            : 'Offline mode: Arduino device not connected',
-        warning: allowCloudFallbackMessages
-            ? failure.message
-            : 'Offline mode: Arduino device not connected. Please connect the device or go online.',
-      );
+      _setFlowStatus('Device analysis could not complete.',
+          warning: 'Your patient and image are retained.');
       return CervicalDeviceInterpretation.failure(
         label: 'Error',
         message: failure.message,
@@ -990,7 +935,6 @@ class _CaCxAppState extends State<CaCxApp> {
             CervicalDeviceConfig.timeoutSeconds,
           )
           .toInt();
-      _deviceRetryCount = retryCount;
     });
   }
 
@@ -999,6 +943,21 @@ class _CaCxAppState extends State<CaCxApp> {
     required bool secondOpinionRequired,
     required String secondOpinionStatus,
   }) async {
+    if (_scanOffline) {
+      await CacxScreeningResultsRepository.enqueuePrimaryResult(
+          patientId: _currentScanPatientId,
+          userId: _currentScanUserId,
+          imagePath: _currentScanImagePath!,
+          primary: primary,
+          secondOpinionRequired: false,
+          secondOpinionStatus: 'not_required');
+      _resultQueued = true;
+      if (primary.deviceStatus == 'success') {
+        _setFlowStatus('Device analysis complete · saved locally',
+            warning: 'Result will sync automatically when you are online.');
+      }
+      return null;
+    }
     final existingId = _screeningRecordId;
     if (existingId != null && existingId.isNotEmpty) {
       final saved = await CacxScreeningResultsRepository.updatePrimaryResult(
@@ -1020,6 +979,7 @@ class _CaCxAppState extends State<CaCxApp> {
       secondOpinionRequired: secondOpinionRequired,
       secondOpinionStatus: secondOpinionStatus,
     );
+    _resultQueued = recordId == null;
     if (recordId != null && mounted) {
       setState(() => _screeningRecordId = recordId);
     }
@@ -1041,122 +1001,22 @@ class _CaCxAppState extends State<CaCxApp> {
     );
   }
 
-  Future<void> _skipToCloudResultNow() async {
-    if (_selectedImage == null || _cloudFallbackInProgress) return;
-
-    final primary = _primaryDeviceResult ?? _pendingDeviceInterpretation();
-    final choice = await _askSecondOpinionApproval(primary);
-    if (!mounted || choice != _SecondOpinionChoice.sendOnline) return;
-    _cloudFallbackRequested = true;
-
-    await _savePrimaryResultForCurrentScan(
-      primary: primary,
-      secondOpinionRequired: true,
-      secondOpinionStatus: 'pending',
-    );
-
-    if (!mounted) return;
-    setState(() {
-      _primaryDeviceResult = primary;
-      _secondOpinionRequired = true;
-      _secondOpinionStatus = 'pending';
-    });
-
-    await _runCloudFallbackForCurrentScan(
-      userApproved: true,
-      primary: primary,
-      statusMessage: 'Using online scan result now...',
-      warning:
-          'The online scan is using the same uploaded image while the offline device request continues.',
-    );
-  }
-
-  Future<_SecondOpinionChoice> _askSecondOpinionApproval(
-    CervicalDeviceInterpretation primary,
-  ) async {
-    final deviceFailed = primary.deviceStatus != 'success';
-    final failure = _lastDeviceFailure;
-    final reason = !deviceFailed
-        ? 'The device result recommends a second opinion.'
-        : primary.deviceStatus == 'rejected'
-            ? 'The device rejected the image quality.'
-            : failure?.message ??
-                primary.error ??
-                'The Dawa device could not analyse the image.';
-    debugPrint('[Device] Fallback reason: '
-        '${failure?.kind.name ?? primary.deviceStatus}');
-    final canRetry = deviceFailed && primary.deviceStatus != 'rejected';
-    final choice = await showDialog<_SecondOpinionChoice>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Send for online second opinion?'),
-        content: Text(
-          '$reason\n\nSending will upload this cervical image to the online '
-          'second-opinion service, outside the clinic network.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(_SecondOpinionChoice.cancel),
-            child: const Text('Do not send'),
-          ),
-          if (canRetry)
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext)
-                  .pop(_SecondOpinionChoice.retryDevice),
-              child: const Text('Retry device'),
-            ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext)
-                .pop(_SecondOpinionChoice.sendOnline),
-            child: const Text('Send online'),
-          ),
-        ],
-      ),
-    );
-    return choice ?? _SecondOpinionChoice.cancel;
-  }
-
   Future<void> _runCloudFallbackForCurrentScan({
     required CervicalDeviceInterpretation primary,
     required String statusMessage,
     String? warning,
-    bool userApproved = false,
   }) async {
     if (_selectedImage == null || _cloudFallbackInProgress) return;
 
-    if (!userApproved) {
-      final choice = await _askSecondOpinionApproval(primary);
-      if (!mounted) return;
-      if (choice == _SecondOpinionChoice.retryDevice) {
-        debugPrint('[Device] Controlled retry requested by clinician');
-        _lastDeviceFailure = null;
-        await _analyzeImage();
-        return;
-      }
-      if (choice != _SecondOpinionChoice.sendOnline) {
-        debugPrint('[Device] Online second opinion declined by clinician');
-        _setFlowStatus(
-          'Online second opinion not sent',
-          warning:
-              'The image was not sent to the online service. Re-run the scan when the Dawa device is ready.',
-        );
-        setState(() {
-          _deviceSecondsRemaining = null;
-          _isAnalyzing = false;
-          _appState = AppState.dashboard;
-        });
-        return;
-      }
-    }
-
-    final connectivity = await OfflineConnectivityService.refreshStatus();
+    final connectivity = await (widget.checkConnectivity?.call() ??
+        OfflineConnectivityService.refreshStatus());
+    if (mounted)
+      setState(() => _onlineAvailable = connectivity.internetAvailable);
     if (!connectivity.internetAvailable) {
       _setFlowStatus(
         'Offline mode: online scan unavailable',
         warning:
-            'Server analysis requires internet. Connect to the internet or use the Arduino device.',
+            'Connect to the internet or reconnect the Dawa device, then retry Analyze image.',
       );
       if (!mounted) return;
       setState(() {
@@ -1173,13 +1033,15 @@ class _CaCxAppState extends State<CaCxApp> {
 
     final image = _selectedImage!;
     try {
-      final secondOpinion = await HuggingFaceService.analyzeVIAImage(image);
+      final secondOpinion = await (widget.requestSecondOpinion?.call(image) ??
+          HuggingFaceService.analyzeVIAImage(image));
       final secondOpinionFailed = secondOpinion.error != null ||
           secondOpinion.label.toLowerCase().contains('failed') ||
           secondOpinion.label.toLowerCase().contains('error');
       final finalSecondStatus = secondOpinionFailed ? 'failed' : 'completed';
 
-      await CacxScreeningResultsRepository.updateSecondOpinion(
+      final opinionSaved =
+          await CacxScreeningResultsRepository.updateSecondOpinion(
         recordId: _screeningRecordId,
         result: secondOpinion,
         status: finalSecondStatus,
@@ -1207,97 +1069,71 @@ class _CaCxAppState extends State<CaCxApp> {
             : 'Second opinion completed',
         warning: secondOpinionFailed
             ? 'The server fallback did not complete. Please retry or escalate for clinical review.'
-            : null,
+            : opinionSaved
+                ? null
+                : 'Online analysis completed, but the result could not be saved. Keep this page open.',
       );
 
       setState(() {
+        _secondOpinionPersisted = opinionSaved;
         _deviceSecondsRemaining = null;
         _secondOpinionResult = secondOpinion;
         _secondOpinionStatus = finalSecondStatus;
-        _analysisResult = finalResult;
+        _analysisResult =
+            secondOpinionFailed && primary.deviceStatus != 'success'
+                ? null
+                : finalResult;
         _isAnalyzing = false;
-        _appState = AppState.results;
+        _appState =
+            _analysisResult == null ? AppState.dashboard : AppState.results;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      _setFlowStatus('Online second opinion unavailable',
+          warning:
+              'The service did not complete the request. Your image is kept; retry when connected.');
+      setState(() {
+        _isAnalyzing = false;
+        _secondOpinionStatus = 'failed';
+        _appState =
+            _analysisResult == null ? AppState.dashboard : AppState.results;
       });
     } finally {
       _cloudFallbackInProgress = false;
     }
   }
 
-  Future<void> _runManualSecondOpinion() async {
-    if (_selectedImage == null) return;
-    final approved = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Send for online second opinion?'),
-        content: const Text(
-          'This sends the selected image outside the clinic network to the online second-opinion service.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Do not send'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Send online'),
-          ),
-        ],
-      ),
-    );
-    if (approved != true || !mounted) return;
+  Future<void> _runManualSecondOpinion() => _analyzeImage();
 
-    final connectivity = await OfflineConnectivityService.refreshStatus();
-    if (!connectivity.internetAvailable) {
-      _setFlowStatus(
-        'Offline mode: online scan unavailable',
-        warning:
-            'Server analysis requires internet. Connect to the internet or use the Arduino device.',
-      );
-      return;
+  Future<void> _saveAnalysisResult() async {
+    if (_savingOpinionResult ||
+        _isAnalyzing ||
+        _onlineRequestInProgress ||
+        _cloudFallbackInProgress) return;
+    if (_secondOpinionRequired && !_secondOpinionPersisted) {
+      final opinion = _secondOpinionResult;
+      if (_screeningRecordId != null && opinion != null) {
+        setState(() => _savingOpinionResult = true);
+        final saved = await CacxScreeningResultsRepository.updateSecondOpinion(
+            recordId: _screeningRecordId,
+            result: opinion,
+            status: _secondOpinionStatus);
+        if (!mounted) return;
+        setState(() {
+          _secondOpinionPersisted = saved;
+          _savingOpinionResult = false;
+          if (saved) {
+            _flowWarningMessage = null;
+            _analyzingStatus = 'Second opinion saved';
+          }
+        });
+      }
+      if (!_secondOpinionPersisted) {
+        showDawaToast(context,
+            'The second opinion has not been saved. Keep this page open and check your connection.');
+        return;
+      }
     }
-
-    setState(() {
-      _isAnalyzing = true;
-      _secondOpinionRequired = true;
-      _secondOpinionStatus = 'pending';
-    });
-    _setFlowStatus('Sending for second opinion...');
-
-    final secondOpinion = await HuggingFaceService.analyzeVIAImage(
-      _selectedImage!,
-    );
-    final failed = secondOpinion.error != null ||
-        secondOpinion.label.toLowerCase().contains('failed') ||
-        secondOpinion.label.toLowerCase().contains('error');
-    final status = failed ? 'failed' : 'completed';
-
-    await CacxScreeningResultsRepository.updateSecondOpinion(
-      recordId: _screeningRecordId,
-      result: secondOpinion,
-      status: status,
-    );
-
-    if (!mounted) return;
-
-    _setFlowStatus(
-      failed
-          ? 'Second opinion failed - manual review required'
-          : 'Second opinion completed',
-      warning: failed
-          ? 'The server fallback did not complete. Please retry or escalate for clinical review.'
-          : null,
-    );
-
-    setState(() {
-      _secondOpinionResult = secondOpinion;
-      _secondOpinionStatus = status;
-      _analysisResult = failed ? _analysisResult : secondOpinion;
-      _isAnalyzing = false;
-      _appState = AppState.results;
-    });
-  }
-
-  void _saveAnalysisResult() {
     if (widget.returnToPreviousOnSave) {
       Navigator.of(context).pop(true);
       return;
@@ -1349,9 +1185,10 @@ class _CaCxAppState extends State<CaCxApp> {
       _selectedPatient = null;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Record Saved Successfully!')),
-    );
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+          const SnackBar(content: Text('Record Saved Successfully!')));
   }
 
   Future<void> _shareAnalysisSummary() async {
@@ -1373,29 +1210,6 @@ class _CaCxAppState extends State<CaCxApp> {
     );
   }
 
-  void _addNewPatient() {
-    if (_nameController.text.isEmpty ||
-        _ageController.text.isEmpty ||
-        _phoneController.text.isEmpty) return;
-
-    final newPatient = Patient(
-      id: 'DM-${1000 + _patients.length}',
-      name: _nameController.text,
-      age: int.parse(_ageController.text),
-      contact: _phoneController.text,
-      status: PatientStatus.untested,
-      riskLevel: RiskLevel.low,
-    );
-
-    setState(() {
-      _patients = [newPatient, ..._patients];
-      _selectedPatient = newPatient;
-      _nameController.clear();
-      _ageController.clear();
-      _phoneController.clear();
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     switch (_appState) {
@@ -1403,6 +1217,8 @@ class _CaCxAppState extends State<CaCxApp> {
         return _buildSplashScreen();
       case AppState.results:
         return _buildResultsScreen();
+      case AppState.viaTest:
+        return _buildScreeningWorkspace();
       default:
         return _buildMainLayout();
     }
@@ -1465,32 +1281,48 @@ class _CaCxAppState extends State<CaCxApp> {
 
   // ??? MAIN LAYOUT ??????????????????????????????????????????????????????????
   Widget _buildMainLayout() {
-    final isMobile = MediaQuery.of(context).size.width < 768;
-
     return Scaffold(
-      body: SafeArea(
-        child: Row(
-          children: [
-            if (!isMobile) ...[
-              _buildSidebar(),
-              const VerticalDivider(width: 1),
+      backgroundColor: NavigationTokens.canvas,
+      body: Column(
+        children: [
+          if (_loadingPatients) const LinearProgressIndicator(),
+          if (widget.demonstrationMode)
+            const Text('Training data — real screening is disabled.'),
+          if (_patientLoadError != null &&
+              (_activeTab != DashboardTab.home || _patientsLoaded))
+            Padding(
+                padding: const EdgeInsets.all(8),
+                child: Row(children: [
+                  Expanded(child: Text(_patientLoadError!)),
+                  TextButton(
+                      onPressed: _loadScreeningData,
+                      child: const Text('Retry records')),
+                ])),
+          Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              child: _buildCacxEdgeStatus(compact: true)),
+          if (_shouldShowFlowStatus) _buildFlowStatusBanner(),
+          ClinicalTabBar(
+            tabs: const [
+              ClinicalTab('Overview'),
+              ClinicalTab('Patient Records'),
+              ClinicalTab('Screening History')
             ],
-            Expanded(
-              child: Column(
-                children: [
-                  if (isMobile) ...[
-                    _buildMobileHeader(),
-                    const Divider(height: 1),
-                  ],
-                  if (_shouldShowFlowStatus) _buildFlowStatusBanner(),
-                  Expanded(child: _buildCurrentTab()),
-                ],
-              ),
-            ),
-          ],
-        ),
+            activeIndex: _activeTab == DashboardTab.home
+                ? 0
+                : _activeTab == DashboardTab.patients
+                    ? 1
+                    : 2,
+            enabled: !_isAnalyzing,
+            onSelected: (i) => _handleTabChange([
+              DashboardTab.home,
+              DashboardTab.patients,
+              DashboardTab.history
+            ][i]),
+          ),
+          Expanded(child: _buildCurrentTab()),
+        ],
       ),
-      bottomNavigationBar: isMobile ? _buildMobileBottomNav() : null,
     );
   }
 
@@ -1512,17 +1344,6 @@ class _CaCxAppState extends State<CaCxApp> {
             ? Icons.sync_rounded
             : Icons.check_circle_outline;
     final remaining = _deviceSecondsRemaining;
-    final progress = remaining == null
-        ? null
-        : 1 -
-            (remaining / CervicalDeviceConfig.timeoutSeconds)
-                .clamp(0.0, 1.0)
-                .toDouble();
-    final showCloudSkip = _isAnalyzing &&
-        _deviceUploadInProgress &&
-        !_cloudFallbackRequested &&
-        _selectedImage != null;
-
     return Container(
       width: double.infinity,
       color: DawaTokens.surface,
@@ -1580,7 +1401,7 @@ class _CaCxAppState extends State<CaCxApp> {
                       if (_isAnalyzing && remaining != null) ...[
                         const SizedBox(height: 8),
                         Text(
-                          'The device may need several minutes to prepare and process the image.',
+                          'The device is processing this screening. Readiness and results are confirmed by the device.',
                           style: DawaTextStyles.secondary.copyWith(
                             color: warning
                                 ? DawaTokens.statusWarningText
@@ -1592,54 +1413,21 @@ class _CaCxAppState extends State<CaCxApp> {
                         ClipRRect(
                           borderRadius: BorderRadius.circular(99),
                           child: LinearProgressIndicator(
-                            value: progress,
                             minHeight: 5,
                             color: statusColor,
                             backgroundColor: Colors.white.withOpacity(0.65),
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          '$remaining seconds remaining'
-                          '${_deviceRetryCount > 0 ? ' - retry $_deviceRetryCount' : ''}',
-                          style: DawaTextStyles.secondary.copyWith(
-                            color: warning
-                                ? DawaTokens.statusWarningText
-                                : DawaTokens.textSecondary,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                      if (showCloudSkip) ...[
-                        const SizedBox(height: 10),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: OutlinedButton.icon(
-                            onPressed: _cloudFallbackInProgress
-                                ? null
-                                : _skipToCloudResultNow,
-                            icon: const Icon(Icons.cloud_outlined, size: 16),
-                            label: const Text('Use Online Scan Now'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: DawaTokens.brandPrimary,
-                              side: const BorderSide(
-                                color: DawaTokens.brandPrimary,
-                              ),
-                              backgroundColor: DawaTokens.surface,
-                            ),
                           ),
                         ),
                       ],
                     ],
                   ),
                 ),
-                if (!showCloudSkip &&
-                    !_isAnalyzing &&
+                if (!_isAnalyzing &&
                     _selectedImage != null &&
                     _secondOpinionStatus == 'failed')
                   TextButton(
                     onPressed: _runManualSecondOpinion,
-                    child: const Text('Retry server'),
+                    child: const Text('Retry analysis'),
                   ),
                 if (!_isAnalyzing &&
                     _selectedImage != null &&
@@ -1654,65 +1442,123 @@ class _CaCxAppState extends State<CaCxApp> {
               ],
             ),
           ),
-          if (_isAnalyzing || _primaryDeviceResult != null) ...[
-            const SizedBox(height: 8),
-            _buildCacxEdgeStatus(),
-          ],
         ],
       ),
     );
   }
 
-  Widget _buildCacxEdgeStatus() {
-    final manager = EdgeDeviceManager.shared;
-    return AnimatedBuilder(
-      animation: manager,
+  Widget _buildCacxEdgeStatus({bool compact = false}) => AnimatedBuilder(
+      animation: _deviceManager,
       builder: (context, _) {
-        if (manager.activeExaminationId != null &&
-            manager.activeModel != EdgeAIModel.cervicalCancer) {
-          return const SizedBox.shrink();
-        }
-        if (!manager.modelManagementEnabled) {
-          return const EdgeDeviceStatusBanner(
-            state: EdgeDeviceState.unverified,
-            message:
-                'Legacy CaCx upload remains available. The device does not confirm model readiness until George verifies model-management support.',
-          );
+        final manager = _deviceManager;
+        if (compact) {
+          final hub = manager.hubConnected == true
+              ? 'Hub connected'
+              : manager.hubConnected == false
+                  ? 'Hub offline'
+                  : 'Checking hub';
+          final model = _localCervicalReady
+              ? 'Cervical model ready'
+              : manager.activeExaminationId != null
+                  ? 'Device in use'
+                  : 'Cervical model not ready';
+          return SizedBox(
+              width: double.infinity,
+              child: Wrap(
+                  spacing: 12,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    const Icon(Icons.hub_outlined,
+                        size: 16, color: NavigationTokens.secondary),
+                    Text('$hub · $model',
+                        style: DawaTextStyles.secondary.copyWith(fontSize: 12)),
+                    if (widget.allowOnlineFallback) ...[
+                      Text(
+                          _onlineAvailable == false
+                              ? 'Online unavailable'
+                              : 'Automatic online fallback',
+                          style:
+                              DawaTextStyles.secondary.copyWith(fontSize: 12)),
+                      const Tooltip(
+                          message:
+                              'If the device is unavailable, Analyze sends the screening image to the online analysis service. Patient identity is not sent.',
+                          child: Icon(Icons.info_outline_rounded,
+                              size: 16, color: NavigationTokens.secondary)),
+                    ],
+                  ]));
         }
         final unresolved = manager.activeModel == EdgeAIModel.cervicalCancer &&
             manager.activeExaminationId != null &&
+            !_deviceUploadInProgress &&
             {
               EdgeDeviceState.error,
-              EdgeDeviceState.loadingModel,
               EdgeDeviceState.busy,
-              EdgeDeviceState.unsupported,
+              EdgeDeviceState.unsupported
             }.contains(manager.state);
         return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            EdgeDeviceStatusBanner(
-              model: EdgeAIModel.cervicalCancer,
-              state: manager.state,
-              message: manager.readinessMessage ??
-                  'Active model: ${(manager.activeModel ?? manager.observedReadyModel)?.wireValue ?? 'none'}',
-            ),
-            if (unresolved)
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: _reconcileCacxEdgeSession,
-                  icon: const Icon(Icons.sync),
-                  label: const Text('Recheck device session'),
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              EdgeWorkflowStatus(
+                  manager: manager,
+                  model: EdgeAIModel.cervicalCancer,
+                  examinationId: _deviceUploadInProgress
+                      ? manager.activeExaminationId
+                      : null,
+                  isRelevant: _appState == AppState.viaTest ||
+                      _selectedImage != null ||
+                      _isAnalyzing ||
+                      _deviceUploadInProgress),
+              if (_selectedImage != null)
+                FilledButton.icon(
+                    onPressed: (_localCervicalReady ||
+                                _canTryLocal ||
+                                widget.allowOnlineFallback &&
+                                    _onlineAvailable != false) &&
+                            _selectedPatient != null &&
+                            _deviceManager.activeExaminationId == null &&
+                            _deviceManager.state != EdgeDeviceState.busy &&
+                            !_isAnalyzing &&
+                            !_analysisAttempt.running &&
+                            !widget.demonstrationMode
+                        ? () {
+                            setState(() => _isAnalyzing = true);
+                            unawaited(_analyzeImage());
+                          }
+                        : null,
+                    icon: const Icon(Icons.biotech),
+                    label: const Text('Analyze image')),
+              if (widget.allowOnlineFallback)
+                Text(
+                    'Analyze tries the local Dawa device first. If it is unavailable and internet is available, the image is sent for online analysis. Patient identity is not sent.',
+                    style: DawaTextStyles.secondary),
+              if (!_localCervicalReady)
+                Text(
+                    widget.allowOnlineFallback && _onlineAvailable != false
+                        ? 'The local Dawa device is checked first. Online analysis is used only if it is unavailable.'
+                        : 'No internet. Analyze will connect to the local Dawa device; results will sync later.',
+                    style: DawaTextStyles.secondary),
+              if (_onlineAvailable == false && !_localCervicalReady)
+                TextButton(
+                    onPressed: () async {
+                      final connection =
+                          await (widget.checkConnectivity?.call() ??
+                              OfflineConnectivityService.refreshStatus());
+                      if (mounted)
+                        setState(() =>
+                            _onlineAvailable = connection.internetAvailable);
+                    },
+                    child: const Text('Retry connection')),
+              if (unresolved)
+                TextButton.icon(
+                    onPressed: _reconcileCacxEdgeSession,
+                    icon: const Icon(Icons.sync),
+                    label: const Text('Check interrupted device session')),
+            ]);
+      });
 
   Future<void> _reconcileCacxEdgeSession() async {
-    final manager = EdgeDeviceManager.shared;
+    final manager = _deviceManager;
     if (manager.activeModel != EdgeAIModel.cervicalCancer) {
       if (mounted) {
         showDawaToast(
@@ -1737,233 +1583,6 @@ class _CaCxAppState extends State<CaCxApp> {
     }
   }
 
-  // ??? SIDEBAR ??????????????????????????????????????????????????????????????
-  Widget _buildSidebar() {
-    return Container(
-      width: 280,
-      color: Colors.white,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(24),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border:
-                        Border.all(color: DawaTokens.brandPrimary, width: 1.5),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Image.asset(
-                      'assets/images/dawa_cross.png',
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Dawa CaCx',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                          color: Colors.black87),
-                    ),
-                    Text(
-                      'Dashboard',
-                      style: TextStyle(
-                          fontSize: 10, color: Colors.grey, letterSpacing: 1),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-            child: _buildBackToHomeButton(),
-          ),
-          const Divider(),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                _buildNavItem(Icons.dashboard, 'Dashboard', DashboardTab.home),
-                _buildNavItem(
-                    Icons.people, 'Patient Registry', DashboardTab.patients),
-                _buildNavItem(
-                    Icons.history, 'Screening History', DashboardTab.history),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBackToHomeButton({
-    bool compact = false,
-    double? width,
-    Color color = DawaTokens.brandPrimary,
-  }) {
-    final style = OutlinedButton.styleFrom(
-      foregroundColor: color,
-      side: BorderSide(color: color.withOpacity(0.28)),
-      minimumSize: Size.zero,
-      padding: compact
-          ? EdgeInsets.zero
-          : const EdgeInsets.symmetric(horizontal: 12),
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
-      ),
-    );
-
-    final button = compact
-        ? OutlinedButton(
-            onPressed: _handleLogout,
-            style: style,
-            child: const Icon(Icons.arrow_back_rounded, size: 18),
-          )
-        : OutlinedButton.icon(
-            onPressed: _handleLogout,
-            icon: const Icon(Icons.arrow_back_rounded, size: 18),
-            label: const Text('Back to Home'),
-            style: style,
-          );
-
-    return SizedBox(
-      width: width ?? double.infinity,
-      height: 38,
-      child: Tooltip(
-        message: 'Back to Home',
-        child: button,
-      ),
-    );
-  }
-
-  Widget _buildNavItem(IconData icon, String label, DashboardTab tab) {
-    final isActive = _activeTab == tab;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: isActive ? DawaTokens.brandPrimary : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-        child: ListTile(
-          leading: Icon(
-            icon,
-            color: isActive ? DawaTokens.textInverse : DawaTokens.textMuted,
-          ),
-          title: Text(
-            label,
-            style: TextStyle(
-              color:
-                  isActive ? DawaTokens.textInverse : DawaTokens.textSecondary,
-              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
-          onTap: () => _handleTabChange(tab),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      ),
-    );
-  }
-
-  // ??? MOBILE HEADER ????????????????????????????????????????????????????????
-  Widget _buildMobileHeader() {
-    final compact = MediaQuery.of(context).size.width < 430;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      color: Colors.white,
-      child: Row(
-        children: [
-          _buildBackToHomeButton(
-            compact: compact,
-            width: compact ? 38 : 136,
-          ),
-          const SizedBox(width: 4),
-          SizedBox(
-            width: 40,
-            height: 40,
-            child: Image.asset('assets/images/dawa_cross.png',
-                fit: BoxFit.contain),
-          ),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Text(
-              'Dawa CaCx',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                  color: Colors.black87),
-            ),
-          ),
-          const SizedBox(width: 8),
-          const CircleAvatar(
-            backgroundColor: DawaTokens.brandPrimaryPale,
-            child: Text('MM',
-                style: TextStyle(
-                    color: DawaTokens.brandPrimary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ??? MOBILE BOTTOM NAV ????????????????????????????????????????????????????
-  Widget _buildMobileBottomNav() {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildMobileNavItem(Icons.dashboard, 'Home', DashboardTab.home),
-          _buildMobileNavItem(Icons.people, 'Patients', DashboardTab.patients),
-          _buildMobileNavItem(Icons.history, 'History', DashboardTab.history),
-          _buildMobileNavItem(Icons.person, 'Profile', DashboardTab.profile),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMobileNavItem(IconData icon, String label, DashboardTab tab) {
-    final isActive = _activeTab == tab;
-    return GestureDetector(
-      onTap: () => _handleTabChange(tab),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon,
-              color: isActive ? DawaTokens.brandPrimary : Colors.grey,
-              size: 24),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: isActive ? DawaTokens.brandPrimary : Colors.grey,
-              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildCurrentTab() {
     switch (_activeTab) {
       case DashboardTab.home:
@@ -1977,67 +1596,888 @@ class _CaCxAppState extends State<CaCxApp> {
     }
   }
 
-  // ??? HOME TAB ?????????????????????????????????????????????????????????????
-  Widget _buildHomeTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Cervical Cancer Dashboard',
-            style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87),
+  void _beginNewScreening() {
+    if (_isAnalyzing || _deviceUploadInProgress || _cloudFallbackInProgress) {
+      showDawaToast(context, 'A cervical screening is already in progress.');
+      return;
+    }
+    setState(() {
+      _screeningMode = ScreeningMode.via;
+      _draftId = null;
+      _selectedImage = null;
+      _analysisResult = null;
+      _resetScreeningFlow();
+      _appState = AppState.viaTest;
+    });
+  }
+
+  Widget _buildScreeningWorkspace() {
+    final patient = _selectedPatient;
+    final imagePrepared = _selectedImage != null;
+    return Scaffold(
+      backgroundColor: NavigationTokens.canvas,
+      body: SafeArea(
+        bottom: false,
+        child: LayoutBuilder(builder: (context, constraints) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1120),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        spacing: 8,
+                        runSpacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          TextButton.icon(
+                            onPressed: _isAnalyzing
+                                ? null
+                                : () => setState(
+                                    () => _appState = AppState.dashboard),
+                            icon:
+                                const Icon(Icons.arrow_back_rounded, size: 18),
+                            label: const Text('Back to overview'),
+                          ),
+                          if (patient != null)
+                            DawaStatusBadge(
+                                status: 'pending',
+                                label: 'Screening in progress'),
+                        ]),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Confirm the patient, prepare an image, then request AI-assisted analysis.',
+                      style: DawaTextStyles.secondary
+                          .copyWith(color: DawaTokens.textSecondary),
+                    ),
+                    const SizedBox(height: 18),
+                    if (_scanDrafts.isNotEmpty) _buildSavedScanDrafts(),
+                    _buildScreeningSteps(
+                        patient: patient, imagePrepared: imagePrepared),
+                    const SizedBox(height: 20),
+                    ClinicalScreeningLayout(
+                      image: _buildWorkflowImageCard(),
+                      analysis: Column(children: [
+                        _buildWorkflowPatientCard(),
+                        const SizedBox(height: 16),
+                        _buildWorkflowAnalysisCard(),
+                      ]),
+                    ),
+                    const SizedBox(height: 16),
+                    if (_flowWarningMessage != null) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: DawaTokens.statusWarningBg,
+                          borderRadius:
+                              BorderRadius.circular(DawaTokens.radiusMd),
+                          border: Border.all(
+                              color: DawaTokens.statusWarning.withOpacity(.35)),
+                        ),
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(_analyzingStatus,
+                                  style: DawaTextStyles.secondary.copyWith(
+                                      color: DawaTokens.statusWarningText,
+                                      fontWeight: FontWeight.w700)),
+                              const SizedBox(height: 3),
+                              Text(
+                                  'Analysis needs attention. Retry the device connection above, or replace the image and try again.',
+                                  style: DawaTextStyles.secondary),
+                            ]),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildScreeningSteps(
+      {required Patient? patient, required bool imagePrepared}) {
+    final steps = <(String, bool)>[
+      ('Patient', patient != null),
+      ('Image', imagePrepared),
+      ('Analysis', _isAnalyzing || _analysisResult != null),
+      ('Review', _analysisResult != null),
+    ];
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (var index = 0; index < steps.length; index++)
+          Semantics(
+            label:
+                '${steps[index].$1}${steps[index].$2 ? ', complete' : ', pending'}',
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: steps[index].$2
+                    ? NavigationTokens.selected
+                    : DawaTokens.surface,
+                borderRadius: BorderRadius.circular(99),
+                border: Border.all(
+                    color: steps[index].$2
+                        ? NavigationTokens.brand
+                        : DawaTokens.border),
+              ),
+              child: Text('${index + 1}. ${steps[index].$1}',
+                  style: DawaTextStyles.secondary.copyWith(
+                      color: steps[index].$2
+                          ? NavigationTokens.brand
+                          : DawaTokens.textSecondary,
+                      fontWeight: FontWeight.w600)),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildWorkflowPatientCard() {
+    final locked =
+        (_selectedImage != null && _selectedPatient != null) || _isAnalyzing;
+    final query = _screeningPatientQuery.trim().toLowerCase();
+    final matching = _patients
+        .where((patient) =>
+            query.isEmpty ||
+            patient.name.toLowerCase().contains(query) ||
+            patient.id.toLowerCase().contains(query))
+        .take(6)
+        .toList();
+    final patient = _selectedPatient;
+    return DawaCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('1. Select patient', style: DawaTextStyles.cardTitle),
+        const SizedBox(height: 6),
+        Text(
+            'Choose an authorized patient before preparing the examination image.',
+            style: DawaTextStyles.secondary),
+        const SizedBox(height: 14),
+        if (patient != null)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: NavigationTokens.selected,
+              borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
+              border:
+                  Border.all(color: NavigationTokens.brand.withOpacity(.22)),
+            ),
+            child: Row(children: [
+              DawaAvatarCircle(
+                  name: patient.name,
+                  moduleColor: NavigationTokens.brand,
+                  size: 36),
+              const SizedBox(width: 10),
+              Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text(patient.name, style: DawaTextStyles.cardTitle),
+                    Text(
+                        '${patient.age > 0 ? '${patient.age} years' : 'Age not recorded'} · Ref ${patient.id.length > 8 ? patient.id.substring(0, 8) : patient.id}',
+                        style: DawaTextStyles.secondary),
+                  ])),
+              TextButton(
+                onPressed: locked
+                    ? null
+                    : () => setState(() => _selectedPatient = null),
+                child: const Text('Change'),
+              ),
+            ]),
+          )
+        else if (_loadingPatients)
+          const LinearProgressIndicator()
+        else if (_patientLoadError != null)
+          Text(_patientLoadError!,
+              style: DawaTextStyles.secondary
+                  .copyWith(color: DawaTokens.statusDangerText))
+        else ...[
+          TextField(
+            enabled: !locked,
+            decoration: const InputDecoration(
+              labelText: 'Search patient name or ID',
+              prefixIcon: Icon(Icons.search),
+            ),
+            onChanged: (value) =>
+                setState(() => _screeningPatientQuery = value),
           ),
           const SizedBox(height: 8),
-          Text(
-            'Welcome, ${_clinicianName()}. Manage VIA screening, patient records, and AI-supported cervical cancer results.',
-            style: const TextStyle(color: Colors.grey, fontSize: 16),
-          ),
-          const SizedBox(height: 32),
-          _buildDashboardActions(),
-          const SizedBox(height: 24),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final columns = constraints.maxWidth >= 840
-                  ? 3
-                  : constraints.maxWidth >= 560
-                      ? 2
-                      : 1;
-              final cardWidth =
-                  (constraints.maxWidth - (16 * (columns - 1))) / columns;
-
-              return Wrap(
-                spacing: 16,
-                runSpacing: 16,
-                children: [
-                  SizedBox(
-                    width: cardWidth,
-                    child: _buildStatCard(
-                        'Registered Patients',
-                        '5',
-                        Icons.people,
-                        DawaTokens.brandPrimary,
-                        '+12% this month'),
-                  ),
-                  SizedBox(
-                    width: cardWidth,
-                    child: _buildStatCard('Follow-Up Required', '3',
-                        Icons.warning, DawaTokens.statusWarning, '2 urgent'),
-                  ),
-                  SizedBox(
-                    width: cardWidth,
-                    child: _buildFreeAnalysisCard(),
-                  ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 32),
-          _buildScreeningActivityCard(),
+          if (matching.isEmpty)
+            Text('No authorized patients match this search.',
+                style: DawaTextStyles.secondary)
+          else
+            for (final candidate in matching)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: DawaAvatarCircle(
+                    name: candidate.name,
+                    moduleColor: NavigationTokens.brand,
+                    size: 34),
+                title: Text(candidate.name,
+                    style: DawaTextStyles.secondary
+                        .copyWith(fontWeight: FontWeight.w700)),
+                subtitle: Text(
+                    '${candidate.age > 0 ? '${candidate.age} years' : 'Age not recorded'} · Ref ${candidate.id.length > 8 ? candidate.id.substring(0, 8) : candidate.id}'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => setState(() => _selectedPatient = candidate),
+              ),
         ],
+        if (locked) ...[
+          const SizedBox(height: 10),
+          Text('Patient identity is locked while this image is prepared.',
+              style: DawaTextStyles.secondary
+                  .copyWith(color: DawaTokens.textSecondary)),
+        ],
+      ]),
+    );
+  }
+
+  Widget _buildWorkflowImageCard() {
+    final image = _selectedImage;
+    return DawaCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('2. Prepare cervical image', style: DawaTextStyles.cardTitle),
+        const SizedBox(height: 6),
+        Text(
+            'Use a clear image. Uploading an image does not submit it for analysis.',
+            style: DawaTextStyles.secondary),
+        const SizedBox(height: 14),
+        if (image != null)
+          Container(
+            height: 250,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: DawaTokens.surfaceSecondary,
+              borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
+              border: Border.all(color: DawaTokens.border),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Image.memory(base64Decode(image.split(',').last),
+                  fit: BoxFit.contain),
+            ),
+          )
+        else
+          Container(
+            height: 170,
+            width: double.infinity,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: DawaTokens.surfaceSecondary,
+              borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
+              border: Border.all(color: DawaTokens.border),
+            ),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.add_a_photo_outlined,
+                  size: 32, color: DawaTokens.textMuted),
+              const SizedBox(height: 8),
+              Text('No image selected', style: DawaTextStyles.secondary),
+            ]),
+          ),
+        const SizedBox(height: 12),
+        Wrap(spacing: 10, runSpacing: 10, children: [
+          OutlinedButton.icon(
+            onPressed: _isAnalyzing
+                ? null
+                : () => _pickWorkflowImage(ImagePickerService.captureImage),
+            icon: const Icon(Icons.camera_alt_outlined, size: 18),
+            label: Text(image == null ? 'Take photo' : 'Retake photo'),
+          ),
+          OutlinedButton.icon(
+            onPressed: _isAnalyzing
+                ? null
+                : () => _pickWorkflowImage(ImagePickerService.pickImage),
+            icon: const Icon(Icons.photo_library_outlined, size: 18),
+            label: Text(image == null ? 'Choose image' : 'Replace image'),
+          ),
+        ]),
+      ]),
+    );
+  }
+
+  void _onConnectionChanged() {
+    final connection = OfflineConnectivityService.statusNotifier.value;
+    if (connection == null) return;
+    if (mounted)
+      setState(() => _onlineAvailable = connection.internetAvailable);
+    if (connection.supabaseReachable) {
+      unawaited(CacxScanDrafts.sync().then((_) => _reloadScanDrafts()));
+    }
+  }
+
+  Future<void> _reloadScanDrafts() async {
+    final uid = currentUserUid;
+    final drafts = await CacxScanDrafts.forUser(uid);
+    if (mounted && currentUserUid == uid) setState(() => _scanDrafts = drafts);
+  }
+
+  Future<void> _saveScanForLater() async {
+    final patient = _selectedPatient;
+    final image = _selectedImage;
+    if (patient == null || image == null || _savingDraft) return;
+    setState(() => _savingDraft = true);
+    try {
+      _draftId = await CacxScanDrafts.save(
+          uid: currentUserUid,
+          patientId: patient.id,
+          patientName: patient.name,
+          image: image,
+          id: _draftId);
+      await _reloadScanDrafts();
+      if (!mounted) return;
+      showDawaToast(context,
+          'Scan saved on this device. It will upload when online; analysis is still pending.');
+      if (OfflineConnectivityService.statusNotifier.value?.supabaseReachable ==
+          true) {
+        unawaited(CacxScanDrafts.sync().then((_) => _reloadScanDrafts()));
+      }
+    } catch (_) {
+      if (mounted)
+        showDawaToast(context,
+            'Could not save the scan. Keep this page open and try again.');
+    } finally {
+      if (mounted) setState(() => _savingDraft = false);
+    }
+  }
+
+  Widget _buildSavedScanDrafts() => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final draft in _scanDrafts)
+            ListTile(
+              title: Text('Saved scan: ${draft['patient_name']}'),
+              subtitle: Text(draft['synced'] == true
+                  ? 'Uploaded · awaiting analysis'
+                  : 'Saved locally · upload pending'),
+              trailing: TextButton(
+                  onPressed: _isAnalyzing
+                      ? null
+                      : () {
+                          final matches = _patients
+                              .where((p) => p.id == draft['patient_id']);
+                          if (matches.isEmpty) {
+                            showDawaToast(context,
+                                'Load the authorized patient list before resuming this scan.');
+                            return;
+                          }
+                          setState(() {
+                            _resetScreeningFlow();
+                            _draftId = draft['id'] as String;
+                            _selectedPatient = matches.first;
+                            _selectedImage = draft['image_data_uri'] as String;
+                            _analysisResult = null;
+                            _appState = AppState.viaTest;
+                          });
+                        },
+                  child: const Text('Resume')),
+            )
+        ],
+      );
+
+  Widget _buildWorkflowAnalysisCard() {
+    final hasPatient = _selectedPatient != null;
+    final hasImage = _selectedImage != null;
+    final ready = _localCervicalReady;
+    final blocker = !hasPatient
+        ? 'Select a patient before continuing.'
+        : !hasImage
+            ? 'Choose or capture an image before continuing.'
+            : _isAnalyzing
+                ? 'The edge device is processing this image.'
+                : ready
+                    ? 'Cervical AI is ready for local analysis.'
+                    : _cervicalReadinessMessage();
+    return DawaCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('3. AI-assisted analysis', style: DawaTextStyles.cardTitle),
+        const SizedBox(height: 6),
+        Text(
+            'The image is sent to the local Dawa device only when analysis begins.',
+            style: DawaTextStyles.secondary),
+        const SizedBox(height: 12),
+        Text(blocker,
+            style: DawaTextStyles.secondary.copyWith(
+                color: ready
+                    ? DawaTokens.statusSuccessText
+                    : DawaTokens.textSecondary)),
+        const SizedBox(height: 12),
+        _buildCacxEdgeStatus(),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: hasPatient &&
+                  hasImage &&
+                  !_isAnalyzing &&
+                  !_savingDraft &&
+                  !widget.demonstrationMode
+              ? _saveScanForLater
+              : null,
+          icon: const Icon(Icons.save_outlined),
+          label: Text(_savingDraft ? 'Saving scan…' : 'Save scan for later'),
+        ),
+        Text(
+            'Save the patient and image on this device, then upload automatically when online. Analysis remains pending until a device or online service is available.',
+            style: DawaTextStyles.secondary),
+      ]),
+    );
+  }
+
+  String _cervicalReadinessMessage() => switch (_deviceManager.state) {
+        EdgeDeviceState.loadingModel => 'Cervical AI is still preparing.',
+        EdgeDeviceState.disconnected =>
+          'Local analysis is unavailable. Reconnect the device to continue.',
+        EdgeDeviceState.error =>
+          'Local analysis is unavailable. Retry the device connection to continue.',
+        EdgeDeviceState.busy =>
+          'Another examination is using the device. Wait before starting analysis.',
+        _ => 'Preparing the local cervical screening device.',
+      };
+
+  Future<void> _pickWorkflowImage(Future<String?> Function() picker) async {
+    if (_isAnalyzing || _deviceUploadInProgress || _cloudFallbackInProgress) {
+      return;
+    }
+    try {
+      final image = await (widget.pickImage?.call() ?? picker());
+      if (!mounted || image == null) return;
+      setState(() {
+        _selectedImage = image;
+        _screeningMode = ScreeningMode.via;
+        _resetScreeningFlow();
+      });
+    } catch (_) {
+      if (mounted) {
+        showDawaToast(context,
+            'Could not load the image. Select a JPEG or PNG and try again.');
+      }
+    }
+  }
+
+  // ??? HOME TAB ?????????????????????????????????????????????????????????????
+  Widget _buildHomeTab() {
+    return LayoutBuilder(builder: (context, size) {
+      final padding = size.maxWidth < 600 ? 16.0 : 24.0;
+      final largeText = MediaQuery.textScalerOf(context).scale(14) > 21;
+      return SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(padding, 8, padding, 32),
+        child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints:
+                  const BoxConstraints(maxWidth: DawaTokens.workspaceMaxWidth),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ClinicalPageHeader(
+                      subtitle: 'Find a patient to start a cervical screening.',
+                      action: FilledButton.icon(
+                        onPressed: _beginNewScreening,
+                        icon: const Icon(Icons.add_rounded, size: 18),
+                        label: const Text('New Screening'),
+                        style: FilledButton.styleFrom(
+                            backgroundColor: NavigationTokens.brand,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size(0, 42)),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildOverviewMetrics(),
+                    const SizedBox(height: 20),
+                    LayoutBuilder(builder: (context, content) {
+                      final patients = _buildOverviewPatients();
+                      final recent = _buildOverviewRecentScreenings();
+                      if (content.maxWidth < 900 || largeText) {
+                        return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              patients,
+                              const SizedBox(height: 20),
+                              recent
+                            ]);
+                      }
+                      return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(flex: 7, child: patients),
+                            const SizedBox(width: 20),
+                            Expanded(flex: 5, child: recent),
+                          ]);
+                    }),
+                    if (_screeningData.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      _buildScreeningActivityCard(),
+                    ],
+                  ]),
+            )),
+      );
+    });
+  }
+
+  Widget _buildOverviewMetrics() => LayoutBuilder(builder: (context, size) {
+        final largeText = MediaQuery.textScalerOf(context).scale(14) > 21;
+        final stack = size.maxWidth < 340 || largeText;
+        final compact = size.maxWidth < 600 && !stack;
+        final metrics = [
+          (
+            'Available patients',
+            _patientsLoaded ? '${_patients.length}' : '—',
+            _patientsLoaded
+                ? 'Loaded patient records'
+                : 'Awaiting patient records',
+            Icons.people_outline,
+            DashboardTab.patients
+          ),
+          (
+            'Loaded screenings',
+            _historyLoaded ? '${_historyRecords.length}' : '—',
+            'Saved results available here',
+            Icons.assignment_outlined,
+            DashboardTab.history
+          ),
+          (
+            'Needs review',
+            _historyLoaded
+                ? '${_historyRecords.where(_recordNeedsReview).length}'
+                : '—',
+            _historyLoaded
+                ? 'Of ${_historyRecords.length} loaded screenings'
+                : 'Awaiting saved results',
+            Icons.fact_check_outlined,
+            DashboardTab.history
+          ),
+        ];
+        final cards = <Widget>[
+          for (final metric in metrics)
+            SizedBox(
+              width: stack ? size.maxWidth : (size.maxWidth - 24) / 3,
+              child: DawaCard(
+                  padding: EdgeInsets.all(compact ? 12 : 16),
+                  onTap: () => setState(() {
+                        _activeTab = metric.$5;
+                        if (metric.$1 == 'Needs review')
+                          _resultsFilter = QuickAccessResultsFilter.needsReview;
+                      }),
+                  child: Row(children: [
+                    if (!compact) ...[
+                      Icon(metric.$4, size: 20, color: NavigationTokens.brand),
+                      const SizedBox(width: 12),
+                    ],
+                    Expanded(
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                          Text(metric.$2,
+                              style: DawaTextStyles.statNumber
+                                  .copyWith(fontSize: 24)),
+                          const SizedBox(height: 6),
+                          Text(metric.$1,
+                              style: DawaTextStyles.body.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: compact ? 12 : 14)),
+                          const SizedBox(height: 4),
+                          Text(metric.$3,
+                              style: DawaTextStyles.secondary
+                                  .copyWith(fontSize: compact ? 11 : 12)),
+                        ])),
+                  ])),
+            ),
+        ];
+        if (stack) return Wrap(runSpacing: 12, children: cards);
+        return IntrinsicHeight(
+            child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var index = 0; index < cards.length; index++) ...[
+              if (index > 0) const SizedBox(width: 12),
+              cards[index],
+            ],
+          ],
+        ));
+      });
+
+  Widget _buildOverviewPatients() {
+    final query = _patientSearchController.text.trim().toLowerCase();
+    final matches = _patients
+        .where((patient) =>
+            query.isEmpty ||
+            patient.name.toLowerCase().contains(query) ||
+            patient.id.toLowerCase().contains(query) ||
+            patient.contact.toLowerCase().contains(query))
+        .toList();
+    return DawaCard(
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if (_scanDrafts.isNotEmpty) _buildSavedScanDrafts(),
+      Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          spacing: 12,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text('Patients', style: DawaTextStyles.cardTitle),
+            TextButton(
+                onPressed: () =>
+                    setState(() => _activeTab = DashboardTab.patients),
+                child: Text(_patientsLoaded
+                    ? 'View all (${_patients.length})'
+                    : 'View patient records')),
+          ]),
+      const SizedBox(height: 8),
+      TextField(
+        key: const ValueKey('cacx-overview-patient-search'),
+        controller: _patientSearchController,
+        onChanged: (_) => setState(() {}),
+        decoration: InputDecoration(
+            labelText: 'Find a patient',
+            hintText: 'Name, reference or phone',
+            prefixIcon: const Icon(Icons.search_rounded, size: 20),
+            suffixIcon: query.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: 'Clear patient search',
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    onPressed: () =>
+                        setState(() => _patientSearchController.clear())),
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(DawaTokens.radiusMd))),
+      ),
+      const SizedBox(height: 12),
+      if (_loadingPatients)
+        const Padding(
+            padding: EdgeInsets.all(24),
+            child: Center(child: CircularProgressIndicator()))
+      else if (!_patientsLoaded)
+        ClinicalEmptyState(
+            surface: false,
+            icon: Icons.cloud_off_outlined,
+            title: 'Patient records unavailable',
+            message: 'Check your connection and sign-in, then try again.',
+            actionLabel: 'Retry records',
+            onAction: _loadScreeningData)
+      else if (_patients.isEmpty)
+        ClinicalEmptyState(
+            surface: false,
+            icon: Icons.person_add_outlined,
+            title: 'No patients available',
+            message: 'Register a patient in Patients to start screening.',
+            actionLabel: 'Open Patients',
+            onAction: () => context.goNamed('Moms'))
+      else if (matches.isEmpty)
+        ClinicalEmptyState(
+            surface: false,
+            icon: Icons.search_off_rounded,
+            title: 'No matching patients',
+            message: 'Try another name, reference or phone number.',
+            actionLabel: 'Clear search',
+            onAction: () => setState(() => _patientSearchController.clear()))
+      else ...[
+        for (var index = 0; index < matches.take(5).length; index++) ...[
+          if (index > 0) const Divider(height: 1, color: DawaTokens.border),
+          _buildOverviewPatientRow(matches[index]),
+        ],
+        if (matches.length > 5) ...[
+          const Divider(height: 1, color: DawaTokens.border),
+          Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text('Showing 5 of ${matches.length} matching patients',
+                  style: DawaTextStyles.secondary.copyWith(fontSize: 12))),
+        ],
+      ],
+    ]));
+  }
+
+  Widget _buildOverviewPatientRow(Patient patient) {
+    final ref = patient.id.length > 18
+        ? '${patient.id.substring(0, 8)}…${patient.id.substring(patient.id.length - 4)}'
+        : patient.id;
+    final identity =
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      DawaAvatarCircle(name: patient.name, size: 34),
+      const SizedBox(width: 10),
+      Expanded(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(patient.name,
+            style: DawaTextStyles.body.copyWith(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        Text(
+            'Ref $ref · ${patient.age > 0 ? '${patient.age} years' : 'Age unavailable'}',
+            style: DawaTextStyles.secondary.copyWith(fontSize: 12)),
+      ])),
+    ]);
+    final action = Semantics(
+        label: 'Start screening for ${patient.name}',
+        button: true,
+        child: TextButton.icon(
+            onPressed: () {
+              setState(() => _selectedPatient = patient);
+              _beginNewScreening();
+            },
+            icon: const Icon(Icons.add_rounded, size: 16),
+            label: const Text('Screen')));
+    return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: LayoutBuilder(builder: (context, size) {
+          if (size.maxWidth < 300 ||
+              MediaQuery.textScalerOf(context).scale(14) > 21) {
+            return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  identity,
+                  Align(alignment: Alignment.centerRight, child: action)
+                ]);
+          }
+          return Row(children: [
+            Expanded(child: identity),
+            const SizedBox(width: 12),
+            action
+          ]);
+        }));
+  }
+
+  Widget _buildOverviewRecentScreenings() {
+    final records = [..._historyRecords]
+      ..sort((a, b) => b.date.compareTo(a.date));
+    return DawaCard(
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          spacing: 12,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text('Recent screenings', style: DawaTextStyles.cardTitle),
+            TextButton(
+                onPressed: () =>
+                    setState(() => _activeTab = DashboardTab.history),
+                child: const Text('View history')),
+          ]),
+      if (!_historyLoaded)
+        ClinicalEmptyState(
+            surface: false,
+            icon: Icons.history_rounded,
+            title: _loadingPatients
+                ? 'Loading screening history'
+                : 'Screening history unavailable',
+            message:
+                'Saved results will appear here when records are available.',
+            actionLabel: 'Refresh records',
+            onAction: _loadScreeningData)
+      else if (records.isEmpty)
+        ClinicalEmptyState(
+            surface: false,
+            icon: Icons.assignment_outlined,
+            title: 'No saved screenings yet',
+            message: 'Choose a patient to record the first cervical screening.',
+            actionLabel: 'New screening',
+            onAction: _beginNewScreening)
+      else
+        for (var index = 0; index < records.take(3).length; index++) ...[
+          if (index > 0) const Divider(height: 1, color: DawaTokens.border),
+          Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(records[index].patientName,
+                        style: DawaTextStyles.body
+                            .copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Text(_formatDate(records[index].date),
+                        style: DawaTextStyles.secondary.copyWith(fontSize: 12)),
+                    const SizedBox(height: 8),
+                    Text(records[index].result, style: DawaTextStyles.body),
+                    const SizedBox(height: 10),
+                    Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          DawaStatusBadge(
+                              status: _recordNeedsReview(records[index])
+                                  ? 'needs_review'
+                                  : 'completed'),
+                          TextButton(
+                              onPressed: () {
+                                setState(() {
+                                  _activeTab = DashboardTab.history;
+                                  _resultsFilter = QuickAccessResultsFilter.all;
+                                  _resultsSearchController.text =
+                                      records[index].id;
+                                });
+                              },
+                              child: const Text('View result')),
+                        ]),
+                  ])),
+        ],
+    ]));
+  }
+
+  Widget _buildSecondaryActionCard({
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: NavigationTokens.border),
+            boxShadow: DawaTokens.shadowSm,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: NavigationTokens.brand.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.arrow_outward,
+                  color: NavigationTokens.brand,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: DawaTextStyles.cardTitle.copyWith(fontSize: 14)),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: DawaTextStyles.secondary.copyWith(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -2056,23 +2496,23 @@ class _CaCxAppState extends State<CaCxApp> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Wrap(
+            spacing: 16,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Screening Activity',
-                      style: DawaTextStyles.cardTitle.copyWith(fontSize: 16),
-                    ),
-                    Text(
-                      'VIA screening outcomes - last 6 months',
-                      style: DawaTextStyles.secondary.copyWith(fontSize: 12),
-                    ),
-                  ],
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Screening Activity',
+                    style: DawaTextStyles.cardTitle.copyWith(fontSize: 16),
+                  ),
+                  Text(
+                    'VIA screening outcomes - last 6 months',
+                    style: DawaTextStyles.secondary.copyWith(fontSize: 12),
+                  ),
+                ],
               ),
               TextButton(
                 onPressed: () =>
@@ -2110,304 +2550,23 @@ class _CaCxAppState extends State<CaCxApp> {
             ],
           ),
           const SizedBox(height: 12),
-          SizedBox(
-            height: 220,
-            child: _ScreeningStackedBarChart(
-              data: _screeningData,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _clinicianName() {
-    final displayName = currentUserDisplayName.trim();
-    if (displayName.isNotEmpty) return displayName;
-
-    final email = currentUserEmail.trim();
-    if (email.isNotEmpty) return email;
-
-    return 'Clinician';
-  }
-
-  Widget _buildDashboardActions() {
-    final actions = [
-      (
-        title: 'Add Screening Record',
-        subtitle: 'Capture or upload a VIA image for AI-supported review.',
-        icon: Icons.add_circle_outline,
-        color: DawaTokens.brandPrimary,
-        onTap: () => _openImageSourcePicker(mode: ScreeningMode.via),
-      ),
-      (
-        title: 'View Patient Records',
-        subtitle: 'Open the patient registry and select a patient.',
-        icon: Icons.people_outline,
-        color: DawaTokens.brandPrimary,
-        onTap: () => setState(() => _activeTab = DashboardTab.patients),
-      ),
-      (
-        title: 'View Screening Results',
-        subtitle: 'Search, filter, and review VIA result history.',
-        icon: Icons.fact_check_outlined,
-        color: DawaTokens.brandPrimary,
-        onTap: () => setState(() => _activeTab = DashboardTab.history),
-      ),
-      (
-        title: 'Find Patient',
-        subtitle: 'Search the registry by name, ID, or contact details.',
-        icon: Icons.search,
-        color: DawaTokens.brandPrimary,
-        onTap: () => setState(() => _activeTab = DashboardTab.patients),
-      ),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 900
-            ? 4
-            : constraints.maxWidth >= 560
-                ? 2
-                : 1;
-        final width = (constraints.maxWidth - (14 * (columns - 1))) / columns;
-
-        return Wrap(
-          spacing: 14,
-          runSpacing: 14,
-          children: [
-            for (final action in actions)
-              SizedBox(
-                width: width,
-                child: _buildActionCard(
-                  action.title,
-                  action.subtitle,
-                  action.icon,
-                  action.color,
-                  action.onTap,
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildActionCard(String title, String subtitle, IconData icon,
-      Color color, VoidCallback onTap) {
-    return Material(
-      color: DawaTokens.surface,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 172),
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: DawaTokens.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: DawaTokens.border),
-            boxShadow: DawaTokens.shadowSm,
-          ),
-          child: Stack(
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(right: 26),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(icon, color: color, size: 22),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: DawaTextStyles.cardTitle.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: DawaTextStyles.secondary.copyWith(fontSize: 12),
-                    ),
-                    if (title.contains('Screening') ||
-                        title.contains('Training')) ...[
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          _sourceBadge(Icons.camera_alt, 'Camera'),
-                          _sourceBadge(Icons.photo_library, 'Gallery'),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              Positioned(
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  width: 30,
-                  height: 30,
-                  decoration: BoxDecoration(
-                    color: DawaTokens.surfaceTertiary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.arrow_forward_rounded,
-                    color: DawaTokens.textSecondary,
-                    size: 16,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _sourceBadge(IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: DawaTokens.surfaceTertiary,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: DawaTokens.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: DawaTokens.textSecondary, size: 12),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              color: DawaTokens.textSecondary,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatCard(
-      String title, String value, IconData icon, Color color, String trend) {
-    final isUrgent = trend.toLowerCase().contains('urgent');
-    final badgeBg =
-        isUrgent ? DawaTokens.statusDangerBg : DawaTokens.statusSuccessBg;
-    final badgeColor =
-        isUrgent ? DawaTokens.statusDanger : DawaTokens.statusSuccessText;
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: DawaTokens.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: DawaTokens.border),
-        boxShadow: DawaTokens.shadowSm,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: DawaTextStyles.statNumber.copyWith(fontSize: 32),
-          ),
-          const SizedBox(height: 8),
-          Text(title, style: DawaTextStyles.secondary),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: badgeBg,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              trend,
-              style: TextStyle(
-                color: badgeColor,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
+          if (totalScreenings == 0)
+            ClinicalEmptyState(
+              icon: Icons.assignment_outlined,
+              title: 'No screening activity yet',
+              message:
+                  'Start a cervical screening to record the first result for this period.',
+              actionLabel: 'New screening',
+              onAction: _beginNewScreening,
+              surface: false,
+            )
+          else
+            SizedBox(
+              height: 220,
+              child: _ScreeningStackedBarChart(
+                data: _screeningData,
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFreeAnalysisCard() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: DawaTokens.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: DawaTokens.border),
-        boxShadow: DawaTokens.shadowSm,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: DawaTokens.statusSuccessBg,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.verified,
-              color: DawaTokens.statusSuccessText,
-              size: 20,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'FREE',
-            style: DawaTextStyles.statNumber.copyWith(fontSize: 32),
-          ),
-          const SizedBox(height: 8),
-          Text('AI Analysis', style: DawaTextStyles.secondary),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: DawaTokens.statusSuccessBg,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Text('Unlimited Use',
-                style: TextStyle(
-                    color: DawaTokens.statusSuccessText,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold)),
-          ),
         ],
       ),
     );
@@ -2427,135 +2586,116 @@ class _CaCxAppState extends State<CaCxApp> {
       return matchesSearch && matchesReview;
     }).toList();
 
-    return Column(
-      children: [
-        Container(
+    return CustomScrollView(
+      key: const PageStorageKey('cacx-patients'),
+      slivers: [
+        SliverToBoxAdapter(
+            child: Padding(
           padding: const EdgeInsets.all(24),
-          color: Colors.white,
-          child: Row(
-            children: [
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Patient Registry',
-                        style: TextStyle(
-                            fontSize: 24, fontWeight: FontWeight.bold)),
-                    SizedBox(height: 4),
-                    Text('Manage and track your patient records.',
-                        style: TextStyle(color: Colors.grey)),
-                  ],
-                ),
-              ),
-              ElevatedButton.icon(
-                onPressed: () =>
-                    _openImageSourcePicker(mode: ScreeningMode.via),
-                icon: const Icon(Icons.add_a_photo_outlined),
-                label: const Text('Add Screening'),
-              ),
-            ],
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.all(16),
-          color: Colors.grey[50],
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  onChanged: (value) =>
-                      setState(() => _patientSearchText = value),
-                  decoration: InputDecoration(
-                    hintText: 'Search by name, ID or phone...',
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Patient Registry', style: DawaTextStyles.pageTitle),
+            const SizedBox(height: 4),
+            Text('Manage and track your patient records.',
+                style: DawaTextStyles.secondary),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+                onPressed: _beginNewScreening,
+                icon: const Icon(Icons.add_a_photo_outlined, size: 18),
+                label: const Text('Add Screening')),
+          ]),
+        )),
+        SliverToBoxAdapter(
+            child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            TextField(
+                controller: _patientSearchController,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                    labelText: 'Search patients',
+                    hintText: 'Name, ID or phone',
                     prefixIcon: const Icon(Icons.search),
                     border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none),
+                        borderRadius: BorderRadius.circular(12)),
                     filled: true,
-                    fillColor: Colors.white,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              FilterChip(
+                    fillColor: Colors.white)),
+            const SizedBox(height: 8),
+            FilterChip(
                 selected: _patientNeedsReviewOnly,
                 onSelected: (selected) =>
                     setState(() => _patientNeedsReviewOnly = selected),
-                avatar: Icon(
-                  Icons.priority_high_rounded,
-                  size: 16,
-                  color: _patientNeedsReviewOnly
-                      ? DawaTokens.textInverse
-                      : DawaTokens.statusWarning,
-                ),
                 label: const Text('Needs review'),
-                selectedColor: DawaTokens.brandPrimary,
-                checkmarkColor: DawaTokens.textInverse,
-                labelStyle: TextStyle(
-                  color: _patientNeedsReviewOnly
-                      ? DawaTokens.textInverse
-                      : DawaTokens.textSecondary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: filteredPatients.isEmpty
-              ? _buildNoPatientMatches()
-              : ListView.builder(
+                selectedColor: NavigationTokens.selected,
+                checkmarkColor: NavigationTokens.brand),
+          ]),
+        )),
+        if (filteredPatients.isEmpty)
+          SliverFillRemaining(
+              hasScrollBody: false, child: _buildNoPatientMatches())
+        else
+          SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+              sliver: SliverList.builder(
                   itemCount: filteredPatients.length,
-                  itemBuilder: (context, index) {
-                    final patient = filteredPatients[index];
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 6),
-                      child: DawaCard(
-                        padding: const EdgeInsets.all(14),
-                        urgent: patient.status == PatientStatus.suspicious,
-                        onTap: () async {
-                          setState(() => _selectedPatient = patient);
-                          await _openImageSourcePicker(mode: ScreeningMode.via);
-                        },
-                        child: Row(
-                          children: [
-                            DawaAvatarCircle(
-                              name: patient.name,
-                              moduleColor: DawaTokens.brandPrimary,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(patient.name,
-                                      style: DawaTextStyles.cardTitle),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '${patient.id} | ${patient.age} yrs | ${patient.contact} | Last screened: ${patient.lastTestDate == null ? 'Not yet' : _formatDate(patient.lastTestDate!)}',
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: DawaTextStyles.secondary,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            _patientStatusBadge(patient),
-                            const SizedBox(width: 8),
-                            const Icon(Icons.chevron_right_rounded,
-                                color: DawaTokens.textMuted),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-        ),
+                  itemBuilder: (context, index) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _buildPatientRow(filteredPatients[index])))),
       ],
     );
   }
+
+  Widget _buildPatientRow(Patient patient) => DawaCard(
+        padding: const EdgeInsets.all(14),
+        urgent: patient.status == PatientStatus.suspicious,
+        onTap: () async {
+          setState(() => _selectedPatient = patient);
+          _beginNewScreening();
+        },
+        child: LayoutBuilder(builder: (context, constraints) {
+          final inline = constraints.maxWidth >= 680 &&
+              MediaQuery.textScalerOf(context).scale(14) <= 21;
+          final age =
+              patient.age > 0 ? '${patient.age} yrs' : 'Age unavailable';
+          final lastScreened = patient.lastTestDate == null
+              ? 'Not yet'
+              : _formatDate(patient.lastTestDate!);
+          return Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+            DawaAvatarCircle(
+                name: patient.name, moduleColor: DawaTokens.brandPrimary),
+            const SizedBox(width: 12),
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text(patient.name, style: DawaTextStyles.cardTitle),
+                  const SizedBox(height: 4),
+                  if (inline)
+                    Text(
+                        '${patient.id} · $age${patient.contact.isEmpty ? '' : ' · ${patient.contact}'} · Last screened: $lastScreened',
+                        style: DawaTextStyles.secondary)
+                  else ...[
+                    Text('${patient.id} · $age',
+                        style: DawaTextStyles.secondary),
+                    if (patient.contact.isNotEmpty)
+                      Text(patient.contact, style: DawaTextStyles.secondary),
+                    Text('Last screened: $lastScreened',
+                        style: DawaTextStyles.secondary),
+                    const SizedBox(height: 8),
+                    _patientStatusBadge(patient),
+                  ],
+                ])),
+            if (inline) ...[
+              const SizedBox(width: 12),
+              _patientStatusBadge(patient)
+            ],
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right_rounded,
+                size: 18, color: DawaTokens.textMuted),
+          ]);
+        }),
+      );
 
   Widget _buildNoPatientMatches() {
     return Center(
@@ -2583,7 +2723,7 @@ class _CaCxAppState extends State<CaCxApp> {
             const SizedBox(height: 14),
             TextButton.icon(
               onPressed: () => setState(() {
-                _patientSearchText = '';
+                _patientSearchController.text = '';
                 _patientNeedsReviewOnly = false;
               }),
               icon: const Icon(Icons.refresh_rounded),
@@ -2620,9 +2760,11 @@ class _CaCxAppState extends State<CaCxApp> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isNarrow = constraints.maxWidth < 640;
-        return Column(
-          children: [
-            Container(
+        return CustomScrollView(
+          key: const PageStorageKey('cacx-history'),
+          slivers: [
+            SliverToBoxAdapter(
+                child: Container(
               width: double.infinity,
               padding: const EdgeInsets.all(24),
               color: Colors.white,
@@ -2713,18 +2855,19 @@ class _CaCxAppState extends State<CaCxApp> {
                   ),
                 ],
               ),
-            ),
-            Expanded(
-              child: filteredRecords.isEmpty
-                  ? _buildResultsEmptyState()
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            )),
+            if (filteredRecords.isEmpty)
+              SliverFillRemaining(
+                  hasScrollBody: false, child: _buildResultsEmptyState())
+            else
+              SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                  sliver: SliverList.builder(
                       itemCount: filteredRecords.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) =>
-                          _buildHistoryResultCard(filteredRecords[index]),
-                    ),
-            ),
+                      itemBuilder: (context, index) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _buildHistoryResultCard(
+                              filteredRecords[index])))),
           ],
         );
       },
@@ -2891,103 +3034,6 @@ class _CaCxAppState extends State<CaCxApp> {
             ],
           ),
         ],
-      ),
-    );
-  }
-
-  // ignore: unused_element
-  Widget _legacyHistoryResultCard(VIATestRecord record) {
-    final needsReview = _recordNeedsReview(record);
-    final statusColor =
-        needsReview ? DawaTokens.statusWarning : DawaTokens.statusSuccess;
-    final statusLabel = needsReview ? 'Needs review' : 'Completed';
-
-    return Card(
-      margin: EdgeInsets.zero,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade200),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                CircleAvatar(
-                  backgroundColor: statusColor.withOpacity(0.12),
-                  child: Icon(Icons.medical_services, color: statusColor),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      record.patientName,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                    Text(
-                      'Patient ${record.patientId} - Record ${record.id}',
-                      style: const TextStyle(color: Colors.grey, fontSize: 13),
-                    ),
-                  ],
-                ),
-                Chip(
-                  label: Text(statusLabel),
-                  backgroundColor: statusColor.withOpacity(0.12),
-                  labelStyle: TextStyle(
-                    color: statusColor,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Date: ${_formatDate(record.date)}',
-              style: const TextStyle(color: Colors.black54),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Result: ${record.result}',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 6),
-            Text('Notes: ${record.notes}'),
-            if ((record.aiAnalysis ?? '').isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(
-                'AI analysis: ${record.aiAnalysis}',
-                style: const TextStyle(color: DawaTokens.brandPrimary),
-              ),
-            ],
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: () => _openPatientFromRecord(record),
-                  icon: const Icon(Icons.person_outline),
-                  label: const Text('Open patient'),
-                ),
-                ElevatedButton.icon(
-                  onPressed: () => _handleViaFollowUp(record),
-                  icon: Icon(needsReview
-                      ? Icons.event_available
-                      : Icons.check_circle_outline),
-                  label: Text(
-                      needsReview ? 'Plan follow-up' : 'Routine follow-up'),
-                ),
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -3254,7 +3300,7 @@ class _CaCxAppState extends State<CaCxApp> {
                       detail: secondResult == null
                           ? (_secondOpinionRequired
                               ? 'Online scan route'
-                              : 'Device completed primary diagnosis')
+                              : 'Device completed local screening; clinician review required')
                           : '${secondResult.label} (${secondResult.confidence.toStringAsFixed(1)}%)',
                       color: secondStatusColor,
                     ),
@@ -3278,7 +3324,7 @@ class _CaCxAppState extends State<CaCxApp> {
             OutlinedButton.icon(
               onPressed: _isAnalyzing ? null : _runManualSecondOpinion,
               icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Retry server second opinion'),
+              label: const Text('Retry analysis'),
             ),
           ],
         ],
@@ -3359,8 +3405,8 @@ class _CaCxAppState extends State<CaCxApp> {
     final resultSourceLabel = !isTraining &&
             _secondOpinionRequired &&
             _secondOpinionStatus == 'completed'
-        ? 'Second Opinion'
-        : 'Device AI';
+        ? 'Analysed online (device unavailable)'
+        : 'Analysed on Dawa device';
 
     return Scaffold(
       appBar: AppBar(
@@ -3382,10 +3428,20 @@ class _CaCxAppState extends State<CaCxApp> {
           if (!isTraining && !widget.returnToPreviousOnSave) ...[
             IconButton(
               icon: const Icon(Icons.share),
+              tooltip: 'Share screening summary',
               onPressed: _shareAnalysisSummary,
             ),
             IconButton(
-                icon: const Icon(Icons.save), onPressed: _saveAnalysisResult),
+                tooltip: _savingOpinionResult
+                    ? 'Saving screening'
+                    : 'Save screening',
+                icon: const Icon(Icons.save),
+                onPressed: _savingOpinionResult ||
+                        _isAnalyzing ||
+                        _onlineRequestInProgress ||
+                        _cloudFallbackInProgress
+                    ? null
+                    : _saveAnalysisResult),
           ],
         ],
       ),
@@ -3477,6 +3533,8 @@ class _CaCxAppState extends State<CaCxApp> {
                       ),
                     ],
                     const SizedBox(height: 18),
+                    _buildReturnedModelDetails(),
+                    const SizedBox(height: 18),
                     _buildResultDisclaimer(isTraining),
                     if (!isTraining && widget.returnToPreviousOnSave) ...[
                       const SizedBox(height: 18),
@@ -3551,6 +3609,101 @@ class _CaCxAppState extends State<CaCxApp> {
         ],
       ),
     );
+  }
+
+  Widget _buildReturnedModelDetails() {
+    final primary = _primaryDeviceResult;
+    final online = _secondOpinionResult;
+    Widget provider(String title, String label, double? confidence,
+        Map<String, dynamic>? raw, String status) {
+      final fields = <String, String>{
+        'Classification': label,
+        'Status': status,
+        if (confidence != null)
+          'Model confidence': '${confidence.toStringAsFixed(1)}%',
+        if (raw?['gatekeeper_flagged'] is bool)
+          'Image suitability check':
+              raw!['gatekeeper_flagged'] == true ? 'Rejected' : 'Passed',
+      };
+      const names = {
+        'record_id': 'Model record reference',
+        'model_id': 'Model',
+        'model': 'Model',
+        'model_version': 'Model version',
+        'device_id': 'Device reference',
+        'message': 'Model message',
+        'image_quality': 'Image quality',
+        'findings': 'Returned findings',
+        'timings_ms': 'Model timings (ms)'
+      };
+      for (final entry in names.entries) {
+        final value = raw?[entry.key];
+        if (value != null && value.toString().trim().isNotEmpty) {
+          fields[entry.value] = value is Map || value is List
+              ? jsonEncode(value)
+              : value.toString();
+        }
+      }
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: DawaTextStyles.cardTitle),
+        const SizedBox(height: 10),
+        for (final field in fields.entries)
+          Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(field.key, style: DawaTextStyles.secondary),
+                    SelectableText(field.value,
+                        style: DawaTextStyles.secondary
+                            .copyWith(fontWeight: FontWeight.w600)),
+                  ])),
+        if (raw == null || !names.keys.any((key) => raw[key] != null))
+          Text('No additional model metadata was returned.',
+              style: DawaTextStyles.secondary),
+      ]);
+    }
+
+    return DawaCard(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Screening details', style: DawaTextStyles.cardTitle),
+      const SizedBox(height: 8),
+      if (_selectedPatient != null)
+        SelectableText(
+            'Patient: ${_selectedPatient!.name} · Reference: ${_selectedPatient!.id}',
+            style: DawaTextStyles.secondary),
+      Text(
+          _screeningRecordId != null
+              ? 'Database reference: $_screeningRecordId'
+              : _resultQueued
+                  ? 'Saved on this device; database sync pending.'
+                  : 'Database save not confirmed.',
+          style: DawaTextStyles.secondary),
+      const Divider(height: 28),
+      if (primary != null)
+        provider(
+            'Local Dawa device output',
+            primary.label,
+            primary.deviceStatus == 'success' ? primary.confidence : null,
+            primary.rawResponse,
+            primary.deviceStatus),
+      if (online != null) ...[
+        const Divider(height: 28),
+        provider('Online model output', online.label, online.confidence,
+            online.rawOutput, _secondOpinionStatus),
+      ],
+      if (primary == null && online == null)
+        provider(
+            'Model output',
+            _analysisResult!.label,
+            _analysisResult!.confidence,
+            _analysisResult!.rawOutput,
+            'completed'),
+      const SizedBox(height: 8),
+      Text(
+          'Confidence describes the model output for this image. It is not a confirmed diagnosis or a measured probability that the patient has cancer.',
+          style: DawaTextStyles.secondary),
+    ]));
   }
 
   Widget _buildResultImageCard({required bool isWide}) {
@@ -3666,7 +3819,7 @@ class _CaCxAppState extends State<CaCxApp> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isTraining ? 'Training Result' : 'Diagnosis',
+                      isTraining ? 'Training Result' : 'AI screening result',
                       style: DawaTextStyles.label.copyWith(
                         color: DawaTokens.textMuted,
                       ),
@@ -3708,10 +3861,21 @@ class _CaCxAppState extends State<CaCxApp> {
                   Icons.health_and_safety_outlined,
                 ),
               _pillBadge(
-                _screeningRecordId != null ? 'Saved' : 'Completed',
-                DawaTokens.statusSuccessBg,
-                DawaTokens.statusSuccessText,
-                Icons.check_circle_outline,
+                _screeningRecordId != null &&
+                        (!_secondOpinionRequired || _secondOpinionPersisted)
+                    ? 'Saved'
+                    : _resultQueued
+                        ? 'Saved locally · sync pending'
+                        : 'Not saved',
+                _resultQueued
+                    ? DawaTokens.statusWarningBg
+                    : DawaTokens.statusSuccessBg,
+                _resultQueued
+                    ? DawaTokens.statusWarningText
+                    : DawaTokens.statusSuccessText,
+                _resultQueued
+                    ? Icons.cloud_upload_outlined
+                    : Icons.check_circle_outline,
               ),
               if (!_secondOpinionRequired)
                 _pillBadge(
@@ -3729,53 +3893,16 @@ class _CaCxAppState extends State<CaCxApp> {
             Icons.bar_chart_rounded,
             _confidenceColor(),
           ),
-        ],
-      ),
-    );
-  }
-
-  // ignore: unused_element
-  Widget _buildConfidenceCard(String resultSourceLabel) {
-    final confidence = _analysisResult!.confidence.clamp(0, 100).toDouble();
-    return DawaCard(
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '$resultSourceLabel Confidence',
-                  style: DawaTextStyles.cardTitle,
-                ),
-              ),
-              Text(
-                '${confidence.toStringAsFixed(1)}%',
-                style: DawaTextStyles.statNumber.copyWith(
-                  color: _confidenceColor(),
-                  fontSize: 24,
-                ),
-              ),
-            ],
-          ),
           const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(99),
-            child: LinearProgressIndicator(
-              value: confidence / 100,
-              backgroundColor: DawaTokens.surfaceTertiary,
-              color: _confidenceColor(),
-              minHeight: 9,
-            ),
-          ),
-          const SizedBox(height: 10),
+          Text('AI estimate — clinician must review',
+              style: DawaTextStyles.secondary
+                  .copyWith(color: DawaTokens.textSecondary)),
           Text(
-            'Confidence is interpreted together with clinical judgement and local screening protocols.',
-            style: DawaTextStyles.secondary.copyWith(
-              color: DawaTokens.textSecondary,
-            ),
-          ),
+              _analysisResult!.rawOutput?['timings_ms'] != null
+                  ? 'Model timings (ms): ${jsonEncode(_analysisResult!.rawOutput!['timings_ms'])}'
+                  : 'Analysis time not supplied by model',
+              style: DawaTextStyles.secondary
+                  .copyWith(color: DawaTokens.textSecondary)),
         ],
       ),
     );
@@ -3806,19 +3933,18 @@ class _CaCxAppState extends State<CaCxApp> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Expanded(
-                child: Text(
-                  '$resultSourceLabel Confidence',
-                  style: DawaTextStyles.cardTitle,
-                ),
-              ),
+              Text('$resultSourceLabel Confidence',
+                  style: DawaTextStyles.cardTitle),
               DawaStatusBadge(
-                status: 'completed',
-                label: '${items.length} classes',
-              ),
+                  status: 'completed',
+                  label: items.isEmpty
+                      ? 'Top score ${_analysisResult!.confidence.toStringAsFixed(1)}%'
+                      : '${items.length} classes'),
             ],
           ),
           const SizedBox(height: 8),
@@ -3935,37 +4061,23 @@ class _CaCxAppState extends State<CaCxApp> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        item.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: DawaTextStyles.body.copyWith(
-                          color: DawaTokens.textPrimary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    if (item.isTopPrediction) ...[
-                      const SizedBox(width: 8),
+                Text(item.label,
+                    style: DawaTextStyles.body.copyWith(
+                        color: DawaTokens.textPrimary,
+                        fontWeight: FontWeight.w700)),
+                if (item.isTopPrediction || showRiskBadge) ...[
+                  const SizedBox(height: 4),
+                  Wrap(spacing: 6, runSpacing: 4, children: [
+                    if (item.isTopPrediction)
+                      _predictionMiniBadge('Top match',
+                          DawaTokens.brandPrimaryPale, DawaTokens.brandPrimary),
+                    if (showRiskBadge)
                       _predictionMiniBadge(
-                        'Top match',
-                        DawaTokens.brandPrimaryPale,
-                        DawaTokens.brandPrimary,
-                      ),
-                    ],
-                    if (showRiskBadge) ...[
-                      const SizedBox(width: 8),
-                      _predictionMiniBadge(
-                        _predictionRiskLabel(riskLevel),
-                        _predictionBadgeBackground(riskLevel),
-                        _predictionBadgeForeground(riskLevel),
-                      ),
-                    ],
-                  ],
-                ),
+                          _predictionRiskLabel(riskLevel),
+                          _predictionBadgeBackground(riskLevel),
+                          _predictionBadgeForeground(riskLevel)),
+                  ]),
+                ],
                 const SizedBox(height: 6),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(99),
@@ -4427,8 +4539,6 @@ class _CaCxAppState extends State<CaCxApp> {
                 const SizedBox(height: 3),
                 Text(
                   value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: DawaTextStyles.secondary.copyWith(
                     color: DawaTokens.textPrimary,
                     fontWeight: FontWeight.w800,
@@ -4595,10 +4705,11 @@ class _ChartSummaryPill extends StatelessWidget {
             ),
             const SizedBox(width: 6),
           ],
-          Text(
+          Flexible(
+              child: Text(
             label,
             style: DawaTextStyles.secondary.copyWith(fontSize: 12),
-          ),
+          )),
           const SizedBox(width: 4),
           Text(
             value.toString(),
@@ -4772,5 +4883,3 @@ void showDawaToast(
     ),
   );
 }
-
-enum _SecondOpinionChoice { sendOnline, retryDevice, cancel }

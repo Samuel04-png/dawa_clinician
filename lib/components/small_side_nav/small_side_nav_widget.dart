@@ -1,294 +1,215 @@
 import '/auth/firebase_auth/auth_util.dart';
-import '/components/dawa_design_system.dart';
+import '/components/clinician_navigation.dart';
+import '/components/clinical_features.dart';
+import '/components/navigation_design_system.dart';
+import '/components/navigation_brand_header.dart';
+import '/components/clinician_account_menu.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/index.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
 import 'small_side_nav_model.dart';
 export 'small_side_nav_model.dart';
 
 class SmallSideNavWidget extends StatefulWidget {
-  const SmallSideNavWidget({
-    super.key,
-    String? iconOne,
-    String? iconTwo,
-    String? iconThree,
-    String? iconFour,
-  })  : iconOne = iconOne ?? 'Home',
-        iconTwo = iconTwo ?? 'Patients',
-        iconThree = iconThree ?? 'Appointments',
-        iconFour = iconFour ?? 'Care Tools';
-
-  final String iconOne;
-  final String iconTwo;
-  final String iconThree;
-  final String iconFour;
-
+  const SmallSideNavWidget(
+      {super.key,
+      this.iconOne = 'Home',
+      this.iconTwo = 'Patients',
+      this.iconThree = 'Appointments',
+      this.iconFour = 'Care Tools'});
+  // Retain generated callers' constructor compatibility.
+  final String iconOne, iconTwo, iconThree, iconFour;
   @override
   State<SmallSideNavWidget> createState() => _SmallSideNavWidgetState();
 }
 
 class _SmallSideNavWidgetState extends State<SmallSideNavWidget> {
-  late SmallSideNavModel _model;
+  String? _observedPath;
+  static const tools = [
+    ('Cervical Cancer', 'CervicalCancer', NavigationSymbol.cervical),
+    ('Ultrasound', 'Ultrasound', NavigationSymbol.ultrasound),
+    ('Anemia', 'HemoNix', NavigationSymbol.anemia),
+    if (ClinicalFeatures.ctScan) ('CT Scan', 'CtScan', NavigationSymbol.ct),
+    ('BP Monitor', 'BpMonitor', NavigationSymbol.bloodPressure),
+  ];
 
   @override
-  void setState(VoidCallback callback) {
-    super.setState(callback);
-    _model.onUpdate();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final path = GoRouterState.of(context).uri.path;
+    if (path != _observedPath) {
+      _observedPath = path;
+      if (tools.any((t) => t.$1 == clinicianDestination(path))) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _observedPath == path)
+            clinicianScreeningsExpanded.value = true;
+        });
+      }
+    }
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _model = createModel(context, () => SmallSideNavModel());
-    WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
-  }
-
-  @override
-  void dispose() {
-    _model.maybeDispose();
-    super.dispose();
+  void _goTo(String route, String label) {
+    final router = GoRouter.of(context);
+    final currentLocation = GoRouterState.of(context).uri.toString();
+    Tooltip.dismissAllToolTips();
+    final scaffold = Scaffold.maybeOf(context);
+    if (scaffold?.isDrawerOpen ?? false) scaffold!.closeDrawer();
+    if (currentLocation == router.namedLocation(route)) return;
+    // Commit route selection through the existing router before updating the
+    // generated application state. Highlighting itself always follows the URL.
+    context.goNamed(route);
+    FFAppState().selectedPage = label;
+    FFAppState().makingFIrstEncounter = false;
   }
 
   @override
   Widget build(BuildContext context) {
-    context.watch<FFAppState>();
-
-    final selectedPage = _normalizedSelectedPage(context);
-    final clinicianName = _clinicianName();
-
-    return Container(
-      width: 240,
-      color: DawaTokens.surface,
-      child: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-              child: Row(
-                children: [
-                  Image.asset(
-                    'assets/images/trasnsparent assets/Logos-06-removebg-preview.png',
-                    width: 42,
-                    height: 42,
-                    fit: BoxFit.contain,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+    final active = clinicianDestination(GoRouterState.of(context).uri.path);
+    final drawer = (Scaffold.maybeOf(context)?.isDrawerOpen ?? false) ||
+        MediaQuery.sizeOf(context).width < NavigationTokens.desktopBreakpoint;
+    final activeChild = tools.any((t) => t.$1 == active);
+    return ListenableBuilder(
+      listenable: Listenable.merge(
+          [clinicianSidebarCollapsed, clinicianScreeningsExpanded]),
+      builder: (context, _) {
+        final collapsed = !drawer && clinicianSidebarCollapsed.value;
+        final expanded = clinicianScreeningsExpanded.value;
+        Widget item(String label, NavigationSymbol symbol, VoidCallback onTap,
+                {bool? selected, bool nested = false}) =>
+            NavigationItem(
+                label: label,
+                symbol: symbol,
+                onTap: onTap,
+                collapsed: collapsed,
+                touch: drawer,
+                nested: nested,
+                selected: selected ?? active == label);
+        final width = collapsed
+            ? NavigationTokens.collapsedWidth
+            : NavigationTokens.expandedWidth;
+        return AnimatedContainer(
+          key: const ValueKey('clinician-sidebar'),
+          duration: NavigationTokens.duration(context, layout: true),
+          curve: Curves.easeInOut,
+          width: width,
+          decoration: const BoxDecoration(
+              color: NavigationTokens.surface,
+              border:
+                  Border(right: BorderSide(color: NavigationTokens.border))),
+          child: ClipRect(
+              child: OverflowBox(
+            alignment: Alignment.topLeft,
+            minWidth: width,
+            maxWidth: width,
+            child: SafeArea(
+                child: Column(children: [
+              NavigationBrandHeader(collapsed: collapsed, drawer: drawer),
+              const Divider(height: 1, color: NavigationTokens.border),
+              Expanded(
+                  child: ListView(
+                      primary: false,
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
                       children: [
-                        Text(
-                          'Dawa Clinician',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.dmSans(
-                            color: DawaTokens.brandPrimary,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        Text(
-                          'Clinical Portal',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.dmSans(
-                            color: DawaTokens.textMuted,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Divider(height: 1, color: DawaTokens.border),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(12, 18, 12, 18),
-                children: [
-                  _SidebarItem(
-                    label: widget.iconOne,
-                    icon: Icons.home_rounded,
-                    active: selectedPage == 'Home',
-                    onTap: () => _goTo(context, HomeWidget.routeName, 'Home'),
-                  ),
-                  _SidebarItem(
-                    label: widget.iconTwo,
-                    icon: Icons.people_alt_rounded,
-                    active: selectedPage == 'Patients',
-                    onTap: () =>
-                        _goTo(context, MomsWidget.routeName, 'Patients'),
-                  ),
-                  _SidebarItem(
-                    label: widget.iconThree,
-                    icon: Icons.calendar_month_rounded,
-                    active: selectedPage == 'Appointments',
-                    onTap: () => _goTo(
-                      context,
-                      ScheduledEncountersWidget.routeName,
-                      'Appointments',
-                    ),
-                  ),
-                  _SidebarItem(
-                    label: widget.iconFour,
-                    icon: Icons.medical_services_rounded,
-                    active: selectedPage == 'Care Tools',
-                    onTap: () =>
-                        _goTo(context, CareToolsWidget.routeName, 'Care Tools'),
-                  ),
-                  _SidebarItem(
-                    label: 'HemoNix',
-                    icon: Icons.bloodtype_outlined,
-                    active: selectedPage == 'HemoNix',
-                    onTap: () =>
-                        _goTo(context, HemonixApp.routeName, 'HemoNix'),
-                  ),
-                  _SidebarItem(
-                    label: 'CT Scan',
-                    icon: Icons.desktop_windows_outlined,
-                    active: selectedPage == 'CT Scan',
-                    onTap: () => _goTo(context, CtScanApp.routeName, 'CT Scan'),
-                  ),
-                  _SidebarItem(
-                    label: 'Settings',
-                    icon: Icons.settings_rounded,
-                    active: selectedPage == 'Settings',
-                    onTap: () =>
-                        _goTo(context, ProfileWidget.routeName, 'Settings'),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: DawaTokens.surfaceSecondary,
-                  borderRadius: BorderRadius.circular(DawaTokens.radiusLg),
-                  border: Border.all(color: DawaTokens.border),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        DawaAvatarCircle(
-                          name: clinicianName,
-                          moduleColor: DawaTokens.brandPrimary,
-                          size: 40,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                clinicianName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.dmSans(
-                                  color: DawaTokens.textPrimary,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              Text(
-                                currentUserEmail.isNotEmpty
-                                    ? currentUserEmail
-                                    : 'Clinician',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.dmSans(
-                                  color: DawaTokens.textMuted,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 40,
-                      child: OutlinedButton.icon(
-                        onPressed: _logout,
-                        icon: const Icon(Icons.logout_rounded, size: 18),
-                        label: const Text('Logout'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: DawaTokens.statusDanger,
-                          side: const BorderSide(
-                            color: DawaTokens.statusDangerBg,
-                            width: 1.5,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(DawaTokens.radiusMd),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _normalizedSelectedPage(BuildContext context) {
-    final path = GoRouterState.of(context).uri.path.toLowerCase();
-    final selected = FFAppState().selectedPage;
-    if (path.contains('scheduledencounters')) return 'Appointments';
-    if (path.contains('moms') ||
-        path.contains('momdetails') ||
-        path.contains('createmom') ||
-        path.contains('encounter')) {
-      return 'Patients';
-    }
-    if (path.contains('profile') || path.contains('editprofile')) {
-      return 'Settings';
-    }
-    if (path.contains('hemonix')) return 'HemoNix';
-    if (path.contains('ct-scan')) return 'CT Scan';
-    if (path.contains('care-tools')) return 'Care Tools';
-    if (path.contains('home')) return 'Home';
-    if (selected == 'Mothers') return 'Patients';
-    if (selected.isEmpty) return 'Home';
-    return selected;
-  }
-
-  String _clinicianName() {
-    if (currentUserDisplayName.trim().isNotEmpty) {
-      return currentUserDisplayName.trim();
-    }
-    if (currentUserEmail.trim().isNotEmpty) {
-      return currentUserEmail.trim();
-    }
-    return 'Clinician';
-  }
-
-  void _goTo(BuildContext context, String routeName, String pageName) {
-    FFAppState().selectedPage = pageName;
-    FFAppState().makingFIrstEncounter = false;
-    safeSetState(() {});
-
-    context.goNamed(
-      routeName,
-      extra: <String, dynamic>{
-        kTransitionInfoKey: TransitionInfo(
-          hasTransition: true,
-          transitionType: PageTransitionType.fade,
-          duration: Duration.zero,
-        ),
+                    NavigationSectionLabel('Workspace', collapsed: collapsed),
+                    item('Home', NavigationSymbol.home,
+                        () => _goTo(HomeWidget.routeName, 'Home')),
+                    item('Patients', NavigationSymbol.patients,
+                        () => _goTo(MomsWidget.routeName, 'Patients')),
+                    item(
+                        'Appointments',
+                        NavigationSymbol.appointments,
+                        () => _goTo(ScheduledEncountersWidget.routeName,
+                            'Appointments')),
+                    const SizedBox(height: NavigationTokens.sectionGap),
+                    NavigationSectionLabel('Clinical Tools',
+                        collapsed: collapsed),
+                    if (collapsed)
+                      MenuAnchor(
+                        menuChildren: [
+                          for (final tool in tools)
+                            MenuItemButton(
+                                onPressed: () => _goTo(tool.$2, tool.$1),
+                                leadingIcon: NavigationIcon(tool.$3,
+                                    strong: active == tool.$1,
+                                    color: active == tool.$1
+                                        ? NavigationTokens.brand
+                                        : NavigationTokens.secondary),
+                                trailingIcon: active == tool.$1
+                                    ? const NavigationIcon(
+                                        NavigationSymbol.check,
+                                        size: 16)
+                                    : null,
+                                child: Text(tool.$1)),
+                        ],
+                        builder: (context, controller, _) => NavigationItem(
+                            label: 'Screenings',
+                            symbol: NavigationSymbol.screenings,
+                            tooltip: activeChild
+                                ? 'Screenings · $active'
+                                : 'Screenings',
+                            collapsed: true,
+                            selected: active == 'Screenings',
+                            indicateGroup: activeChild,
+                            onTap: () => controller.isOpen
+                                ? controller.close()
+                                : controller.open()),
+                      )
+                    else ...[
+                      NavigationItem(
+                          label: 'Screenings',
+                          symbol: NavigationSymbol.screenings,
+                          selected: active == 'Screenings',
+                          expanded: expanded,
+                          touch: drawer,
+                          onTap: () =>
+                              clinicianScreeningsExpanded.value = !expanded,
+                          trailing: AnimatedRotation(
+                              turns: expanded ? .5 : 0,
+                              duration: NavigationTokens.duration(context,
+                                  layout: true),
+                              child: const NavigationIcon(
+                                  NavigationSymbol.chevron,
+                                  size: 16))),
+                      AnimatedSize(
+                          alignment: Alignment.topCenter,
+                          duration:
+                              NavigationTokens.duration(context, layout: true),
+                          child: expanded
+                              ? Container(
+                                  margin: const EdgeInsets.only(left: 20),
+                                  decoration: const BoxDecoration(
+                                      border: Border(
+                                          left: BorderSide(
+                                              color: NavigationTokens.border))),
+                                  child: Column(children: [
+                                    for (final tool in tools)
+                                      item(tool.$1, tool.$3,
+                                          () => _goTo(tool.$2, tool.$1),
+                                          nested: true),
+                                  ]))
+                              : const SizedBox.shrink()),
+                    ],
+                  ])),
+              const Divider(
+                  height: 1,
+                  indent: 12,
+                  endIndent: 12,
+                  color: NavigationTokens.border),
+              Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Column(children: [
+                    item('Settings', NavigationSymbol.settings,
+                        () => _goTo(ProfileWidget.routeName, 'Settings')),
+                    ClinicianAccountMenu(
+                        collapsed: collapsed,
+                        touch: drawer,
+                        onProfile: () =>
+                            _goTo(ProfileWidget.routeName, 'Settings'),
+                        onSignOut: _logout),
+                  ])),
+            ])),
+          )),
+        );
       },
     );
   }
@@ -310,63 +231,6 @@ class _SmallSideNavWidgetState extends State<SmallSideNavWidget> {
           duration: Duration.zero,
         ),
       },
-    );
-  }
-}
-
-class _SidebarItem extends StatelessWidget {
-  const _SidebarItem({
-    required this.label,
-    required this.icon,
-    required this.active,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final foreground =
-        active ? DawaTokens.textInverse : DawaTokens.textSecondary;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
-          onTap: onTap,
-          child: Container(
-            height: 46,
-            decoration: BoxDecoration(
-              color: active ? DawaTokens.brandPrimary : Colors.transparent,
-              borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
-            ),
-            child: Row(
-              children: [
-                const SizedBox(width: 15),
-                Icon(icon, color: foreground, size: 21),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.dmSans(
-                      color: foreground,
-                      fontSize: 14,
-                      fontWeight: active ? FontWeight.w700 : FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

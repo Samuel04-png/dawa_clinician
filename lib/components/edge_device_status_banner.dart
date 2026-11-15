@@ -9,8 +9,10 @@ class EdgeDeviceStatusBanner extends StatelessWidget {
     required this.state,
     this.message,
     this.model,
+    this.takingLongerThanExpected = false,
   });
 
+  final bool takingLongerThanExpected;
   final EdgeAIModel? model;
   final EdgeDeviceState state;
   final String? message;
@@ -18,14 +20,8 @@ class EdgeDeviceStatusBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final presentation = _presentation(state, model);
-    // While the model loads, tell the clinician how long it takes so nobody
-    // uploads an image too early.
-    final text = message ??
-        (state == EdgeDeviceState.loadingModel
-            ? 'Please wait for "Model ready" before uploading. This usually '
-                'takes about a minute, up to 3 minutes after the device '
-                'switches scan.'
-            : null);
+    final loading = state == EdgeDeviceState.loadingModel;
+    final text = message;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
@@ -37,7 +33,13 @@ class EdgeDeviceStatusBanner extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(presentation.icon, color: presentation.color, size: 20),
+          if (loading)
+            const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2))
+          else
+            Icon(presentation.icon, color: presentation.color, size: 20),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -50,6 +52,21 @@ class EdgeDeviceStatusBanner extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+                if (loading && model == EdgeAIModel.ultrasound) ...[
+                  const SizedBox(height: 3),
+                  const Text(
+                      'First-time initialization typically takes about a minute. '
+                      'Subsequent loading may take up to 30 seconds. '
+                      'You can browse patients and prepare the examination while AI loads.'),
+                  if (takingLongerThanExpected)
+                    const Text(
+                        'Taking longer than expected. Still monitoring the device.'),
+                ],
+                if (loading && model != EdgeAIModel.ultrasound) ...[
+                  const SizedBox(height: 3),
+                  const Text(
+                      'Preparing the selected AI model. You can prepare the patient and image while it loads.'),
+                ],
                 if (text != null) ...[
                   const SizedBox(height: 3),
                   Text(
@@ -88,15 +105,21 @@ class EdgeDeviceStatusBanner extends StatelessWidget {
       EdgeDeviceState.loadingModel => _EdgeDeviceStatusPresentation(
           switch (model) {
             EdgeAIModel.cervicalCancer => 'Preparing cervical AI',
-            EdgeAIModel.ultrasound => 'Preparing ultrasound AI',
+            EdgeAIModel.ultrasound => 'Initializing Ultrasound AI',
+            EdgeAIModel.anemia => 'Initializing Anemia AI',
             null => 'Preparing AI model',
           },
           Icons.hourglass_top,
           DawaTokens.statusInfo,
           DawaTokens.statusInfoBg,
         ),
-      EdgeDeviceState.ready => const _EdgeDeviceStatusPresentation(
-          'Model ready',
+      EdgeDeviceState.ready => _EdgeDeviceStatusPresentation(
+          switch (model) {
+            EdgeAIModel.ultrasound => 'Ultrasound AI ready',
+            EdgeAIModel.cervicalCancer => 'Cervical AI ready',
+            EdgeAIModel.anemia => 'Anemia AI ready',
+            null => 'Model ready',
+          },
           Icons.check_circle_outline,
           DawaTokens.statusSuccess,
           DawaTokens.statusSuccessBg,

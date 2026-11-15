@@ -1,0 +1,101 @@
+[
+  {
+    "path": "lib/application/ultrasound/screens/ultrasound_app.dart",
+    "method": "_buildSecondaryActions",
+    "start_line": 1092,
+    "lines": 55,
+    "classification": "E",
+    "safe_to_remove": true,
+    "reason": "Private duplicate/legacy presentation builder; only identifier occurrence is its declaration, no library parts or reflection, no route or callback references. Current render paths use the shared workspace builders. No analysis or persistence routine removed."
+  },
+  {
+    "path": "lib/application/ultrasound/screens/ultrasound_app.dart",
+    "method": "_buildAiGuidedAction",
+    "start_line": 1148,
+    "lines": 15,
+    "classification": "E",
+    "safe_to_remove": true,
+    "reason": "Private duplicate/legacy presentation builder; only identifier occurrence is its declaration, no library parts or reflection, no route or callback references. Current render paths use the shared workspace builders. No analysis or persistence routine removed."
+  },
+  {
+    "path": "lib/application/ultrasound/screens/ultrasound_app.dart",
+    "method": "_buildManualScanScreen",
+    "start_line": 1479,
+    "lines": 124,
+    "classification": "E",
+    "safe_to_remove": true,
+    "reason": "Private duplicate/legacy presentation builder; only identifier occurrence is its declaration, no library parts or reflection, no route or callback references. Current render paths use the shared workspace builders. No analysis or persistence routine removed."
+  },
+  {
+    "path": "lib/application/ultrasound/screens/ultrasound_app.dart",
+    "method": "_buildAIGuidedScanScreen",
+    "start_line": 1607,
+    "lines": 246,
+    "classification": "E",
+    "safe_to_remove": true,
+    "reason": "Private duplicate/legacy presentation builder; only identifier occurrence is its declaration, no library parts or reflection, no route or callback references. Current render paths use the shared workspace builders. No analysis or persistence routine removed."
+  },
+  {
+    "path": "lib/application/ultrasound/screens/ultrasound_app.dart",
+    "method": "_buildProbeAngleBadge",
+    "start_line": 2296,
+    "lines": 11,
+    "classification": "E",
+    "safe_to_remove": true,
+    "reason": "Private duplicate/legacy presentation builder; only identifier occurrence is its declaration, no library parts or reflection, no route or callback references. Current render paths use the shared workspace builders. No analysis or persistence routine removed."
+  },
+  {
+    "path": "lib/application/ultrasound/screens/ultrasound_app.dart",
+    "method": "_buildAiProgressCard",
+    "start_line": 2457,
+    "lines": 57,
+    "classification": "E",
+    "safe_to_remove": true,
+    "reason": "Private duplicate/legacy presentation builder; only identifier occurrence is its declaration, no library parts or reflection, no route or callback references. Current render paths use the shared workspace builders. No analysis or persistence routine removed."
+  },
+  {
+    "path": "lib/application/ultrasound/screens/ultrasound_app.dart",
+    "method": "_buildAiInstructionCard",
+    "start_line": 2515,
+    "lines": 61,
+    "classification": "E",
+    "safe_to_remove": true,
+    "reason": "Private duplicate/legacy presentation builder; only identifier occurrence is its declaration, no library parts or reflection, no route or callback references. Current render paths use the shared workspace builders. No analysis or persistence routine removed."
+  },
+  {
+    "path": "lib/application/ultrasound/screens/ultrasound_app.dart",
+    "method": "_buildAiScanActionsCard",
+    "start_line": 2577,
+    "lines": 60,
+    "classification": "E",
+    "safe_to_remove": true,
+    "reason": "Private duplicate/legacy presentation builder; only identifier occurrence is its declaration, no library parts or reflection, no route or callback references. Current render paths use the shared workspace builders. No analysis or persistence routine removed."
+  },
+  {
+    "path": "lib/application/cacx/cacx_widget.dart",
+    "method": "_buildSecondaryActions",
+    "start_line": 2248,
+    "lines": 53,
+    "classification": "E",
+    "safe_to_remove": true,
+    "reason": "Private duplicate/legacy presentation builder; only identifier occurrence is its declaration, no library parts or reflection, no route or callback references. Current render paths use the shared workspace builders. No analysis or persistence routine removed."
+  },
+  {
+    "path": "lib/application/cacx/cacx_widget.dart",
+    "method": "_legacyHistoryResultCard",
+    "start_line": 2917,
+    "lines": 95,
+    "classification": "E",
+    "safe_to_remove": true,
+    "reason": "Private duplicate/legacy presentation builder; only identifier occurrence is its declaration, no library parts or reflection, no route or callback references. Current render paths use the shared workspace builders. No analysis or persistence routine removed."
+  },
+  {
+    "path": "lib/application/cacx/cacx_widget.dart",
+    "method": "_buildConfidenceCard",
+    "start_line": 3776,
+    "lines": 45,
+    "classification": "E",
+    "safe_to_remove": true,
+    "reason": "Private duplicate/legacy presentation builder; only identifier occurrence is its declaration, no library parts or reflection, no route or callback references. Current render paths use the shared workspace builders. No analysis or persistence routine removed."
+  }
+]

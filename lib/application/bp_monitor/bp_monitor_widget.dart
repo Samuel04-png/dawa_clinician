@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
+import '/components/clinical_workspace_components.dart';
 import '/components/dawa_design_system.dart';
+import '/components/navigation_design_system.dart';
 
 class BpMonitorApp extends StatefulWidget {
-  const BpMonitorApp({super.key});
+  const BpMonitorApp({super.key, this.now});
+
+  final DateTime Function()? now;
 
   static String routeName = 'BpMonitor';
   static String routePath = '/bp-monitor';
@@ -19,6 +24,40 @@ class _BpMonitorAppState extends State<BpMonitorApp> {
   final TextEditingController _diastolicController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
 
+  final FocusNode _systolicFocus = FocusNode();
+  final FocusNode _diastolicFocus = FocusNode();
+  final FocusNode _ageFocus = FocusNode();
+  final GlobalKey _interpretationKey = GlobalKey();
+  String? _validationMessage;
+  String? _validationField;
+  bool _entryChanged = false;
+
+  @override
+  void initState() {
+    super.initState();
+    for (final controller in [
+      _patientController,
+      _ageController,
+      _systolicController,
+      _diastolicController,
+      _notesController
+    ]) {
+      var previousText = controller.text;
+      controller.addListener(() {
+        if (controller.text == previousText) return;
+        previousText = controller.text;
+        _onEntryChanged();
+      });
+    }
+  }
+
+  void _onEntryChanged() {
+    setState(() {
+      _validationMessage = null;
+      _entryChanged = _latestInterpretation != null;
+    });
+  }
+
   bool _hasDiabetes = false;
   bool _hasKidneyDisease = false;
   bool _hasHeartDisease = false;
@@ -29,6 +68,9 @@ class _BpMonitorAppState extends State<BpMonitorApp> {
 
   @override
   void dispose() {
+    _systolicFocus.dispose();
+    _diastolicFocus.dispose();
+    _ageFocus.dispose();
     _patientController.dispose();
     _ageController.dispose();
     _systolicController.dispose();
@@ -39,108 +81,70 @@ class _BpMonitorAppState extends State<BpMonitorApp> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: DawaTokens.surfaceSecondary,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final wide = constraints.maxWidth >= 920;
-                  final contentWidth = constraints.maxWidth > 1180
-                      ? 1180.0
-                      : constraints.maxWidth;
-                  final panelWidth =
-                      wide ? (contentWidth - 16) / 2 : contentWidth;
-
-                  return SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 1180),
-                        child: Wrap(
-                          spacing: 16,
-                          runSpacing: 16,
-                          crossAxisAlignment: WrapCrossAlignment.start,
-                          children: [
-                            SizedBox(
-                                width: panelWidth, child: _buildInputCard()),
-                            SizedBox(
-                              width: panelWidth,
-                              child: Column(
-                                children: [
-                                  _buildInterpretationCard(),
-                                  const SizedBox(height: 16),
-                                  _buildHistoryCard(),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Container(
-      width: double.infinity,
-      color: DawaTokens.surface,
-      padding: const EdgeInsets.fromLTRB(8, 10, 16, 10),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: 'Back',
-            onPressed: () => Navigator.of(context).maybePop(),
-            icon: const Icon(Icons.arrow_back_rounded),
-            color: DawaTokens.brandPrimary,
-          ),
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: DawaTokens.statusDangerBg,
-              borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
-            ),
-            child: const Icon(
-              Icons.monitor_heart_outlined,
-              color: DawaTokens.statusDanger,
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
+    return Material(
+      color: NavigationTokens.canvas,
+      child: SafeArea(
+        bottom: false,
+        child: LayoutBuilder(builder: (context, constraints) {
+          final padding = constraints.maxWidth < 600 ? 16.0 : 24.0;
+          final contentWidth = (constraints.maxWidth - padding * 2)
+              .clamp(0.0, DawaTokens.workspaceMaxWidth);
+          final wide = contentWidth >= 700 &&
+              MediaQuery.textScalerOf(context).scale(14) <= 21;
+          final input = SizedBox(
+            width: wide ? (contentWidth - 20) * .54 : contentWidth,
+            child: _buildInputCard(sideBySide: wide),
+          );
+          final review = SizedBox(
+            width: wide ? (contentWidth - 20) * .46 : contentWidth,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('BP Monitor', style: DawaTextStyles.cardTitle),
-                Text(
-                  'Blood pressure reading and clinical interpretation',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: DawaTextStyles.secondary.copyWith(
-                    color: DawaTokens.textMuted,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Semantics(
+                      liveRegion: true, child: _buildInterpretationCard()),
+                  const SizedBox(height: 16),
+                  _buildHistoryCard(),
+                ]),
+          );
+          return SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(padding, 12, padding, 32),
+            child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                      maxWidth: DawaTokens.workspaceMaxWidth),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const ClinicalPageHeader(
+                          subtitle:
+                              'Enter a measured reading, review the interpretation, then repeat as needed.',
+                          status: ClinicalStatusChip(label: 'Session only'),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                            'Readings stay on this page during this visit and are not saved to the patient record.',
+                            style: DawaTextStyles.secondary
+                                .copyWith(color: DawaTokens.textSecondary)),
+                        const SizedBox(height: 20),
+                        if (wide)
+                          Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                input,
+                                const SizedBox(width: 20),
+                                review,
+                              ])
+                        else ...[input, const SizedBox(height: 16), review],
+                      ]),
+                )),
+          );
+        }),
       ),
     );
   }
 
-  Widget _buildInputCard() {
+  Widget _buildInputCard({required bool sideBySide}) {
     return DawaCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -152,41 +156,58 @@ class _BpMonitorAppState extends State<BpMonitorApp> {
                 color: DawaTokens.brandPrimary,
               ),
               const SizedBox(width: 8),
-              Text('New BP Reading', style: DawaTextStyles.cardTitle),
+              Expanded(
+                  child:
+                      Text('New BP Reading', style: DawaTextStyles.cardTitle)),
             ],
           ),
           const SizedBox(height: 18),
-          TextField(
-            controller: _patientController,
-            textInputAction: TextInputAction.next,
-            decoration: _inputDecoration(
-              label: 'Patient name',
-              icon: Icons.person_outline_rounded,
-              hint: 'Optional',
-            ),
-          ),
-          const SizedBox(height: 12),
+          LayoutBuilder(builder: (context, constraints) {
+            final patient = TextField(
+              controller: _patientController,
+              textInputAction: TextInputAction.next,
+              decoration: _inputDecoration(
+                  label: 'Patient name',
+                  icon: Icons.person_outline_rounded,
+                  hint: 'Optional'),
+            );
+            final age = _numberField(
+                controller: _ageController,
+                label: 'Age',
+                hint: 'Optional, in years',
+                icon: Icons.cake_outlined);
+            if (constraints.maxWidth >= 320 &&
+                MediaQuery.textScalerOf(context).scale(14) <= 21) {
+              return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 2, child: patient),
+                    const SizedBox(width: 12),
+                    Expanded(child: age),
+                  ]);
+            }
+            return Column(children: [patient, const SizedBox(height: 12), age]);
+          }),
+          const SizedBox(height: 18),
+          Text('Blood pressure', style: DawaTextStyles.cardTitle),
+          const SizedBox(height: 4),
+          Text('Enter the measured systolic and diastolic values in mmHg.',
+              style: DawaTextStyles.secondary),
+          const SizedBox(height: 10),
           LayoutBuilder(
             builder: (context, constraints) {
-              final useRows = constraints.maxWidth >= 540;
+              final useRows = constraints.maxWidth >= 300 &&
+                  MediaQuery.textScalerOf(context).scale(14) <= 21;
               final fields = [
-                _numberField(
-                  controller: _ageController,
-                  label: 'Age',
-                  hint: 'Years',
-                  icon: Icons.cake_outlined,
-                ),
-                _numberField(
+                _measurementField(
                   controller: _systolicController,
                   label: 'Systolic',
-                  hint: 'mmHg',
-                  icon: Icons.arrow_upward_rounded,
+                  helper: 'Upper reading',
                 ),
-                _numberField(
+                _measurementField(
                   controller: _diastolicController,
                   label: 'Diastolic',
-                  hint: 'mmHg',
-                  icon: Icons.arrow_downward_rounded,
+                  helper: 'Lower reading',
                 ),
               ];
 
@@ -204,17 +225,20 @@ class _BpMonitorAppState extends State<BpMonitorApp> {
               }
 
               return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (var index = 0; index < fields.length; index++) ...[
-                    Expanded(child: fields[index]),
-                    if (index != fields.length - 1) const SizedBox(width: 12),
-                  ],
+                  Expanded(child: fields[0]),
+                  const SizedBox(width: 12),
+                  Expanded(child: fields[1]),
                 ],
               );
             },
           ),
           const SizedBox(height: 14),
           Text('Clinical context', style: DawaTextStyles.cardTitle),
+          const SizedBox(height: 4),
+          Text('Select all that apply to this reading.',
+              style: DawaTextStyles.secondary),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -223,23 +247,38 @@ class _BpMonitorAppState extends State<BpMonitorApp> {
               _riskChip(
                 label: 'Diabetes',
                 selected: _hasDiabetes,
-                onSelected: (value) => setState(() => _hasDiabetes = value),
+                onSelected: (value) => setState(() {
+                  _hasDiabetes = value;
+                  _entryChanged = _latestInterpretation != null;
+                  _validationMessage = null;
+                }),
               ),
               _riskChip(
                 label: 'Kidney disease',
                 selected: _hasKidneyDisease,
-                onSelected: (value) =>
-                    setState(() => _hasKidneyDisease = value),
+                onSelected: (value) => setState(() {
+                  _hasKidneyDisease = value;
+                  _entryChanged = _latestInterpretation != null;
+                  _validationMessage = null;
+                }),
               ),
               _riskChip(
                 label: 'Heart disease',
                 selected: _hasHeartDisease,
-                onSelected: (value) => setState(() => _hasHeartDisease = value),
+                onSelected: (value) => setState(() {
+                  _hasHeartDisease = value;
+                  _entryChanged = _latestInterpretation != null;
+                  _validationMessage = null;
+                }),
               ),
               _riskChip(
                 label: 'Pregnant',
                 selected: _isPregnant,
-                onSelected: (value) => setState(() => _isPregnant = value),
+                onSelected: (value) => setState(() {
+                  _isPregnant = value;
+                  _entryChanged = _latestInterpretation != null;
+                  _validationMessage = null;
+                }),
               ),
             ],
           ),
@@ -249,7 +288,7 @@ class _BpMonitorAppState extends State<BpMonitorApp> {
             minLines: 2,
             maxLines: 3,
             decoration: _inputDecoration(
-              label: 'Notes',
+              label: 'Clinical notes',
               icon: Icons.notes_outlined,
               hint: 'Symptoms, medicine, or repeat reading notes',
             ),
@@ -260,22 +299,51 @@ class _BpMonitorAppState extends State<BpMonitorApp> {
             runSpacing: 10,
             children: [
               ElevatedButton.icon(
-                onPressed: _analyzeReading,
+                onPressed: () => _analyzeReading(scrollToResult: !sideBySide),
                 icon: const Icon(Icons.fact_check_outlined, size: 18),
                 label: const Text('Interpret Reading'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: DawaTokens.brandPrimary,
                   foregroundColor: DawaTokens.textInverse,
+                  side: BorderSide.none,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
                 ),
               ),
               OutlinedButton.icon(
-                onPressed: _clearForm,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: DawaTokens.brandPrimary,
+                  side: const BorderSide(color: DawaTokens.borderStrong),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: _confirmClearForm,
                 icon: const Icon(Icons.refresh_rounded, size: 18),
-                label: const Text('Clear'),
+                label: const Text('Clear form'),
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _measurementField({
+    required TextEditingController controller,
+    required String label,
+    required String helper,
+  }) {
+    return TextField(
+      controller: controller,
+      focusNode: label == 'Systolic' ? _systolicFocus : _diastolicFocus,
+      keyboardType: TextInputType.number,
+      textInputAction: TextInputAction.next,
+      style: DawaTextStyles.pageTitle.copyWith(fontSize: 24),
+      decoration: _inputDecoration(label: label, icon: null).copyWith(
+        suffixText: 'mmHg',
+        suffixStyle:
+            DawaTextStyles.secondary.copyWith(color: DawaTokens.textSecondary),
+        helperText: helper,
       ),
     );
   }
@@ -288,26 +356,46 @@ class _BpMonitorAppState extends State<BpMonitorApp> {
   }) {
     return TextField(
       controller: controller,
+      focusNode: _ageFocus,
       keyboardType: TextInputType.number,
       textInputAction: TextInputAction.next,
-      decoration: _inputDecoration(label: label, icon: icon, hint: hint),
+      decoration: _inputDecoration(label: label, icon: icon, hint: hint)
+          .copyWith(suffixText: hint == 'mmHg' ? 'mmHg' : null),
     );
   }
 
   InputDecoration _inputDecoration({
     required String label,
-    required IconData icon,
+    required IconData? icon,
     String? hint,
   }) {
     return InputDecoration(
       labelText: label,
       hintText: hint,
-      prefixIcon: Icon(icon, size: 18),
+      errorText: _validationField == label ? _validationMessage : null,
+      errorMaxLines: 4,
+      errorStyle:
+          DawaTextStyles.secondary.copyWith(color: DawaTokens.textSecondary),
+      prefixIcon: icon == null ? null : Icon(icon, size: 18),
       filled: true,
-      fillColor: DawaTokens.surfaceTertiary,
+      fillColor: DawaTokens.surface,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
-        borderSide: BorderSide.none,
+        borderSide: const BorderSide(color: DawaTokens.borderStrong),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
+        borderSide: const BorderSide(color: DawaTokens.borderStrong),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
+        borderSide: const BorderSide(color: DawaTokens.brandPrimary),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
+        borderSide:
+            const BorderSide(color: DawaTokens.brandPrimary, width: 1.4),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
@@ -325,6 +413,7 @@ class _BpMonitorAppState extends State<BpMonitorApp> {
     return FilterChip(
       label: Text(label),
       selected: selected,
+      backgroundColor: DawaTokens.surface,
       onSelected: onSelected,
       selectedColor: DawaTokens.brandPrimaryPale,
       checkmarkColor: DawaTokens.brandPrimary,
@@ -338,29 +427,25 @@ class _BpMonitorAppState extends State<BpMonitorApp> {
     );
   }
 
-  Widget _buildInterpretationCard() {
-    final interpretation = _latestInterpretation;
+  Widget _buildInterpretationCard({_BpSavedReading? reading}) {
+    final interpretation = reading?.interpretation ?? _latestInterpretation;
+    final snapshot =
+        reading ?? (interpretation == null ? null : _readings.first);
     if (interpretation == null) {
       return DawaCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                const Icon(
-                  Icons.monitor_heart_outlined,
-                  color: DawaTokens.textMuted,
-                ),
-                const SizedBox(width: 8),
-                Text('Interpretation', style: DawaTextStyles.cardTitle),
-              ],
-            ),
+            Text('Interpretation', style: DawaTextStyles.cardTitle),
             const SizedBox(height: 12),
-            Text(
-              'Enter a reading to see risk level, context-aware interpretation, and follow-up guidance.',
-              style: DawaTextStyles.secondary.copyWith(
-                color: DawaTokens.textSecondary,
-              ),
+            ClinicalEmptyState(
+              surface: false,
+              icon: Icons.monitor_heart_outlined,
+              title: 'No interpretation yet',
+              message:
+                  'Enter blood-pressure measurements and select Interpret Reading.',
+              actionLabel: 'Enter a reading',
+              onAction: _focusMeasurement,
             ),
           ],
         ),
@@ -372,6 +457,25 @@ class _BpMonitorAppState extends State<BpMonitorApp> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text('Interpretation',
+              key: reading == null ? _interpretationKey : null,
+              style: DawaTextStyles.cardTitle),
+          const SizedBox(height: 12),
+          Text(snapshot!.patientName, style: DawaTextStyles.cardTitle),
+          const SizedBox(height: 4),
+          Text(
+              'Interpreted ${DateFormat.yMMMd().add_Hm().format(snapshot.recordedAt.toLocal())}',
+              style: DawaTextStyles.secondary
+                  .copyWith(color: DawaTokens.textSecondary)),
+          const SizedBox(height: 12),
+          if (reading == null && _entryChanged) ...[
+            const ClinicalInlineBanner(
+                tone: ClinicalBannerTone.info,
+                title: 'Entry changed',
+                message:
+                    'This interpretation is for the previous entry. Select Interpret Reading to update it.'),
+            const SizedBox(height: 12),
+          ],
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -403,7 +507,8 @@ class _BpMonitorAppState extends State<BpMonitorApp> {
                     const SizedBox(height: 3),
                     Text(
                       interpretation.readingLabel,
-                      style: DawaTextStyles.secondary.copyWith(
+                      style: DawaTextStyles.pageTitle.copyWith(
+                        color: DawaTokens.textPrimary,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -454,6 +559,23 @@ class _BpMonitorAppState extends State<BpMonitorApp> {
               ),
             ),
           ),
+          if (snapshot.notes.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text('Clinical notes', style: DawaTextStyles.cardTitle),
+            const SizedBox(height: 4),
+            Text(snapshot.notes, style: DawaTextStyles.secondary),
+          ],
+          const SizedBox(height: 12),
+          Text('Decision support • clinician must review.',
+              style: DawaTextStyles.secondary
+                  .copyWith(color: DawaTokens.textSecondary)),
+          if (reading == null) ...[
+            const SizedBox(height: 8),
+            TextButton.icon(
+                onPressed: _focusMeasurement,
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                label: const Text('Repeat measurement')),
+          ],
         ],
       ),
     );
@@ -468,18 +590,24 @@ class _BpMonitorAppState extends State<BpMonitorApp> {
             children: [
               const Icon(Icons.history_rounded, color: DawaTokens.brandPrimary),
               const SizedBox(width: 8),
-              Text('Recent Readings', style: DawaTextStyles.cardTitle),
+              Expanded(
+                  child: Text('Recent Readings (${_readings.length})',
+                      style: DawaTextStyles.cardTitle)),
             ],
           ),
           const SizedBox(height: 12),
-          if (_readings.isEmpty)
+          if (_readings.isEmpty) ...[
             Text(
-              'Saved BP interpretations from this session will appear here.',
+              'Interpreted readings appear here during this visit to BP Monitor. They are not saved to permanent patient records.',
               style: DawaTextStyles.secondary.copyWith(
                 color: DawaTokens.textSecondary,
               ),
-            )
-          else
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+                onPressed: _focusMeasurement,
+                child: const Text('Enter first reading')),
+          ] else
             Column(
               children: _readings
                   .map(
@@ -496,63 +624,115 @@ class _BpMonitorAppState extends State<BpMonitorApp> {
   }
 
   Widget _historyRow(_BpSavedReading reading) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: DawaTokens.surfaceTertiary,
+    return Semantics(
+      button: true,
+      hint: 'Open full session reading',
+      child: InkWell(
+        onTap: () => _showReading(reading),
         borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            reading.interpretation.icon,
-            color: reading.interpretation.color,
-            size: 20,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: DawaTokens.surfaceTertiary,
+            borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${reading.patientName} - ${reading.interpretation.readingLabel}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: DawaTextStyles.secondary.copyWith(
-                    color: DawaTokens.textPrimary,
-                    fontWeight: FontWeight.w700,
-                  ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                reading.interpretation.icon,
+                color: reading.interpretation.color,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${reading.patientName} - ${reading.interpretation.readingLabel}',
+                      style: DawaTextStyles.secondary.copyWith(
+                        color: DawaTokens.textPrimary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                        'Recorded ${DateFormat.yMMMd().add_Hm().format(reading.recordedAt.toLocal())}',
+                        style: DawaTextStyles.secondary),
+                    const SizedBox(height: 3),
+                    Text(
+                      reading.interpretation.title,
+                      style: DawaTextStyles.secondary.copyWith(
+                        color: reading.interpretation.color,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (reading.notes.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        reading.notes,
+                        style: DawaTextStyles.secondary,
+                      ),
+                    ],
+                  ],
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  reading.interpretation.title,
-                  style: DawaTextStyles.secondary.copyWith(
-                    color: reading.interpretation.color,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                if (reading.notes.isNotEmpty) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    reading.notes,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: DawaTextStyles.secondary,
-                  ),
-                ],
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right_rounded,
+                  color: DawaTokens.brandPrimary, size: 20),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  void _analyzeReading() {
+  void _focusMeasurement() {
+    _systolicFocus.requestFocus();
+    _systolicController.selection = TextSelection(
+        baseOffset: 0, extentOffset: _systolicController.text.length);
+  }
+
+  Future<void> _showReading(_BpSavedReading reading) => showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Session reading'),
+          contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          content: SizedBox(
+              width: 560,
+              child: SingleChildScrollView(
+                  child: _buildInterpretationCard(reading: reading))),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'))
+          ],
+        ),
+      );
+
+  void _showValidation(String message, FocusNode field) {
+    setState(() {
+      _validationMessage = message;
+      _validationField = field == _ageFocus
+          ? 'Age'
+          : field == _systolicFocus
+              ? 'Systolic'
+              : 'Diastolic';
+    });
+    field.requestFocus();
+  }
+
+  void _analyzeReading({required bool scrollToResult}) {
     final systolic = int.tryParse(_systolicController.text.trim());
     final diastolic = int.tryParse(_diastolicController.text.trim());
     final age = int.tryParse(_ageController.text.trim());
+
+    if (_ageController.text.trim().isNotEmpty && (age == null || age <= 0)) {
+      _showValidation(
+          'Enter a valid age in years, or leave age empty.', _ageFocus);
+      return;
+    }
 
     if (systolic == null ||
         diastolic == null ||
@@ -560,12 +740,19 @@ class _BpMonitorAppState extends State<BpMonitorApp> {
         systolic > 260 ||
         diastolic < 30 ||
         diastolic > 160) {
-      _showToast('Enter a valid systolic and diastolic BP reading.', true);
+      final invalidSystolic =
+          systolic == null || systolic < 50 || systolic > 260;
+      _showValidation(
+          invalidSystolic
+              ? 'Enter systolic pressure from 50 to 260 mmHg.'
+              : 'Enter diastolic pressure from 30 to 160 mmHg.',
+          invalidSystolic ? _systolicFocus : _diastolicFocus);
       return;
     }
 
     if (diastolic >= systolic) {
-      _showToast('Diastolic pressure should be lower than systolic.', true);
+      _showValidation(
+          'Diastolic pressure should be lower than systolic.', _diastolicFocus);
       return;
     }
 
@@ -584,6 +771,8 @@ class _BpMonitorAppState extends State<BpMonitorApp> {
         : _patientController.text.trim();
 
     setState(() {
+      _validationMessage = null;
+      _entryChanged = false;
       _latestInterpretation = interpretation;
       _readings.insert(
         0,
@@ -591,9 +780,58 @@ class _BpMonitorAppState extends State<BpMonitorApp> {
           patientName: patientName,
           interpretation: interpretation,
           notes: _notesController.text.trim(),
+          recordedAt: widget.now?.call() ?? DateTime.now(),
         ),
       );
     });
+    FocusScope.of(context).unfocus();
+    if (!scrollToResult) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final target = _interpretationKey.currentContext;
+      if (target != null) {
+        Scrollable.ensureVisible(target,
+            alignment: .04,
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 180));
+      }
+    });
+  }
+
+  Future<void> _confirmClearForm() async {
+    final hasContent = [
+          _patientController.text,
+          _ageController.text,
+          _systolicController.text,
+          _diastolicController.text,
+          _notesController.text,
+        ].any((value) => value.trim().isNotEmpty) ||
+        _hasDiabetes ||
+        _hasKidneyDisease ||
+        _hasHeartDisease ||
+        _isPregnant;
+    if (!hasContent) {
+      _clearForm();
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear BP reading form?'),
+        content: const Text(
+            'This clears the current entry and interpretation. Recent session readings will remain available.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Keep entry')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Clear form')),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) _clearForm();
   }
 
   void _clearForm() {
@@ -608,19 +846,9 @@ class _BpMonitorAppState extends State<BpMonitorApp> {
       _hasHeartDisease = false;
       _isPregnant = false;
       _latestInterpretation = null;
+      _entryChanged = false;
+      _validationMessage = null;
     });
-  }
-
-  void _showToast(String message, bool isError) {
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor:
-            isError ? DawaTokens.statusDanger : DawaTokens.textPrimary,
-      ),
-    );
   }
 }
 
@@ -647,8 +875,8 @@ class BpInterpretation {
     return switch (severity) {
       BpSeverity.normal => DawaTokens.statusSuccessText,
       BpSeverity.caution => DawaTokens.statusWarningText,
-      BpSeverity.review => DawaTokens.statusWarning,
-      BpSeverity.urgent => DawaTokens.statusDanger,
+      BpSeverity.review => DawaTokens.statusWarningText,
+      BpSeverity.urgent => DawaTokens.statusDangerText,
     };
   }
 
@@ -773,8 +1001,10 @@ class _BpSavedReading {
     required this.patientName,
     required this.interpretation,
     required this.notes,
+    required this.recordedAt,
   });
 
+  final DateTime recordedAt;
   final String patientName;
   final BpInterpretation interpretation;
   final String notes;

@@ -3,7 +3,7 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-class ImageSourcePickerDialogWidget extends StatelessWidget {
+class ImageSourcePickerDialogWidget extends StatefulWidget {
   const ImageSourcePickerDialogWidget({
     super.key,
     required this.title,
@@ -26,137 +26,142 @@ class ImageSourcePickerDialogWidget extends StatelessWidget {
   final Future<void> Function() onUploadImage;
 
   @override
+  State<ImageSourcePickerDialogWidget> createState() =>
+      _ImageSourcePickerDialogWidgetState();
+}
+
+class _ImageSourcePickerDialogWidgetState
+    extends State<ImageSourcePickerDialogWidget> {
+  bool _choosing = false;
+  String? _error;
+
+  Future<void> _choose(Future<void> Function() action) async {
+    if (_choosing) return;
+    setState(() {
+      _choosing = true;
+      _error = null;
+    });
+    try {
+      await action();
+    } catch (_) {
+      if (mounted)
+        setState(() =>
+            _error = 'Could not open the image source. Please try again.');
+    } finally {
+      if (mounted) setState(() => _choosing = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    final isCompact = size.width < 640.0;
-
-    return SafeArea(
-      child: Dialog(
-        insetPadding: const EdgeInsets.all(24.0),
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24.0),
-        ),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: 600.0,
-            maxHeight: size.height * 0.85,
-          ),
-          child: Material(
+    return Dialog(
+      insetPadding: const EdgeInsets.all(16),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+            maxWidth: 560,
+            maxHeight:
+                (size.height - MediaQuery.viewInsetsOf(context).vertical - 48)
+                    .clamp(120.0, 720.0)),
+        child: Material(
             color: FlutterFlowTheme.of(context).secondaryBackground,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 22, 14, 16),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              title,
-                              style: FlutterFlowTheme.of(context)
-                                  .titleLarge
-                                  .override(
-                                    font: GoogleFonts.dmSans(
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.0,
-                                  ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              subtitle,
-                              style: FlutterFlowTheme.of(context)
-                                  .bodyMedium
-                                  .override(
-                                    font: GoogleFonts.dmSans(),
-                                    color: FlutterFlowTheme.of(context)
-                                        .secondaryText,
-                                    letterSpacing: 0.0,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Close',
-                        onPressed: () => Navigator.of(context).maybePop(),
-                        icon: const Icon(Icons.close_rounded),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1),
-                Flexible(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Flexible(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final stack = constraints.maxWidth < 420.0 || isCompact;
-
-                        final takePhoto = _ActionCard(
-                          icon: Icons.camera_alt_rounded,
-                          title: takePhotoLabel,
-                          subtitle: takePhotoSubtitle,
-                          accent: DawaTokens.brandPrimary,
-                          onTap: onTakePhoto,
-                        );
-                        final upload = _ActionCard(
-                          icon: Icons.photo_library_outlined,
-                          title: uploadLabel,
-                          subtitle: uploadSubtitle,
-                          accent: DawaTokens.brandPrimary,
-                          onTap: onUploadImage,
-                        );
-
-                        if (stack) {
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              takePhoto,
-                              const SizedBox(height: 12),
-                              upload,
-                            ],
-                          );
-                        }
-
-                        return Row(
-                          children: [
-                            Expanded(child: takePhoto),
-                            const SizedBox(width: 12),
-                            Expanded(child: upload),
-                          ],
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                SafeArea(
-                  top: false,
-                  minimum: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 20, 12, 16),
+                          child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                    child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                      Text(widget.title,
+                                          style: DawaTextStyles.pageTitle),
+                                      const SizedBox(height: 8),
+                                      Text(widget.subtitle,
+                                          style: DawaTextStyles.secondary),
+                                    ])),
+                                IconButton(
+                                    tooltip: 'Close image selection',
+                                    onPressed: _choosing
+                                        ? null
+                                        : () =>
+                                            Navigator.of(context).maybePop(),
+                                    icon: const Icon(Icons.close_rounded)),
+                              ])),
+                      const Divider(height: 1),
+                      if (_choosing)
+                        const LinearProgressIndicator(
+                            semanticsLabel: 'Opening image source'),
+                      Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: LayoutBuilder(builder: (context, constraints) {
+                            final takePhoto = _ActionCard(
+                                icon: Icons.camera_alt_outlined,
+                                title: widget.takePhotoLabel,
+                                subtitle: widget.takePhotoSubtitle,
+                                accent: DawaTokens.brandPrimary,
+                                onTap: _choosing
+                                    ? null
+                                    : () => _choose(widget.onTakePhoto));
+                            final upload = _ActionCard(
+                                icon: Icons.photo_library_outlined,
+                                title: widget.uploadLabel,
+                                subtitle: widget.uploadSubtitle,
+                                accent: DawaTokens.brandPrimary,
+                                onTap: _choosing
+                                    ? null
+                                    : () => _choose(widget.onUploadImage));
+                            if (constraints.maxWidth < 420 ||
+                                MediaQuery.textScalerOf(context).scale(14) >
+                                    21) {
+                              return Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    takePhoto,
+                                    const SizedBox(height: 12),
+                                    upload
+                                  ]);
+                            }
+                            return Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(child: takePhoto),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: upload)
+                                ]);
+                          })),
+                      if (_error != null)
+                        Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                            child: Semantics(
+                                liveRegion: true,
+                                child: Text(_error!,
+                                    style: const TextStyle(
+                                        color: DawaTokens.statusDanger)))),
+                    ]),
+              )),
+              Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
                   child: SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(context).maybePop(),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(48),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12.0),
-                        ),
-                      ),
-                      child: const Text('Cancel'),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+                      width: double.infinity,
+                      child: OutlinedButton(
+                          onPressed: _choosing
+                              ? null
+                              : () => Navigator.of(context).maybePop(),
+                          style: OutlinedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(48)),
+                          child: const Text('Cancel')))),
+            ])),
       ),
     );
   }
@@ -175,60 +180,63 @@ class _ActionCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final Color accent;
-  final Future<void> Function() onTap;
+  final Future<void> Function()? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: accent.withOpacity(0.06),
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: () async => onTap(),
-        child: Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
+    return Semantics(
+        button: true,
+        enabled: onTap != null,
+        child: Material(
+          color: accent.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(18),
+          child: InkWell(
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: accent.withOpacity(0.20)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: accent,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(icon, color: Colors.white, size: 24),
+            onTap: onTap == null ? null : () async => onTap!(),
+            child: Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: accent.withOpacity(0.20)),
               ),
-              const SizedBox(height: 14),
-              Text(
-                title,
-                style: FlutterFlowTheme.of(context).titleSmall.override(
-                      font: GoogleFonts.dmSans(
-                        fontWeight: FontWeight.w700,
-                      ),
-                      color: FlutterFlowTheme.of(context).primaryText,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.0,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: accent,
+                      borderRadius: BorderRadius.circular(14),
                     ),
+                    child: Icon(icon, color: Colors.white, size: 24),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    title,
+                    style: FlutterFlowTheme.of(context).titleSmall.override(
+                          font: GoogleFonts.dmSans(
+                            fontWeight: FontWeight.w700,
+                          ),
+                          color: FlutterFlowTheme.of(context).primaryText,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.0,
+                        ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    subtitle,
+                    style: FlutterFlowTheme.of(context).bodySmall.override(
+                          font: GoogleFonts.dmSans(),
+                          color: FlutterFlowTheme.of(context).secondaryText,
+                          letterSpacing: 0.0,
+                        ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 6),
-              Text(
-                subtitle,
-                style: FlutterFlowTheme.of(context).bodySmall.override(
-                      font: GoogleFonts.dmSans(),
-                      color: FlutterFlowTheme.of(context).secondaryText,
-                      letterSpacing: 0.0,
-                    ),
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
-    );
+        ));
   }
 }

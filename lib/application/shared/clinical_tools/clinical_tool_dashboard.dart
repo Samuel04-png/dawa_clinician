@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
-import '/auth/firebase_auth/auth_util.dart';
+import '/components/clinical_page_intro.dart';
+import '/components/clinical_tab_bar.dart';
+import '/components/clinical_workspace_components.dart' as workspace;
 import '/components/dawa_design_system.dart';
+import '/components/navigation_design_system.dart';
 import 'clinical_tool_controller.dart';
 import 'clinical_tool_models.dart';
 
@@ -9,9 +13,11 @@ class ClinicalToolDashboard extends StatefulWidget {
   const ClinicalToolDashboard({
     super.key,
     required this.controller,
+    this.demonstrationMode = false,
   });
 
   final ClinicalToolController controller;
+  final bool demonstrationMode;
 
   @override
   State<ClinicalToolDashboard> createState() => _ClinicalToolDashboardState();
@@ -45,286 +51,344 @@ class _ClinicalToolDashboardState extends State<ClinicalToolDashboard> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 768;
-
+    if (widget.demonstrationMode) return _buildSampleWorkspace();
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FB),
+      backgroundColor: NavigationTokens.canvas,
       body: SafeArea(
-        child: isMobile
-            ? Column(
-                children: [
-                  _buildMobileHeader(),
-                  Expanded(child: _buildContent()),
-                  _buildMobileNav(),
-                ],
-              )
-            : Row(
-                children: [
-                  _buildSidebar(),
-                  const VerticalDivider(width: 1),
-                  Expanded(child: _buildContent()),
-                ],
-              ),
-      ),
-    );
-  }
-
-  Widget _buildMobileHeader() {
-    return Container(
-      color: DawaTokens.surface,
-      padding: const EdgeInsets.fromLTRB(8, 10, 14, 10),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: 'Back to tools',
-            onPressed: () => Navigator.of(context).maybePop(),
-            icon: const Icon(Icons.arrow_back_rounded),
-            color: config.color,
-          ),
-          _moduleIcon(size: 36, iconSize: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  config.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: DawaTextStyles.cardTitle.copyWith(
-                    fontWeight: FontWeight.w800,
+        bottom: false,
+        child: LayoutBuilder(builder: (context, constraints) {
+          final scrollingIntro = constraints.maxHeight < 520;
+          return Column(
+            children: [
+              SizedBox(
+                  child: scrollingIntro
+                      ? const SizedBox.shrink()
+                      : _buildPageIntro()),
+              _buildTabBar(),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: _transitionDuration(context),
+                  child: KeyedSubtree(
+                    key: ValueKey(controller.activeTab),
+                    child: _buildContent(scrollingIntro: scrollingIntro),
                   ),
                 ),
-                Text(
-                  'Clinical tool',
-                  style: DawaTextStyles.secondary.copyWith(fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-        ],
+              ),
+            ],
+          );
+        }),
       ),
     );
   }
 
-  Widget _buildSidebar() {
-    return Container(
-      key: ValueKey('${config.key}-sidebar'),
-      width: 240,
-      color: DawaTokens.surface,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-            child: Row(
-              children: [
-                _moduleIcon(size: 42),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildSampleWorkspace() {
+    final overview = controller.activeTab == ClinicalToolDashboardTab.overview;
+    final recordsTab = controller.activeTab == ClinicalToolDashboardTab.records;
+    final records = overview ? controller.records : controller.filteredRecords;
+    return Material(
+      color: NavigationTokens.canvas,
+      child: Column(children: [
+        _buildTabBar(),
+        Expanded(
+          child: SingleChildScrollView(
+            key: const PageStorageKey('ct-scan-results'),
+            padding: EdgeInsets.all(
+                MediaQuery.sizeOf(context).width < 600 ? 16 : 24),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                    maxWidth: DawaTokens.workspaceMaxWidth),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
-                        config.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: DawaTextStyles.cardTitle.copyWith(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
+                      workspace.ClinicalPageHeader(
+                        subtitle: 'Review CT records and radiology reports.',
+                        action: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: NavigationTokens.brand,
+                            side: const BorderSide(
+                                color: DawaTokens.borderStrong),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
+                          onPressed: () {
+                            controller.clearSearchAndFilters();
+                            controller.setTab(ClinicalToolDashboardTab.records);
+                          },
+                          icon:
+                              const Icon(Icons.folder_open_outlined, size: 18),
+                          label: const Text('View sample records'),
                         ),
                       ),
-                      Text(
-                        'Clinical tool',
-                        style: DawaTextStyles.secondary.copyWith(
-                          color: DawaTokens.textMuted,
-                          fontSize: 11,
-                        ),
+                      const SizedBox(height: 8),
+                      DawaCard(
+                        padding: const EdgeInsets.all(12),
+                        child: Wrap(
+                            spacing: 12,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              const workspace.ClinicalStatusChip(
+                                  label: 'Sample data'),
+                              Text(
+                                  'Clinical record creation and saving are not connected.',
+                                  style: DawaTextStyles.secondary),
+                            ]),
                       ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-            child: SizedBox(
-              width: double.infinity,
-              height: 38,
-              child: OutlinedButton.icon(
-                onPressed: () => Navigator.of(context).maybePop(),
-                icon: const Icon(Icons.arrow_back_rounded, size: 18),
-                label: const Text('Back to tools'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: config.color,
-                  side: BorderSide(color: config.color.withOpacity(0.28)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
-                  ),
-                ),
+                      const SizedBox(height: 16),
+                      _sampleSummary(),
+                      const SizedBox(height: 24),
+                      Text(
+                          overview
+                              ? 'Recent CT records'
+                              : recordsTab
+                                  ? 'Patient records'
+                                  : config.resultsLabel,
+                          style: DawaTextStyles.cardTitle),
+                      const SizedBox(height: 12),
+                      if (!overview) ...[
+                        TextField(
+                          key: ValueKey(recordsTab
+                              ? 'ct-scan-records-search'
+                              : 'ct-scan-results-search'),
+                          controller: _searchController,
+                          autofocus: controller.activeTab ==
+                              ClinicalToolDashboardTab.search,
+                          onChanged: controller.setSearch,
+                          decoration: InputDecoration(
+                            labelText: 'Search records',
+                            hintText: 'Patient, reference or report',
+                            prefixIcon: const Icon(Icons.search, size: 20),
+                            suffixIcon: controller.searchQuery.isEmpty
+                                ? null
+                                : IconButton(
+                                    tooltip: 'Clear record search',
+                                    onPressed: controller.clearSearchAndFilters,
+                                    icon: const Icon(Icons.close, size: 18)),
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(spacing: 8, runSpacing: 8, children: [
+                          _filterChip(
+                              'All results', ClinicalToolResultsFilter.all),
+                          _filterChip(
+                              'Completed', ClinicalToolResultsFilter.completed),
+                          _filterChip('Needs review',
+                              ClinicalToolResultsFilter.needsReview),
+                        ]),
+                        const SizedBox(height: 16),
+                        Text(
+                            '${records.length} of ${controller.records.length} records',
+                            style: DawaTextStyles.secondary),
+                        const SizedBox(height: 8),
+                      ],
+                      if (records.isEmpty)
+                        _emptyResults(controller.records.isEmpty)
+                      else
+                        DawaCard(
+                          padding: EdgeInsets.zero,
+                          child: Column(children: [
+                            for (var i = 0; i < records.length; i++) ...[
+                              if (i > 0)
+                                const Divider(
+                                    height: 1, color: DawaTokens.border),
+                              _sampleRecordRow(records[i]),
+                            ],
+                          ]),
+                        ),
+                    ]),
               ),
-            ),
-          ),
-          const Divider(height: 1, color: DawaTokens.border),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(12),
-              children: [
-                _sideNavItem(
-                  Icons.dashboard_outlined,
-                  'Dashboard',
-                  ClinicalToolDashboardTab.overview,
-                ),
-                _sideNavItem(
-                  Icons.people_outline,
-                  'Patient Records',
-                  ClinicalToolDashboardTab.records,
-                ),
-                _sideNavItem(
-                  Icons.fact_check_outlined,
-                  config.resultsLabel,
-                  ClinicalToolDashboardTab.results,
-                ),
-                _sideNavItem(
-                  Icons.search,
-                  'Search Results',
-                  ClinicalToolDashboardTab.search,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _moduleIcon({required double size, double iconSize = 22}) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: config.color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
-      ),
-      child: Icon(config.icon, color: config.color, size: iconSize),
-    );
-  }
-
-  Widget _sideNavItem(
-    IconData icon,
-    String label,
-    ClinicalToolDashboardTab tab,
-  ) {
-    final selected = controller.activeTab == tab;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
-          onTap: () => controller.setTab(tab),
-          child: Container(
-            height: 46,
-            decoration: BoxDecoration(
-              color: selected ? DawaTokens.brandPrimary : Colors.transparent,
-              borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
-            ),
-            child: Row(
-              children: [
-                const SizedBox(width: 15),
-                Icon(
-                  icon,
-                  color:
-                      selected ? DawaTokens.textInverse : DawaTokens.textMuted,
-                  size: 21,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: selected
-                          ? DawaTokens.textInverse
-                          : DawaTokens.textSecondary,
-                      fontWeight: selected ? FontWeight.bold : FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
             ),
           ),
         ),
-      ),
+      ]),
     );
   }
 
-  Widget _buildMobileNav() {
-    final items = [
-      (Icons.dashboard_outlined, 'Home', ClinicalToolDashboardTab.overview),
-      (Icons.people_outline, 'Records', ClinicalToolDashboardTab.records),
-      (Icons.fact_check_outlined, 'Results', ClinicalToolDashboardTab.results),
-      (Icons.search, 'Search', ClinicalToolDashboardTab.search),
-    ];
+  Widget _sampleSummary() => LayoutBuilder(builder: (context, constraints) {
+        final stack = constraints.maxWidth < 300 ||
+            MediaQuery.textScalerOf(context).scale(14) > 21;
+        final items = [
+          _sampleMetric('Total records', controller.records.length,
+              'Sample records', ClinicalToolResultsFilter.all),
+          _sampleMetric(
+              'Completed',
+              controller.completedCount,
+              'of ${controller.records.length} records',
+              ClinicalToolResultsFilter.completed),
+          _sampleMetric(
+              'Needs review',
+              controller.reviewCount,
+              'of ${controller.records.length} records',
+              ClinicalToolResultsFilter.needsReview),
+        ];
+        return DawaCard(
+            padding: EdgeInsets.zero,
+            child: stack
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: items)
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children:
+                        items.map((item) => Expanded(child: item)).toList()));
+      });
 
-    return Container(
-      key: ValueKey('${config.key}-mobile-nav'),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.grey.shade200)),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          for (final item in items)
-            Expanded(
-              child: InkWell(
-                onTap: () => controller.setTab(item.$3),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
+  Widget _sampleMetric(String label, int value, String contextLabel,
+          ClinicalToolResultsFilter filter) =>
+      InkWell(
+        onTap: () {
+          controller.clearSearchAndFilters();
+          controller.setFilter(filter);
+          controller.setTab(ClinicalToolDashboardTab.results);
+        },
+        child: Semantics(
+            button: true,
+            label: 'View $label',
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      item.$1,
-                      color: controller.activeTab == item.$3
-                          ? DawaTokens.brandPrimary
-                          : Colors.grey,
-                    ),
+                    Text(label, style: DawaTextStyles.secondary),
                     const SizedBox(height: 4),
-                    Text(
-                      item.$2,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: controller.activeTab == item.$3
-                            ? DawaTokens.brandPrimary
-                            : Colors.grey,
-                        fontSize: 11,
-                        fontWeight: controller.activeTab == item.$3
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+                    Text('$value', style: DawaTextStyles.pageTitle),
+                    Text(contextLabel, style: DawaTextStyles.secondary),
+                  ]),
+            )),
+      );
+
+  Widget _sampleRecordRow(ClinicalToolRecord record) =>
+      LayoutBuilder(builder: (context, constraints) {
+        final stack = constraints.maxWidth < 660 ||
+            MediaQuery.textScalerOf(context).scale(14) > 21;
+        final identity =
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          DawaAvatarCircle(
+              name: record.patientName, moduleColor: config.color, size: 36),
+          const SizedBox(width: 12),
+          Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text(record.patientName, style: DawaTextStyles.cardTitle),
+                const SizedBox(height: 4),
+                Text(
+                    '${clinicalToolFormatDate(record.date)} • ${record.recordId}',
+                    style: DawaTextStyles.secondary),
+              ])),
+        ]);
+        final outcome =
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          workspace.ClinicalStatusChip(
+              label: record.needsReview ? 'Needs review' : 'Completed',
+              tone: record.needsReview
+                  ? workspace.ClinicalStatusTone.warning
+                  : workspace.ClinicalStatusTone.neutral),
+          const SizedBox(height: 6),
+          Text(record.result, style: DawaTextStyles.secondary),
+        ]);
+        final action = TextButton.icon(
+          onPressed: () => _showRecordDetail(record),
+          icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+          label: const Text('View sample record'),
+        );
+        return InkWell(
+          onTap: () => _showRecordDetail(record),
+          child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: stack
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                          identity,
+                          const SizedBox(height: 12),
+                          outcome,
+                          const SizedBox(height: 8),
+                          action
+                        ])
+                  : Row(children: [
+                      Expanded(flex: 3, child: identity),
+                      const SizedBox(width: 16),
+                      Expanded(flex: 2, child: outcome),
+                      const SizedBox(width: 12),
+                      action
+                    ])),
+        );
+      });
+
+  Duration _transitionDuration(BuildContext context) =>
+      MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 150);
+
+  Widget _buildPageIntro() {
+    final primary = config.actions.isNotEmpty ? config.actions.first : null;
+    return ClinicalPageIntro(
+      subtitle: widget.demonstrationMode
+          ? 'Demonstration data. Clinical record creation and saving are not connected.'
+          : config.description,
+      status: widget.demonstrationMode
+          ? const ClinicalStatusChip(
+              label: 'Sample data', color: NavigationTokens.warning)
+          : null,
+      action: primary == null
+          ? null
+          : FilledButton.icon(
+              onPressed: widget.demonstrationMode
+                  ? () {
+                      controller.clearSearchAndFilters();
+                      controller.setTab(ClinicalToolDashboardTab.records);
+                    }
+                  : controller.prepareNewRecord,
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: Text(widget.demonstrationMode
+                  ? 'View sample records'
+                  : primary.title),
+              style: FilledButton.styleFrom(
+                  backgroundColor: NavigationTokens.brand,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(0, 42),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10))),
             ),
-        ],
-      ),
     );
   }
 
-  Widget _buildContent() {
+  Widget _buildTabBar() {
+    return ClinicalTabBar(
+      tabs: [
+        ClinicalTab('Overview', icon: PhosphorIconsRegular.squaresFour),
+        ClinicalTab('Records', icon: PhosphorIconsRegular.usersThree),
+        ClinicalTab(config.resultsLabel, icon: PhosphorIconsRegular.listChecks),
+        ClinicalTab('Search', icon: PhosphorIconsRegular.magnifyingGlass),
+      ],
+      activeIndex: controller.activeTab.index,
+      onSelected: (i) => controller.setTab(ClinicalToolDashboardTab.values[i]),
+    );
+  }
+
+  Widget _buildContent({bool scrollingIntro = false}) {
     return switch (controller.activeTab) {
-      ClinicalToolDashboardTab.overview => _buildOverview(),
-      ClinicalToolDashboardTab.records => _buildRecords(),
-      ClinicalToolDashboardTab.results => _buildResults(),
-      ClinicalToolDashboardTab.search => _buildResults(focusSearch: true),
+      ClinicalToolDashboardTab.overview =>
+        _buildOverview(scrollingIntro: scrollingIntro),
+      ClinicalToolDashboardTab.records =>
+        _buildRecords(scrollingIntro: scrollingIntro),
+      ClinicalToolDashboardTab.results =>
+        _buildResults(scrollingIntro: scrollingIntro),
+      ClinicalToolDashboardTab.search =>
+        _buildResults(focusSearch: true, scrollingIntro: scrollingIntro),
     };
   }
 
-  Widget _buildOverview() {
+  Widget _buildOverview({bool scrollingIntro = false}) {
     final records = controller.records;
 
     return SingleChildScrollView(
@@ -336,18 +400,10 @@ class _ClinicalToolDashboardState extends State<ClinicalToolDashboard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '${config.title} Dashboard',
-                style: DawaTextStyles.pageTitle.copyWith(fontSize: 28),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Welcome, ${_clinicianName()}. ${config.description}',
-                style: DawaTextStyles.secondary.copyWith(fontSize: 16),
-              ),
-              const SizedBox(height: 24),
-              _buildActionGrid(),
-              const SizedBox(height: 24),
+              SizedBox(
+                  child: scrollingIntro
+                      ? _buildPageIntro()
+                      : const SizedBox.shrink()),
               LayoutBuilder(
                 builder: (context, constraints) {
                   final narrow = constraints.maxWidth < 640;
@@ -376,13 +432,14 @@ class _ClinicalToolDashboardState extends State<ClinicalToolDashboard> {
                         DawaTokens.statusWarning,
                         narrow,
                       ),
-                      _summaryTile(
-                        'Follow-ups',
-                        controller.reviewCount.toString(),
-                        Icons.event_available,
-                        DawaTokens.brandPrimary,
-                        narrow,
-                      ),
+                      if (!widget.demonstrationMode)
+                        _summaryTile(
+                          'Follow-ups',
+                          controller.reviewCount.toString(),
+                          Icons.event_available,
+                          DawaTokens.brandPrimary,
+                          narrow,
+                        ),
                     ],
                   );
                 },
@@ -429,95 +486,6 @@ class _ClinicalToolDashboardState extends State<ClinicalToolDashboard> {
     );
   }
 
-  Widget _buildActionGrid() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 920
-            ? 4
-            : constraints.maxWidth >= 620
-                ? 2
-                : 1;
-        final itemWidth =
-            (constraints.maxWidth - (12 * (columns - 1))) / columns;
-        final actions = config.actions;
-
-        return Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            if (actions.isNotEmpty)
-              _quickAction(
-                actions[0],
-                itemWidth,
-                controller.prepareNewRecord,
-              ),
-            if (actions.length > 1)
-              _quickAction(
-                actions[1],
-                itemWidth,
-                () => controller.setTab(ClinicalToolDashboardTab.records),
-              ),
-            if (actions.length > 2)
-              _quickAction(
-                actions[2],
-                itemWidth,
-                () => controller.setTab(ClinicalToolDashboardTab.results),
-              ),
-            if (actions.length > 3)
-              _quickAction(
-                actions[3],
-                itemWidth,
-                () => controller.setTab(ClinicalToolDashboardTab.search),
-              ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _quickAction(
-    ClinicalToolAction action,
-    double width,
-    VoidCallback onTap,
-  ) {
-    return SizedBox(
-      width: width,
-      child: Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: onTap,
-          child: Container(
-            constraints: const BoxConstraints(minHeight: 148),
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: action.color.withOpacity(0.18)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(action.icon, color: action.color, size: 28),
-                const SizedBox(height: 14),
-                Text(action.title, style: DawaTextStyles.cardTitle),
-                const SizedBox(height: 8),
-                Text(
-                  action.description,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: DawaTextStyles.secondary.copyWith(
-                    color: DawaTokens.textMuted,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _summaryTile(
     String label,
     String value,
@@ -535,8 +503,8 @@ class _ClinicalToolDashboardState extends State<ClinicalToolDashboard> {
     );
   }
 
-  Widget _buildRecords() {
-    final records = controller.records;
+  Widget _buildRecords({bool scrollingIntro = false}) {
+    final records = controller.filteredRecords;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -547,27 +515,51 @@ class _ClinicalToolDashboardState extends State<ClinicalToolDashboard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              SizedBox(
+                  child: scrollingIntro
+                      ? _buildPageIntro()
+                      : const SizedBox.shrink()),
               Text(
-                '${config.title} Patient Records',
+                widget.demonstrationMode
+                    ? 'Sample patient records'
+                    : '${config.title} Patient Records',
                 style: DawaTextStyles.pageTitle,
               ),
               const SizedBox(height: 8),
               Text(
-                controller.selectedPatient == null
-                    ? 'Patient-linked ${config.recordName.toLowerCase()} entries are ready for review.'
-                    : 'Ready to add ${config.recordName.toLowerCase()} for ${controller.selectedPatient}.',
+                controller.searchQuery.trim().isEmpty
+                    ? (widget.demonstrationMode
+                        ? 'Explore sample records. No clinical changes are saved.'
+                        : 'Patient-linked ${config.recordName.toLowerCase()} entries are ready for review.')
+                    : 'Showing matching records. Clear the search to see all records.',
                 style: DawaTextStyles.secondary.copyWith(
                   color: DawaTokens.textMuted,
                 ),
               ),
+              const SizedBox(height: 16),
+              TextField(
+                  key: ValueKey('${config.key}-records-search'),
+                  controller: _searchController,
+                  onChanged: controller.setSearch,
+                  decoration: InputDecoration(
+                      labelText: 'Search records',
+                      hintText: 'Patient, ID or record',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: controller.searchQuery.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'Clear record search',
+                              onPressed: controller.clearSearchAndFilters,
+                              icon: const Icon(Icons.clear)),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12)))),
+              if (controller.resultsFilter != ClinicalToolResultsFilter.all)
+                TextButton(
+                    onPressed: controller.clearSearchAndFilters,
+                    child: const Text('Clear filters')),
               const SizedBox(height: 20),
               if (records.isEmpty)
-                _emptyPanel(
-                  icon: Icons.assignment_outlined,
-                  title: 'No results yet',
-                  message:
-                      '${config.recordName} entries will appear here after the first record is added.',
-                )
+                _emptyResults(controller.records.isEmpty)
               else
                 Column(
                   children: records
@@ -586,110 +578,119 @@ class _ClinicalToolDashboardState extends State<ClinicalToolDashboard> {
     );
   }
 
-  Widget _buildResults({bool focusSearch = false}) {
+  Widget _buildResults(
+      {bool focusSearch = false, bool scrollingIntro = false}) {
     final records = controller.filteredRecords;
     final allRecords = controller.records;
 
-    return Column(
-      children: [
-        Container(
-          width: double.infinity,
-          color: Colors.white,
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(config.resultsLabel, style: DawaTextStyles.pageTitle),
-              const SizedBox(height: 6),
-              Text(
-                'Overview of ${config.recordName.toLowerCase()} results for ${config.title}.',
-                style: DawaTextStyles.secondary.copyWith(
-                  color: DawaTokens.textMuted,
-                ),
-              ),
-              const SizedBox(height: 18),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final narrow = constraints.maxWidth < 640;
-                  return Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
+    return CustomScrollView(
+      key: PageStorageKey('${config.key}-results'),
+      slivers: [
+        if (scrollingIntro)
+          SliverToBoxAdapter(
+              key: const ValueKey('scrolling-intro'), child: _buildPageIntro()),
+        SliverToBoxAdapter(
+            key: const ValueKey('results-controls'),
+            child: Container(
+              width: double.infinity,
+              color: Colors.white,
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(config.resultsLabel, style: DawaTextStyles.pageTitle),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Overview of ${config.recordName.toLowerCase()} results for ${config.title}.',
+                    style: DawaTextStyles.secondary.copyWith(
+                      color: DawaTokens.textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final narrow = constraints.maxWidth < 640;
+                      return Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          _summaryTile(
+                            'All results',
+                            allRecords.length.toString(),
+                            Icons.assignment,
+                            config.color,
+                            narrow,
+                          ),
+                          _summaryTile(
+                            'Completed',
+                            controller.completedCount.toString(),
+                            Icons.check_circle,
+                            DawaTokens.statusSuccess,
+                            narrow,
+                          ),
+                          _summaryTile(
+                            'Needs review',
+                            controller.reviewCount.toString(),
+                            Icons.priority_high,
+                            DawaTokens.statusWarning,
+                            narrow,
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 18),
+                  TextField(
+                    key: ValueKey('${config.key}-results-search'),
+                    autofocus: focusSearch,
+                    controller: _searchController,
+                    onChanged: controller.setSearch,
+                    decoration: InputDecoration(
+                      hintText:
+                          'Search patient, ID, record, result, notes, analysis, or confidence',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: controller.searchQuery.isEmpty
+                          ? null
+                          : IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: controller.clearSearchAndFilters,
+                            ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: const Color(0xFFF6F8FB),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
-                      _summaryTile(
-                        'All results',
-                        allRecords.length.toString(),
-                        Icons.assignment,
-                        config.color,
-                        narrow,
-                      ),
-                      _summaryTile(
-                        'Completed',
-                        controller.completedCount.toString(),
-                        Icons.check_circle,
-                        DawaTokens.statusSuccess,
-                        narrow,
-                      ),
-                      _summaryTile(
+                      _filterChip('All results', ClinicalToolResultsFilter.all),
+                      _filterChip(
+                          'Completed', ClinicalToolResultsFilter.completed),
+                      _filterChip(
                         'Needs review',
-                        controller.reviewCount.toString(),
-                        Icons.priority_high,
-                        DawaTokens.statusWarning,
-                        narrow,
+                        ClinicalToolResultsFilter.needsReview,
                       ),
                     ],
-                  );
-                },
-              ),
-              const SizedBox(height: 18),
-              TextField(
-                key: ValueKey('${config.key}-results-search'),
-                autofocus: focusSearch,
-                controller: _searchController,
-                onChanged: controller.setSearch,
-                decoration: InputDecoration(
-                  hintText:
-                      'Search patient, ID, record, result, notes, analysis, or confidence',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: controller.searchQuery.isEmpty
-                      ? null
-                      : IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: controller.clearSearchAndFilters,
-                        ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  filled: true,
-                  fillColor: const Color(0xFFF6F8FB),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _filterChip('All results', ClinicalToolResultsFilter.all),
-                  _filterChip('Completed', ClinicalToolResultsFilter.completed),
-                  _filterChip(
-                    'Needs review',
-                    ClinicalToolResultsFilter.needsReview,
                   ),
                 ],
               ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: records.isEmpty
-              ? _emptyResults(allRecords.isEmpty)
-              : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            )),
+        if (records.isEmpty)
+          SliverFillRemaining(
+              hasScrollBody: false, child: _emptyResults(allRecords.isEmpty))
+        else
+          SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              sliver: SliverList.builder(
                   itemCount: records.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) => _resultCard(records[index]),
-                ),
-        ),
+                  itemBuilder: (context, index) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _resultCard(records[index])))),
       ],
     );
   }
@@ -702,7 +703,7 @@ class _ClinicalToolDashboardState extends State<ClinicalToolDashboard> {
       selected: selected,
       selectedColor: config.color.withOpacity(0.12),
       labelStyle: TextStyle(
-        color: selected ? config.color : Colors.grey,
+        color: selected ? config.color : DawaTokens.textSecondary,
         fontWeight: selected ? FontWeight.bold : FontWeight.normal,
       ),
       onSelected: (_) => controller.setFilter(filter),
@@ -752,13 +753,12 @@ class _ClinicalToolDashboardState extends State<ClinicalToolDashboard> {
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
-              DawaStatusBadge(
-                status: record.needsReview ? 'needs_review' : 'completed',
-                label: record.needsReview ? 'Needs review' : 'Completed',
-              ),
             ],
           ),
+          const SizedBox(height: 8),
+          DawaStatusBadge(
+              status: record.needsReview ? 'needs_review' : 'completed',
+              label: record.needsReview ? 'Needs review' : 'Completed'),
           const SizedBox(height: 14),
           Wrap(
             spacing: 16,
@@ -774,19 +774,29 @@ class _ClinicalToolDashboardState extends State<ClinicalToolDashboard> {
             ],
           ),
           const SizedBox(height: 10),
-          DawaAIConfidenceBar(analysis: record.analysis),
+          if (config.showAnalysis)
+            DawaAIConfidenceBar(analysis: record.analysis)
+          else
+            _recordField(
+                Icons.info_outline, 'Sample workflow note', record.analysis),
           const SizedBox(height: 14),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
               OutlinedButton.icon(
-                onPressed: () => controller.openPatient(record),
+                onPressed: widget.demonstrationMode
+                    ? () => _showRecordDetail(record)
+                    : () => controller.openPatient(record),
                 icon: const Icon(Icons.person_outline, size: 18),
-                label: const Text('Open patient'),
+                label: Text(widget.demonstrationMode
+                    ? 'View sample record'
+                    : 'Open patient'),
               ),
               ElevatedButton.icon(
-                onPressed: () => controller.planFollowUp(record),
+                onPressed: widget.demonstrationMode
+                    ? () => _showRecordDetail(record)
+                    : () => controller.planFollowUp(record),
                 icon: Icon(
                   record.needsReview
                       ? Icons.event_available
@@ -794,7 +804,11 @@ class _ClinicalToolDashboardState extends State<ClinicalToolDashboard> {
                   size: 18,
                 ),
                 label: Text(
-                  record.needsReview ? 'Plan follow-up' : 'Routine follow-up',
+                  widget.demonstrationMode
+                      ? 'Open sample result'
+                      : record.needsReview
+                          ? 'Plan follow-up'
+                          : 'Routine follow-up',
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: followUpColor,
@@ -814,27 +828,67 @@ class _ClinicalToolDashboardState extends State<ClinicalToolDashboard> {
     return DawaStatusBadge(status: badge.status, label: badge.label);
   }
 
+  Future<void> _showRecordDetail(ClinicalToolRecord record) => showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Sample CT record ${record.recordId}'),
+          content: SizedBox(
+            width: 600,
+            child: SingleChildScrollView(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const DawaStatusBadge(
+                        status: 'active', label: 'Sample data'),
+                    const SizedBox(height: 14),
+                    Text(record.patientName, style: DawaTextStyles.cardTitle),
+                    const SizedBox(height: 4),
+                    Text(
+                        'Patient reference ${record.patientId} • ${clinicalToolFormatDate(record.date)}',
+                        style: DawaTextStyles.secondary),
+                    const SizedBox(height: 16),
+                    Text('Study result', style: DawaTextStyles.cardTitle),
+                    const SizedBox(height: 4),
+                    Text(record.result),
+                    const SizedBox(height: 14),
+                    Text('Radiology report', style: DawaTextStyles.cardTitle),
+                    const SizedBox(height: 4),
+                    Text(record.notes),
+                    const SizedBox(height: 14),
+                    Text('Workflow information',
+                        style: DawaTextStyles.cardTitle),
+                    const SizedBox(height: 4),
+                    Text(record.analysis),
+                    const SizedBox(height: 16),
+                    Text(
+                        'Demonstration data only. Clinical saving and radiology review actions are not connected.',
+                        style: DawaTextStyles.secondary),
+                  ]),
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'))
+          ],
+        ),
+      );
+
   Widget _recordField(IconData icon, String label, String value) {
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 420),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 15, color: DawaTokens.textMuted),
           const SizedBox(width: 5),
-          Text(
-            '$label: ',
-            style: DawaTextStyles.secondary.copyWith(
-              color: DawaTokens.textPrimary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
           Flexible(
             child: Text(
-              value,
+              '$label: $value',
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: DawaTextStyles.secondary,
+              style: DawaTextStyles.secondary.copyWith(
+                color: DawaTokens.textPrimary,
+              ),
             ),
           ),
         ],
@@ -905,15 +959,5 @@ class _ClinicalToolDashboardState extends State<ClinicalToolDashboard> {
 
   Color _defaultActionColor(ClinicalToolRecord record) {
     return record.needsReview ? DawaTokens.statusWarning : config.color;
-  }
-
-  String _clinicianName() {
-    final displayName = currentUserDisplayName.trim();
-    if (displayName.isNotEmpty) return displayName;
-
-    final email = currentUserEmail.trim();
-    if (email.isNotEmpty) return email;
-
-    return 'Clinician';
   }
 }

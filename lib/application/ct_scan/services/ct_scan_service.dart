@@ -17,6 +17,7 @@ class CtScanService {
       recordLabel: 'Records',
       icon: Icons.desktop_windows_outlined,
       color: DawaTokens.brandPrimary,
+      showAnalysis: false,
       followUpColorFor: (record) => record.needsReview
           ? DawaTokens.statusWarning
           : DawaTokens.brandPrimary,

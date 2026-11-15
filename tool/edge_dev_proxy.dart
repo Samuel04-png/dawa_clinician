@@ -19,6 +19,8 @@ const Map<String, Set<String>> kAllowedRoutes = {
   '/health': {'GET'},
   '/predict': {'POST'},
   '/upload/cervical': {'POST'},
+  '/upload/ultrasound': {'POST'},
+  '/upload/anemia': {'POST'},
   '/hub/health': {'GET'},
   '/api/exam/start': {'POST'},
   '/api/exam/heartbeat': {'POST'},
@@ -27,20 +29,26 @@ const Map<String, Set<String>> kAllowedRoutes = {
 };
 
 /// Which device ports expose which routes.
+const Set<String> kHubRoutes = {
+  '/api/status',
+  '/api/select',
+  '/health',
+  '/hub/health',
+  '/upload/cervical',
+  '/upload/ultrasound',
+  '/upload/anemia',
+  '/api/exam/start',
+  '/api/exam/heartbeat',
+  '/api/exam/end',
+  '/api/stop',
+};
+
 const Map<int, Set<String>> kPortRoutes = {
-  8080: {
-    '/api/status',
-    '/api/select',
-    '/health',
-    '/hub/health',
-    '/upload/cervical',
-    '/api/exam/start',
-    '/api/exam/heartbeat',
-    '/api/exam/end',
-    '/api/stop',
-  },
+  80: kHubRoutes,
+  8080: kHubRoutes,
   8085: {'/health', '/predict'},
   8086: {'/health', '/predict'},
+  8087: {'/health', '/predict'},
 };
 
 class EdgeDevProxy {
@@ -73,7 +81,7 @@ class EdgeDevProxy {
     }
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 10);
-    final map = portMap ?? {for (final p in portRoutes.keys) p: p};
+    final map = portMap ?? const {8080: 80, 8085: 8085, 8086: 8086, 8087: 8087};
     final servers = <HttpServer>[];
     try {
       for (final entry in map.entries) {
@@ -195,8 +203,8 @@ Future<void> _handle(
 Future<void> main(List<String> args) async {
   String? device;
   String? origin;
-  final listenPorts = {8080: 8080, 8085: 8085, 8086: 8086};
-  var hubRemotePort = 8080;
+  final listenPorts = {8080: 8080, 8085: 8085, 8086: 8086, 8087: 8087};
+  var hubRemotePort = 80;
   for (var i = 0; i < args.length - 1; i++) {
     if (args[i] == '--device') device = args[i + 1];
     if (args[i] == '--allow-origin') origin = args[i + 1];
@@ -213,6 +221,7 @@ Future<void> main(List<String> args) async {
       '--hub-listen-port' => 8080,
       '--cervical-listen-port' => 8085,
       '--ultrasound-listen-port' => 8086,
+      '--anemia-listen-port' => 8087,
       _ => null,
     };
     if (targetPort != null) {
@@ -235,7 +244,9 @@ Future<void> main(List<String> args) async {
     if (listenPorts.values.toSet().length != listenPorts.length) {
       throw ArgumentError('Proxy listen ports must be distinct.');
     }
-    if (hubRemotePort == 8085 || hubRemotePort == 8086) {
+    if (hubRemotePort == 8085 ||
+        hubRemotePort == 8086 ||
+        hubRemotePort == 8087) {
       throw ArgumentError('Hub and module remote ports must be distinct.');
     }
     final proxy = await EdgeDevProxy.start(
@@ -249,6 +260,7 @@ Future<void> main(List<String> args) async {
         hubRemotePort: kPortRoutes[8080]!,
         8085: kPortRoutes[8085]!,
         8086: kPortRoutes[8086]!,
+        8087: kPortRoutes[8087]!,
       },
     );
     stdout.writeln('[Proxy] listening on 127.0.0.1 ports ${proxy.ports} '

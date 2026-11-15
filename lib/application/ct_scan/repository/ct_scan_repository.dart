@@ -12,7 +12,8 @@ class CtScanRepository {
         date: DateTime(2026, 5, 18),
         result: 'Report completed',
         notes: 'No acute intracranial finding reported.',
-        radiologyAnalysis: 'Radiology workflow complete; confidence 87%.',
+        radiologyAnalysis:
+            'Sample radiology workflow note; demonstration only.',
         needsReview: false,
       ),
       CtScanRecord(
@@ -22,7 +23,7 @@ class CtScanRepository {
         date: DateTime(2026, 5, 13),
         result: 'Needs review',
         notes: 'Contrast follow-up recommended by reporting clinician.',
-        radiologyAnalysis: 'Potential abnormality flagged; confidence 82%.',
+        radiologyAnalysis: 'Sample review workflow note; demonstration only.',
         needsReview: true,
       ),
       CtScanRecord(
@@ -32,7 +33,7 @@ class CtScanRepository {
         date: DateTime(2026, 5, 10),
         result: 'Report completed',
         notes: 'Routine scan archived.',
-        radiologyAnalysis: 'No urgent flag; confidence 89%.',
+        radiologyAnalysis: 'Sample archive workflow note; demonstration only.',
         needsReview: false,
       ),
     ];

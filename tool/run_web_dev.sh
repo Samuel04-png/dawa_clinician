@@ -11,10 +11,11 @@ HUB_REMOTE_PORT="${EDGE_DEVICE_HUB_PORT_REMOTE:-80}"
 HUB_PORT="${EDGE_PROXY_HUB_PORT:-8080}"
 CERVICAL_PORT="${EDGE_PROXY_CERVICAL_PORT:-8085}"
 ULTRASOUND_PORT="${EDGE_PROXY_ULTRASOUND_PORT:-8086}"
+ANEMIA_PORT="${EDGE_PROXY_ANEMIA_PORT:-8087}"
 ORIGIN="http://localhost:${WEB_PORT}"
 
 echo "[Dev] device=$DEVICE origin=$ORIGIN"
-for port in "$WEB_PORT" "$HUB_PORT" "$CERVICAL_PORT" "$ULTRASOUND_PORT"; do
+for port in "$WEB_PORT" "$HUB_PORT" "$CERVICAL_PORT" "$ULTRASOUND_PORT" "$ANEMIA_PORT"; do
   if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
     echo "[Dev] port $port is already in use; stop its owner or choose another web port." >&2
     exit 1
@@ -27,7 +28,7 @@ curl --noproxy '*' -fsS --max-time 8 "http://${DEVICE}:${HUB_REMOTE_PORT}/api/st
 dart tool/edge_dev_proxy.dart --device "$DEVICE" --allow-origin "$ORIGIN" \
   --hub-remote-port "$HUB_REMOTE_PORT" \
   --hub-listen-port "$HUB_PORT" --cervical-listen-port "$CERVICAL_PORT" \
-  --ultrasound-listen-port "$ULTRASOUND_PORT" &
+  --ultrasound-listen-port "$ULTRASOUND_PORT" --anemia-listen-port "$ANEMIA_PORT" &
 PROXY_PID=$!
 trap 'kill $PROXY_PID 2>/dev/null || true' EXIT
 
@@ -52,5 +53,6 @@ flutter run --no-pub -d chrome --web-hostname localhost --web-port "$WEB_PORT" \
   --dart-define=EDGE_DEVICE_HUB_PORT="$HUB_PORT" \
   --dart-define=EDGE_DEVICE_CERVICAL_PORT="$CERVICAL_PORT" \
   --dart-define=EDGE_DEVICE_ULTRASOUND_PORT="$ULTRASOUND_PORT" \
+  --dart-define=EDGE_DEVICE_ANEMIA_PORT="$ANEMIA_PORT" \
   --dart-define=EDGE_DEVICE_MODEL_MANAGEMENT_ENABLED=true \
   --dart-define=EDGE_DEVICE_ULTRASOUND_INFERENCE_ENABLED=true

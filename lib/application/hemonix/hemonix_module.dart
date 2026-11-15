@@ -27,7 +27,7 @@ class HemonixModule {
       config: const HemonixService().config,
       records: records(),
       builder: (BuildContext context) => const HemonixApp(),
-      description: 'Haemoglobin & anaemia tracking',
+      description: 'Local lower-eyelid anemia screening',
     );
   }
 }

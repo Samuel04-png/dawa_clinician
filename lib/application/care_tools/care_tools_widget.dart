@@ -1,3 +1,4 @@
+import '/components/navigation_design_system.dart';
 import '/application/shared/clinical_tools/clinical_tool_models.dart';
 import '/components/appbar_nav/appbar_nav_widget.dart';
 import '/components/clinician_bottom_nav/clinician_bottom_nav_widget.dart';
@@ -55,13 +56,14 @@ class _CareToolsWidgetState extends State<CareToolsWidget> {
 
     return LayoutBuilder(
       builder: (context, pageConstraints) {
-        final showDesktopSidebar = pageConstraints.maxWidth >= 768.0;
+        final showDesktopSidebar =
+            pageConstraints.maxWidth >= NavigationTokens.desktopBreakpoint;
 
         return Scaffold(
           key: scaffoldKey,
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           drawer: showDesktopSidebar ? null : _buildMobileDrawer(),
-          appBar: showDesktopSidebar ? null : _buildMobileAppBar(),
+          appBar: _buildMobileAppBar(),
           bottomNavigationBar: showDesktopSidebar
               ? null
               : const ClinicianBottomNavWidget(currentPage: 'Care Tools'),
@@ -81,13 +83,19 @@ class _CareToolsWidgetState extends State<CareToolsWidget> {
 
   PreferredSizeWidget _buildMobileAppBar() {
     return AppBar(
+      toolbarHeight: NavigationTokens.appBarHeight,
+      surfaceTintColor: Colors.transparent,
       backgroundColor: DawaTokens.surface,
       automaticallyImplyLeading: false,
-      leading: IconButton(
-        tooltip: 'Open navigation',
-        icon: const Icon(Icons.menu_rounded, color: DawaTokens.brandPrimary),
-        onPressed: () => scaffoldKey.currentState?.openDrawer(),
-      ),
+      leading:
+          MediaQuery.sizeOf(context).width >= NavigationTokens.desktopBreakpoint
+              ? null
+              : IconButton(
+                  tooltip: 'Open navigation',
+                  icon: const NavigationIcon(NavigationSymbol.menu,
+                      color: NavigationTokens.brand),
+                  onPressed: () => scaffoldKey.currentState?.openDrawer(),
+                ),
       title: AppbarNavWidget(),
       elevation: 0,
       titleSpacing: 0,
@@ -96,7 +104,7 @@ class _CareToolsWidgetState extends State<CareToolsWidget> {
 
   Widget _buildMobileDrawer() {
     return const SizedBox(
-      width: 280,
+      width: NavigationTokens.expandedWidth,
       child: Drawer(
         elevation: 16,
         child: SmallSideNavWidget(),
@@ -107,7 +115,6 @@ class _CareToolsWidgetState extends State<CareToolsWidget> {
   Widget _buildDesktopSidebar() {
     return Container(
       key: const ValueKey('care-tools-desktop-sidebar'),
-      width: 240,
       decoration: const BoxDecoration(
         color: DawaTokens.surface,
         border: Border(

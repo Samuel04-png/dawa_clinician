@@ -100,7 +100,6 @@ class _CompleteClincianRegWidgetState extends State<CompleteClincianRegWidget> {
               child: Visibility(
                 visible: responsiveVisibility(
                   context: context,
-                  phone: false,
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.max,
@@ -178,6 +177,7 @@ class _CompleteClincianRegWidgetState extends State<CompleteClincianRegWidget> {
                                                           .fontStyle,
                                                 ),
                                                 letterSpacing: 0.0,
+                                                fontSize: 24.0,
                                                 fontWeight:
                                                     FlutterFlowTheme.of(context)
                                                         .displaySmall
@@ -1090,23 +1090,24 @@ class _CompleteClincianRegWidgetState extends State<CompleteClincianRegWidget> {
                         ),
                       ),
                     ),
-                    Expanded(
-                      flex: 6,
-                      child: Container(
-                        width: 100.0,
-                        height: double.infinity,
-                        decoration: BoxDecoration(
-                          color:
-                              FlutterFlowTheme.of(context).secondaryBackground,
-                          image: DecorationImage(
-                            fit: BoxFit.cover,
-                            image: Image.asset(
-                              'assets/images/bg.png',
-                            ).image,
+                    if (MediaQuery.sizeOf(context).width >= 1000)
+                      Expanded(
+                        flex: 6,
+                        child: Container(
+                          width: 100.0,
+                          height: double.infinity,
+                          decoration: BoxDecoration(
+                            color: FlutterFlowTheme.of(context)
+                                .secondaryBackground,
+                            image: DecorationImage(
+                              fit: BoxFit.cover,
+                              image: Image.asset(
+                                'assets/images/bg.png',
+                              ).image,
+                            ),
                           ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),

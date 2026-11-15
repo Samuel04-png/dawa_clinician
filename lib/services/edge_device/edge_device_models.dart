@@ -1,6 +1,7 @@
 enum EdgeAIModel {
   cervicalCancer('cervitriage'),
-  ultrasound('ultrasound');
+  ultrasound('ultrasound'),
+  anemia('anemia');
 
   const EdgeAIModel(this.wireValue);
 
@@ -45,8 +46,11 @@ class EdgeHubStatus {
   const EdgeHubStatus({
     required this.state,
     this.active,
+    this.ready = false,
     this.message = '',
     this.moduleIds = const {},
+    this.busy = false,
+    this.hasExamination = false,
   });
 
   factory EdgeHubStatus.fromJson(Map<String, dynamic> json) {
@@ -70,6 +74,10 @@ class EdgeHubStatus {
     return EdgeHubStatus(
       state: state,
       active: active as String?,
+      ready: json['ready'] == true,
+      busy: json['busy'] == true ||
+          json['busy'] is num && (json['busy'] as num) > 0,
+      hasExamination: json['exam'] is Map && (json['exam'] as Map).isNotEmpty,
       message: (message as String?) ?? '',
       moduleIds: Set<String>.unmodifiable(
         (modules as Map? ?? const {}).keys.map((key) => key.toString()),
@@ -77,6 +85,12 @@ class EdgeHubStatus {
     );
   }
 
+  bool isReadyFor(String module) =>
+      active == module && ready && state == EdgeHubModuleState.ready;
+
+  final bool busy;
+  final bool hasExamination;
+  final bool ready;
   final EdgeHubModuleState state;
   final String? active;
   final String message;

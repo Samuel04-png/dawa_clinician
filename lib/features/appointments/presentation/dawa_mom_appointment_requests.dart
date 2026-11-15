@@ -2,8 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '/components/dawa_design_system.dart';
+import '/backend/supabase/supabase_config.dart';
+import '/flutter_flow/flutter_flow_util.dart';
 import '../data/clinician_appointment_repository.dart';
 import '../domain/clinician_appointment.dart';
 
@@ -326,8 +329,10 @@ class DawaMomNotificationButton extends StatefulWidget {
   const DawaMomNotificationButton({
     super.key,
     this.onOpenAppointment,
+    this.repository = const ClinicianAppointmentRepository(),
   });
 
+  final ClinicianAppointmentRepository repository;
   final ValueChanged<String>? onOpenAppointment;
 
   @override
@@ -336,121 +341,301 @@ class DawaMomNotificationButton extends StatefulWidget {
 }
 
 class _DawaMomNotificationButtonState extends State<DawaMomNotificationButton> {
-  final _repository = const ClinicianAppointmentRepository();
-  late final Stream<List<ClinicianNotification>> _notifications;
+  final _snapshot = ValueNotifier<AsyncSnapshot<List<ClinicianNotification>>>(
+      const AsyncSnapshot.waiting());
+  final _bellFocus = FocusNode();
+  StreamSubscription<List<ClinicianNotification>>? _subscription;
+  StreamSubscription<dynamic>? _authSubscription;
+  int _generation = 0;
+  bool _panelOpen = false;
+  bool _openingNotification = false;
 
   @override
   void initState() {
     super.initState();
-    _notifications = _repository.watchNotifications();
+    _subscribe();
+    try {
+      final client = widget.repository.client ?? supabaseClient;
+      var user = client.auth.currentUser?.id;
+      _authSubscription = client.auth.onAuthStateChange.listen((event) {
+        final next = event.session?.user.id;
+        if (next == user) return;
+        user = next;
+        _subscribe();
+      });
+    } catch (_) {
+      // The notification surface can still report an unavailable connection.
+    }
+  }
+
+  void _subscribe() {
+    final generation = ++_generation;
+    _subscription?.cancel();
+    _snapshot.value = const AsyncSnapshot.waiting();
+    try {
+      _subscription = widget.repository.watchNotifications().listen((items) {
+        if (mounted && generation == _generation)
+          _snapshot.value =
+              AsyncSnapshot.withData(ConnectionState.active, items);
+      }, onError: (Object error) {
+        if (mounted && generation == _generation)
+          _snapshot.value =
+              AsyncSnapshot.withError(ConnectionState.active, error);
+      });
+    } catch (error) {
+      _snapshot.value = AsyncSnapshot.withError(ConnectionState.done, error);
+    }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<List<ClinicianNotification>>(
-      stream: _notifications,
-      builder: (context, snapshot) {
-        final notifications = snapshot.data ?? const <ClinicianNotification>[];
-        final unread = notifications.where((item) => !item.isRead).length;
-        return IconButton(
-          tooltip: 'Appointment notifications',
-          onPressed: () => _showNotifications(notifications),
-          icon: Badge(
-            isLabelVisible: unread > 0,
-            label: Text(unread > 99 ? '99+' : '$unread'),
-            child: const Icon(Icons.notifications_outlined),
-          ),
-        );
-      },
-    );
+  void dispose() {
+    _generation++;
+    _subscription?.cancel();
+    _authSubscription?.cancel();
+    _snapshot.dispose();
+    _bellFocus.dispose();
+    super.dispose();
   }
 
-  Future<void> _showNotifications(
-    List<ClinicianNotification> notifications,
-  ) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (sheetContext) => SafeArea(
-        child: SizedBox(
-          height: MediaQuery.sizeOf(sheetContext).height * 0.65,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 14),
-                child: Text('Notifications', style: DawaTextStyles.pageTitle),
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: notifications.isEmpty
-                    ? const Center(
-                        child: Text('No appointment notifications yet.'),
-                      )
-                    : ListView.separated(
-                        itemCount: notifications.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final notification = notifications[index];
-                          return ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: notification.isRead
-                                  ? DawaTokens.surfaceTertiary
-                                  : DawaTokens.brandPrimaryPale,
-                              child: Icon(
-                                Icons.event_note_rounded,
-                                color: notification.isRead
-                                    ? DawaTokens.textSecondary
-                                    : DawaTokens.brandPrimary,
-                              ),
-                            ),
-                            title: Text(
-                              notification.title,
-                              style: DawaTextStyles.cardTitle.copyWith(
-                                fontWeight: notification.isRead
-                                    ? FontWeight.w500
-                                    : FontWeight.w700,
-                              ),
-                            ),
-                            subtitle: Text(
-                              '${notification.body}\n${DateFormat('d MMM y, HH:mm').format(notification.createdAt.toLocal())}',
-                            ),
-                            isThreeLine: true,
-                            trailing: notification.isRead
-                                ? null
-                                : const Icon(
-                                    Icons.circle,
-                                    size: 10,
-                                    color: DawaTokens.brandPrimary,
-                                  ),
-                            onTap: () async {
-                              if (!notification.isRead) {
-                                try {
-                                  await _repository
-                                      .markNotificationRead(notification.id);
-                                } catch (_) {
-                                  // Opening the linked appointment remains
-                                  // useful if mark-read is temporarily offline.
-                                }
-                              }
-                              if (sheetContext.mounted) {
-                                Navigator.pop(sheetContext);
-                              }
-                              if (notification.appointmentId.isNotEmpty) {
-                                widget.onOpenAppointment
-                                    ?.call(notification.appointmentId);
-                              }
-                            },
-                          );
-                        },
-                      ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder(
+        valueListenable: _snapshot,
+        builder: (context, snapshot, _) {
+          final unread =
+              (snapshot.data ?? []).where((item) => !item.isRead).length;
+          return Semantics(
+              label: 'Notifications, $unread unread',
+              child: IconButton(
+                focusNode: _bellFocus,
+                tooltip: 'Notifications',
+                onPressed: _showNotifications,
+                icon: Badge(
+                    isLabelVisible: unread > 0,
+                    backgroundColor: DawaTokens.brandPrimary,
+                    label: Text(unread > 99 ? '99+' : '$unread'),
+                    child: const Icon(PhosphorIconsRegular.bell,
+                        size: 20, color: DawaTokens.textSecondary)),
+              ));
+        },
+      );
+
+  Future<void> _showNotifications() async {
+    if (_panelOpen) return;
+    _panelOpen = true;
+    _openingNotification = false;
+    try {
+      await showGeneralDialog<void>(
+          context: context,
+          barrierDismissible: true,
+          barrierLabel: 'Close notifications',
+          barrierColor: Colors.black26,
+          transitionDuration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 180),
+          transitionBuilder: (context, animation, _, child) => SlideTransition(
+              position: Tween(begin: const Offset(1, 0), end: Offset.zero)
+                  .animate(CurvedAnimation(
+                      parent: animation, curve: Curves.easeOutCubic)),
+              child: child),
+          pageBuilder: (panelContext, _, __) => Align(
+                alignment: Alignment.centerRight,
+                child: SizedBox(
+                    width:
+                        MediaQuery.sizeOf(panelContext).width.clamp(0.0, 420.0),
+                    child: Material(
+                        color: DawaTokens.surface,
+                        child: SafeArea(
+                            child: Column(children: [
+                          Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(20, 12, 12, 12),
+                              child: Row(children: [
+                                Expanded(
+                                    child: Text('Notifications',
+                                        style: DawaTextStyles.pageTitle)),
+                                IconButton(
+                                    tooltip: 'Close notifications',
+                                    onPressed: () =>
+                                        Navigator.pop(panelContext),
+                                    icon: const Icon(Icons.close_rounded)),
+                              ])),
+                          const Divider(height: 1, color: DawaTokens.border),
+                          Expanded(
+                              child: ValueListenableBuilder(
+                                  valueListenable: _snapshot,
+                                  builder: (context, snapshot, _) {
+                                    if (snapshot.hasError)
+                                      return _notice(
+                                          'Notifications unavailable',
+                                          'Check your connection and try again.',
+                                          'Retry',
+                                          _subscribe);
+                                    if (!snapshot.hasData)
+                                      return const Center(
+                                          child: CircularProgressIndicator(
+                                              semanticsLabel:
+                                                  'Loading notifications'));
+                                    final items = snapshot.data!;
+                                    if (items.isEmpty)
+                                      return _notice(
+                                          'No appointment notifications yet.',
+                                          'Appointment updates will appear here.',
+                                          'View appointments', () {
+                                        Navigator.pop(panelContext);
+                                        this
+                                            .context
+                                            .goNamed('ScheduledEncounters');
+                                      });
+                                    return ListView.separated(
+                                        itemCount: items.length,
+                                        separatorBuilder: (_, __) =>
+                                            const Divider(
+                                                height: 1,
+                                                color: DawaTokens.border),
+                                        itemBuilder: (context, index) {
+                                          final item = items[index];
+                                          return Semantics(
+                                              button: true,
+                                              hint: item.appointmentId.isEmpty
+                                                  ? 'Read notification'
+                                                  : 'Open related appointment',
+                                              child: InkWell(
+                                                key: ValueKey(
+                                                    'notification-${item.id}'),
+                                                onTap: () {
+                                                  if (_openingNotification)
+                                                    return;
+                                                  _openingNotification = true;
+                                                  if (!item.isRead) {
+                                                    unawaited(widget.repository
+                                                        .markNotificationRead(
+                                                            item.id)
+                                                        .catchError(
+                                                            (Object _) {}));
+                                                  }
+                                                  if (!mounted ||
+                                                      !panelContext.mounted)
+                                                    return;
+                                                  Navigator.pop(panelContext);
+                                                  if (item.appointmentId
+                                                      .isNotEmpty) {
+                                                    if (widget
+                                                            .onOpenAppointment !=
+                                                        null)
+                                                      widget.onOpenAppointment!(
+                                                          item.appointmentId);
+                                                    else
+                                                      this.context.goNamed(
+                                                          'ScheduledEncounters',
+                                                          queryParameters: {
+                                                            'appointment': item
+                                                                .appointmentId
+                                                          });
+                                                  }
+                                                },
+                                                child: Padding(
+                                                    padding:
+                                                        const EdgeInsets.all(
+                                                            20),
+                                                    child: Row(
+                                                        crossAxisAlignment:
+                                                            CrossAxisAlignment
+                                                                .start,
+                                                        children: [
+                                                          Icon(
+                                                              Icons
+                                                                  .event_note_outlined,
+                                                              size: 20,
+                                                              color: item.isRead
+                                                                  ? DawaTokens
+                                                                      .textSecondary
+                                                                  : DawaTokens
+                                                                      .brandPrimary),
+                                                          const SizedBox(
+                                                              width: 12),
+                                                          Expanded(
+                                                              child: Column(
+                                                                  crossAxisAlignment:
+                                                                      CrossAxisAlignment
+                                                                          .start,
+                                                                  children: [
+                                                                Text(item.title,
+                                                                    style: DawaTextStyles
+                                                                        .cardTitle
+                                                                        .copyWith(
+                                                                            fontWeight: item.isRead
+                                                                                ? FontWeight.w500
+                                                                                : FontWeight.w700)),
+                                                                const SizedBox(
+                                                                    height: 6),
+                                                                Text(item.body,
+                                                                    style: DawaTextStyles
+                                                                        .secondary),
+                                                                const SizedBox(
+                                                                    height: 8),
+                                                                Text(
+                                                                    _relativeTime(item
+                                                                        .createdAt),
+                                                                    style: DawaTextStyles
+                                                                        .secondary
+                                                                        .copyWith(
+                                                                            color:
+                                                                                DawaTokens.textMuted)),
+                                                                if (item
+                                                                    .appointmentId
+                                                                    .isNotEmpty) ...[
+                                                                  const SizedBox(
+                                                                      height:
+                                                                          6),
+                                                                  Text(
+                                                                      'View appointment',
+                                                                      style: DawaTextStyles
+                                                                          .secondary
+                                                                          .copyWith(
+                                                                              color: DawaTokens.brandPrimary))
+                                                                ],
+                                                              ])),
+                                                          if (!item.isRead) ...[
+                                                            const SizedBox(
+                                                                width: 8),
+                                                            const Icon(
+                                                                Icons.circle,
+                                                                size: 8,
+                                                                color: DawaTokens
+                                                                    .brandPrimary)
+                                                          ],
+                                                        ])),
+                                              ));
+                                        });
+                                  })),
+                        ])))),
+              ));
+    } finally {
+      _panelOpen = false;
+      if (mounted) _bellFocus.requestFocus();
+    }
+  }
+
+  Widget _notice(
+          String title, String message, String action, VoidCallback onAction) =>
+      SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: DawaTextStyles.cardTitle),
+            const SizedBox(height: 8),
+            Text(message, style: DawaTextStyles.secondary),
+            const SizedBox(height: 16),
+            OutlinedButton(onPressed: onAction, child: Text(action)),
+          ]));
+
+  String _relativeTime(DateTime value) {
+    final elapsed = DateTime.now().difference(value.toLocal());
+    if (elapsed.inMinutes < 1) return 'Just now';
+    if (elapsed.inMinutes < 60) return '${elapsed.inMinutes}m ago';
+    if (elapsed.inHours < 24) return '${elapsed.inHours}h ago';
+    if (elapsed.inDays < 7) return '${elapsed.inDays}d ago';
+    return DateFormat('d MMM y').format(value.toLocal());
   }
 }
 

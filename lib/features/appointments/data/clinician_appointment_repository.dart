@@ -1,12 +1,18 @@
 import '/backend/supabase/supabase_config.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../domain/clinician_appointment.dart';
 
 class ClinicianAppointmentRepository {
-  const ClinicianAppointmentRepository();
+  const ClinicianAppointmentRepository({this.client});
+  final SupabaseClient? client;
+  SupabaseClient get _client => client ?? supabaseClient;
+  Future<T> _request<T>(Future<T> Function() request) => client == null
+      ? runSupabaseRequest(request)
+      : request().timeout(supabaseRequestTimeout);
 
   Stream<List<ClinicianAppointment>> watchDawaMomAppointments() {
-    return supabaseClient
+    return _client
         .from('appointments')
         .stream(primaryKey: ['id'])
         .eq('source_project', 'dawa_mom')
@@ -14,8 +20,56 @@ class ClinicianAppointmentRepository {
         .asyncMap(_hydrateAppointments);
   }
 
+  Future<List<ClinicianAppointment>> loadAppointmentsForDate(DateTime day,
+      {int lookbackDays = 0}) async {
+    final rows = <Map<String, dynamic>>[];
+    var offset = 0;
+    while (true) {
+      final page = await _request(() {
+        final base = _client
+            .from('appointments')
+            .select()
+            .eq('source_project', 'dawa_mom');
+        final query = lookbackDays == 0
+            ? base.eq('appointment_date', _dateOnly(day))
+            : base
+                .gte(
+                    'appointment_date',
+                    _dateOnly(
+                        DateTime(day.year, day.month, day.day - lookbackDays)))
+                .lte('appointment_date', _dateOnly(day));
+        return query
+            .inFilter('status', ['pending', 'confirmed', 'rescheduled'])
+            .order('id')
+            .range(offset, offset + 499);
+      });
+      rows.addAll(page);
+      if (page.length < 500) break;
+      offset += page.length;
+    }
+    for (final row in rows) {
+      final time = row['start_time']?.toString() ?? '';
+      final parts = time.split(':');
+      final hour = int.tryParse(parts.first);
+      final minute = parts.length > 1 ? int.tryParse(parts[1]) : null;
+      if (DateTime.tryParse(row['appointment_date']?.toString() ?? '') ==
+              null ||
+          hour == null ||
+          minute == null ||
+          hour < 0 ||
+          hour > 23 ||
+          minute < 0 ||
+          minute > 59) {
+        throw const FormatException(
+            'An appointment has an invalid date or time.');
+      }
+    }
+    return _hydrateAppointments(rows);
+  }
+
   Stream<List<ClinicianNotification>> watchNotifications() {
-    return supabaseClient
+    if (_client.auth.currentUser == null) return Stream.value(const []);
+    return _client
         .from('notifications')
         .stream(primaryKey: ['id'])
         .order('created_at', ascending: false)
@@ -38,8 +92,8 @@ class ClinicianAppointmentRepository {
     String? endTime,
     String? patientSafeMessage,
   }) async {
-    await runSupabaseRequest(
-      () => supabaseClient.rpc(
+    await _request(
+      () => _client.rpc(
         'update_dawa_mom_appointment_status',
         params: {
           'p_appointment_id': appointmentId,
@@ -56,8 +110,8 @@ class ClinicianAppointmentRepository {
 
   Future<void> markNotificationRead(String notificationId) async {
     if (notificationId.isEmpty) return;
-    await runSupabaseRequest(
-      () => supabaseClient.from('notifications').update({
+    await _request(
+      () => _client.from('notifications').update({
         'is_read': true,
         'read_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', notificationId),
@@ -84,11 +138,9 @@ class ClinicianAppointmentRepository {
     final clinicNames = <String, String>{};
 
     if (patientIds.isNotEmpty) {
-      final patientRows = await runSupabaseRequest(
-        () => supabaseClient
-            .from('mother')
-            .select('id,name')
-            .inFilter('id', patientIds),
+      final patientRows = await _request(
+        () =>
+            _client.from('mother').select('id,name').inFilter('id', patientIds),
       );
       for (final dynamic rawRow in patientRows) {
         final row = Map<String, dynamic>.from(rawRow as Map);
@@ -98,11 +150,9 @@ class ClinicianAppointmentRepository {
     }
 
     if (clinicIds.isNotEmpty) {
-      final clinicRows = await runSupabaseRequest(
-        () => supabaseClient
-            .from('clinic')
-            .select('id,name')
-            .inFilter('id', clinicIds),
+      final clinicRows = await _request(
+        () =>
+            _client.from('clinic').select('id,name').inFilter('id', clinicIds),
       );
       for (final dynamic rawRow in clinicRows) {
         final row = Map<String, dynamic>.from(rawRow as Map);

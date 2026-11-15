@@ -2,14 +2,15 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Dawa (phone/tablet -> device 10.127.36.206 direct)",
+      "name": "Dawa (phone/tablet -> dawa.local hub)",
       "request": "launch",
       "type": "dart",
       "toolArgs": [
-        "--dart-define=EDGE_DEVICE_BASE_URL=http://10.127.36.206",
-        "--dart-define=EDGE_DEVICE_HUB_PORT=8080",
+        "--dart-define=EDGE_DEVICE_BASE_URL=http://dawa.local",
+        "--dart-define=EDGE_DEVICE_HUB_PORT=80",
         "--dart-define=EDGE_DEVICE_CERVICAL_PORT=8085",
         "--dart-define=EDGE_DEVICE_ULTRASOUND_PORT=8086",
+        "--dart-define=EDGE_DEVICE_ANEMIA_PORT=8087",
         "--dart-define=EDGE_DEVICE_MODEL_MANAGEMENT_ENABLED=true",
         "--dart-define=EDGE_DEVICE_ULTRASOUND_INFERENCE_ENABLED=true"
       ]
@@ -26,6 +27,7 @@
         "--dart-define=EDGE_DEVICE_HUB_PORT=8080",
         "--dart-define=EDGE_DEVICE_CERVICAL_PORT=8085",
         "--dart-define=EDGE_DEVICE_ULTRASOUND_PORT=8086",
+        "--dart-define=EDGE_DEVICE_ANEMIA_PORT=8087",
         "--dart-define=EDGE_DEVICE_MODEL_MANAGEMENT_ENABLED=true",
         "--dart-define=EDGE_DEVICE_ULTRASOUND_INFERENCE_ENABLED=true"
       ]

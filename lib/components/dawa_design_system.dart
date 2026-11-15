@@ -26,13 +26,26 @@ class DawaTokens {
   static const borderStrong = Color(0xFFCBD5E1);
   static const textPrimary = Color(0xFF0F172A);
   static const textSecondary = Color(0xFF475569);
-  static const textMuted = Color(0xFF94A3B8);
+  static const textMuted = Color(0xFF5B6B82);
   static const textInverse = Color(0xFFFFFFFF);
 
   static const radiusSm = 6.0;
   static const radiusMd = 10.0;
   static const radiusLg = 14.0;
   static const radiusXl = 20.0;
+
+  // Shared workspace rhythm. Keep clinical pages dense enough for daily use
+  // while retaining a predictable 4px grid across modules.
+  static const space1 = 4.0;
+  static const space2 = 8.0;
+  static const space3 = 12.0;
+  static const space4 = 16.0;
+  static const space6 = 24.0;
+  static const space8 = 32.0;
+  static const workspaceMaxWidth = 1180.0;
+  static const workspaceDesktopPadding = 24.0;
+  static const workspaceTabletPadding = 20.0;
+  static const workspaceMobilePadding = 16.0;
 
   static const shadowSm = [
     BoxShadow(
@@ -230,7 +243,9 @@ class DawaStatusBadge extends StatelessWidget {
     final spec = _specFor(status);
 
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 170),
+      constraints: BoxConstraints(
+          maxWidth:
+              MediaQuery.textScalerOf(context).scale(170).clamp(170.0, 340.0)),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
@@ -239,15 +254,13 @@ class DawaStatusBadge extends StatelessWidget {
           border: Border.all(color: spec.border),
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.max,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(spec.icon, size: 13, color: spec.foreground),
             const SizedBox(width: 5),
             Flexible(
               child: Text(
                 label ?? spec.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.dmSans(
                   color: spec.foreground,
                   fontSize: 12,

@@ -66,7 +66,7 @@ class ClinicalToolController extends ChangeNotifier {
 
   void openPatient(ClinicalToolRecord record) {
     selectedPatient = record.patientName;
-    searchQuery = record.patientName;
+    searchQuery = record.patientId;
     activeTab = ClinicalToolDashboardTab.records;
     resultsFilter = ClinicalToolResultsFilter.all;
     notifyListeners();
@@ -74,7 +74,7 @@ class ClinicalToolController extends ChangeNotifier {
 
   void planFollowUp(ClinicalToolRecord record) {
     selectedPatient = record.patientName;
-    searchQuery = record.patientName;
+    searchQuery = record.patientId;
     activeTab = ClinicalToolDashboardTab.results;
     resultsFilter = record.needsReview
         ? ClinicalToolResultsFilter.needsReview

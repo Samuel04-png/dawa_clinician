@@ -25,3 +25,10 @@ android/app/google-services.json
 ios/Runner/GoogleService-Info.plist
 android/hs_err_pid*.log
 android/replay_pid*.log
+
+# Reproducible test/build evidence, not reference golden images.
+/coverage/
+/test/failures/
+
+# Python coverage-report helper bytecode.
+/tool/__pycache__/

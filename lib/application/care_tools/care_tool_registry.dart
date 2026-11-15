@@ -7,6 +7,7 @@ import '/application/hemonix/hemonix_module.dart';
 import '/application/shared/clinical_tools/clinical_tool_models.dart';
 import '/application/ultrasound/ultrasound.dart' show UltrasoundApp;
 import '/components/dawa_design_system.dart';
+import '/components/clinical_features.dart';
 
 List<ClinicalToolSummary> getCareToolSummaries() {
   return [
@@ -21,7 +22,7 @@ List<ClinicalToolSummary> getCareToolSummaries() {
       builder: (_) => const CaCxApp(),
     ),
     HemonixModule.summary(),
-    CtScanModule.summary(),
+    if (ClinicalFeatures.ctScan) CtScanModule.summary(),
     _summaryFromRecords(
       key: 'bp-monitor',
       title: 'BP Monitor',

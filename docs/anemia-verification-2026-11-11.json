@@ -1,0 +1,22 @@
+{
+  "physical_device_inference_verified": false,
+  "inference_is_mocked": true,
+  "authorized_patient_list_is_scoped": true,
+  "review_and_notes_required": true,
+  "authenticated_save_and_complete_provenance": true,
+  "concurrent_duplicate_is_idempotent": true,
+  "conflicting_duplicate_rejected": true,
+  "unauthorized_account_cannot_read_write_or_self_grant": true,
+  "anonymous_access_denied": true,
+  "interrupted_save_retry_recovers_exactly_one_record": true,
+  "fresh_authenticated_flutter_client_reopens_record": true,
+  "fresh_application_history_reopen_verified": true,
+  "new_authorization_migration": "202611110002",
+  "old_migrations_reapplied": false,
+  "cleanup_verified": true,
+  "real_niada_image_inference": "pending_approved_deidentified_image",
+  "analyze": "passed",
+  "web_build": "passed",
+  "default_suite_passed": 143,
+  "default_suite_existing_failures": 3
+}

@@ -13,6 +13,7 @@ class CtScanModuleShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClinicalToolDashboard(controller: controller);
+    return ClinicalToolDashboard(
+        controller: controller, demonstrationMode: true);
   }
 }

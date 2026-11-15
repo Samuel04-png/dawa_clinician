@@ -1,16 +1,17 @@
+import '/components/clinical_navigation_shell.dart';
+import '/components/clinical_workspace_components.dart';
 import '/application/cacx/cacx_model.dart';
 import '/application/cacx/cacx_widget.dart';
 import '/application/mom_details/mom_details_widget.dart';
 import '/backend/backend.dart';
+import '/components/missing_patient_context.dart';
 import '/backend/supabase/supabase_config.dart';
-import '/components/appbar_nav/appbar_nav_widget.dart';
 import '/components/dawa_design_system.dart';
-import '/components/small_side_nav/small_side_nav_widget.dart';
 import '/flutter_flow/custom_functions.dart' as functions;
-import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/index.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class PatientDetailsWidget extends StatefulWidget {
@@ -31,7 +32,6 @@ class PatientDetailsWidget extends StatefulWidget {
 }
 
 class _PatientDetailsWidgetState extends State<PatientDetailsWidget> {
-  final scaffoldKey = GlobalKey<ScaffoldState>();
   int _historyRefreshKey = 0;
 
   Future<List<_ScreeningRecord>> _loadScreenings(String patientId) async {
@@ -114,900 +114,421 @@ class _PatientDetailsWidgetState extends State<PatientDetailsWidget> {
     return patient.reference.id;
   }
 
+  Future<List<_ScreeningRecord>>? _screeningsFuture;
+  String? _screeningsKey;
+
   @override
   Widget build(BuildContext context) {
-    final showDesktopSidebar = MediaQuery.sizeOf(context).width >= 768.0;
-
+    if (widget.momDetails == null) {
+      return const MissingPatientContext();
+    }
     return StreamBuilder<MotherRecord>(
+      key: ValueKey(widget.momDetails!.path),
       stream: MotherRecord.getDocument(widget.momDetails!),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting &&
-            !snapshot.hasData) {
-          return _buildLoadingScaffold(
-            showDesktopSidebar,
-            'Loading patient details...',
+        if (!snapshot.hasData &&
+            !snapshot.hasError &&
+            snapshot.connectionState == ConnectionState.waiting) {
+          return ClinicalNavigationShell(
+            child: Center(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text('Loading patient details…', style: DawaTextStyles.secondary),
+            ])),
           );
         }
-
         if (snapshot.hasError || !snapshot.hasData) {
           debugPrint(
               '[PatientDetails] Failed to load patient: ${snapshot.error}');
-          return _buildErrorScaffold(
-            showDesktopSidebar,
-            'Could not load patient details. Please try again.',
-          );
+          return ClinicalNavigationShell(
+              child: ClinicalEmptyState(
+            icon: Icons.person_search_outlined,
+            title: 'Patient details unavailable',
+            message: 'Return to Patients and open the record again.',
+            actionLabel: 'Open Patients',
+            onAction: () => context.goNamed(MomsWidget.routeName),
+          ));
         }
-
         final patient = snapshot.data!;
         final patientId = _patientIdentifier(patient);
-
-        return GestureDetector(
-          onTap: () {
-            FocusScope.of(context).unfocus();
-            FocusManager.instance.primaryFocus?.unfocus();
-          },
-          child: Scaffold(
-            key: scaffoldKey,
-            backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
-            drawer: showDesktopSidebar ? null : _buildMobileDrawer(),
-            appBar: _buildAppBar(showDesktopSidebar),
-            body: SafeArea(
-              top: true,
-              child: Row(
-                children: [
-                  if (showDesktopSidebar) _buildDesktopSidebar(),
-                  Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final isWide = constraints.maxWidth >= 980.0;
-                        final horizontalPadding =
-                            constraints.maxWidth < 600.0 ? 16.0 : 24.0;
-
-                        return FutureBuilder<List<_ScreeningRecord>>(
-                          key: ValueKey(
-                              'screenings-$patientId-$_historyRefreshKey'),
-                          future: _loadScreenings(patientId),
-                          builder: (context, historySnapshot) {
-                            final latest =
-                                historySnapshot.data?.isNotEmpty == true
-                                    ? historySnapshot.data!.first
-                                    : null;
-
-                            return SingleChildScrollView(
-                              padding: EdgeInsets.fromLTRB(
-                                horizontalPadding,
-                                18.0,
-                                horizontalPadding,
-                                32.0,
-                              ),
-                              child: Align(
-                                alignment: Alignment.topCenter,
-                                child: ConstrainedBox(
-                                  constraints: const BoxConstraints(
-                                    maxWidth: 1180.0,
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      _buildPageHeader(patient),
-                                      const SizedBox(height: 16.0),
-                                      if (isWide)
-                                        Row(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Expanded(
-                                              flex: 5,
-                                              child: Column(
-                                                children: [
-                                                  _buildPatientProfileCard(
-                                                    patient,
-                                                    latest,
-                                                  ),
-                                                  const SizedBox(height: 16.0),
-                                                  _buildQuickActionsCard(
-                                                      patient),
-                                                  const SizedBox(height: 16.0),
-                                                  _buildRiskSummaryCard(latest),
-                                                ],
-                                              ),
-                                            ),
-                                            const SizedBox(width: 16.0),
-                                            Expanded(
-                                              flex: 7,
-                                              child: Column(
-                                                children: [
-                                                  _buildLatestScreeningCard(
-                                                      latest),
-                                                  const SizedBox(height: 16.0),
-                                                  _buildScreeningHistoryCard(
-                                                    patient,
-                                                    historySnapshot,
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        )
-                                      else
-                                        Column(
-                                          children: [
-                                            _buildPatientProfileCard(
-                                              patient,
-                                              latest,
-                                            ),
-                                            const SizedBox(height: 16.0),
-                                            _buildQuickActionsCard(patient),
-                                            const SizedBox(height: 16.0),
-                                            _buildRiskSummaryCard(latest),
-                                            const SizedBox(height: 16.0),
-                                            _buildLatestScreeningCard(latest),
-                                            const SizedBox(height: 16.0),
-                                            _buildScreeningHistoryCard(
-                                              patient,
-                                              historySnapshot,
-                                            ),
-                                          ],
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
+        final historyKey = '$patientId-$_historyRefreshKey';
+        if (_screeningsKey != historyKey) {
+          _screeningsKey = historyKey;
+          _screeningsFuture = _loadScreenings(patientId);
+        }
+        return ClinicalNavigationShell(
+            child: FutureBuilder<List<_ScreeningRecord>>(
+          key: ValueKey(historyKey),
+          future: _screeningsFuture,
+          builder: (context, history) =>
+              LayoutBuilder(builder: (context, size) {
+            final largeText = MediaQuery.textScalerOf(context).scale(14) > 21;
+            final padding = size.maxWidth < 600 ? 16.0 : 24.0;
+            final columns = size.maxWidth - padding * 2 >= 720 && !largeText;
+            final profile = _buildPatientProfileCard(patient);
+            final screenings = _buildScreeningWorkspace(patient, history);
+            return SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(padding, 20, padding, 32),
+              child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                        maxWidth: DawaTokens.workspaceMaxWidth),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildPageHeader(patient),
+                          const SizedBox(height: 20),
+                          if (columns)
+                            Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SizedBox(
+                                      width: size.maxWidth >= 1100 ? 288 : 250,
+                                      child: profile),
+                                  const SizedBox(width: 20),
+                                  Expanded(child: screenings),
+                                ])
+                          else ...[
+                            profile,
+                            const SizedBox(height: 20),
+                            screenings
+                          ],
+                        ]),
+                  )),
+            );
+          }),
+        ));
       },
-    );
-  }
-
-  Scaffold _buildLoadingScaffold(bool showDesktopSidebar, String message) {
-    return Scaffold(
-      backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
-      drawer: showDesktopSidebar ? null : _buildMobileDrawer(),
-      appBar: _buildAppBar(showDesktopSidebar),
-      body: SafeArea(
-        child: Row(
-          children: [
-            if (showDesktopSidebar) _buildDesktopSidebar(),
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      width: 42.0,
-                      height: 42.0,
-                      child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          FlutterFlowTheme.of(context).primary,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16.0),
-                    Text(message, style: DawaTextStyles.secondary),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Scaffold _buildErrorScaffold(bool showDesktopSidebar, String message) {
-    return Scaffold(
-      backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
-      drawer: showDesktopSidebar ? null : _buildMobileDrawer(),
-      appBar: _buildAppBar(showDesktopSidebar),
-      body: SafeArea(
-        child: Row(
-          children: [
-            if (showDesktopSidebar) _buildDesktopSidebar(),
-            Expanded(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.error_outline_rounded,
-                        size: 44.0,
-                        color: DawaTokens.statusDanger,
-                      ),
-                      const SizedBox(height: 12.0),
-                      Text(
-                        message,
-                        textAlign: TextAlign.center,
-                        style: DawaTextStyles.secondary,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  PreferredSizeWidget? _buildAppBar(bool showDesktopSidebar) {
-    if (showDesktopSidebar) {
-      return null;
-    }
-
-    return AppBar(
-      backgroundColor: FlutterFlowTheme.of(context).secondaryBackground,
-      automaticallyImplyLeading: false,
-      leading: IconButton(
-        tooltip: Navigator.of(context).canPop()
-            ? 'Back to patients'
-            : 'Open navigation',
-        icon: Icon(
-          Navigator.of(context).canPop()
-              ? Icons.arrow_back_rounded
-              : Icons.menu_rounded,
-          color: FlutterFlowTheme.of(context).primary,
-        ),
-        onPressed: () {
-          if (Navigator.of(context).canPop()) {
-            Navigator.of(context).pop();
-          } else {
-            scaffoldKey.currentState?.openDrawer();
-          }
-        },
-      ),
-      title: AppbarNavWidget(),
-      actions: [
-        IconButton(
-          tooltip: 'Patients',
-          icon: Icon(
-            Icons.people_alt_rounded,
-            color: FlutterFlowTheme.of(context).primary,
-          ),
-          onPressed: () => context.goNamed(MomsWidget.routeName),
-        ),
-      ],
-      elevation: 0.0,
-      titleSpacing: 0.0,
-    );
-  }
-
-  Widget _buildMobileDrawer() {
-    return SizedBox(
-      width: 280.0,
-      child: Drawer(
-        elevation: 16.0,
-        child: Container(
-          color: FlutterFlowTheme.of(context).primaryBackground,
-          child: const SmallSideNavWidget(),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDesktopSidebar() {
-    return Container(
-      width: 240.0,
-      decoration: BoxDecoration(
-        color: FlutterFlowTheme.of(context).secondaryBackground,
-        border: Border(
-          right: BorderSide(
-            color: FlutterFlowTheme.of(context).alternate,
-            width: 1.0,
-          ),
-        ),
-      ),
-      child: const SmallSideNavWidget(),
     );
   }
 
   Widget _buildPageHeader(MotherRecord patient) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Patient Details', style: DawaTextStyles.pageTitle),
-              const SizedBox(height: 4.0),
-              Text(
-                'Review profile details, start screening, and track historical results for this patient.',
-                style: DawaTextStyles.secondary,
-              ),
-            ],
-          ),
+    return LayoutBuilder(builder: (context, size) {
+      final heading =
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        TextButton.icon(
+          onPressed: () => context.goNamed(MomsWidget.routeName),
+          icon: const Icon(Icons.arrow_back_rounded, size: 16),
+          label: const Text('Patients'),
+          style: TextButton.styleFrom(
+              padding: EdgeInsets.zero,
+              alignment: Alignment.centerLeft,
+              minimumSize: const Size(48, 36)),
         ),
-        if (MediaQuery.sizeOf(context).width >= 720.0)
-          OutlinedButton.icon(
-            onPressed: _openLegacyRecord,
-            icon: const Icon(Icons.open_in_new_rounded, size: 18.0),
-            label: const Text('Full Maternal Record'),
-          ),
-      ],
-    );
+        Semantics(
+            header: true,
+            child: Text('Patient record', style: DawaTextStyles.pageTitle)),
+      ]);
+      final actions = Wrap(spacing: 10, runSpacing: 10, children: [
+        OutlinedButton.icon(
+          onPressed: _openLegacyRecord,
+          icon: const Icon(Icons.description_outlined, size: 18),
+          label: const Text('Full Maternal Record'),
+        ),
+        FilledButton.icon(
+          onPressed: () => _openAddScreening(patient),
+          icon: const Icon(Icons.add_rounded, size: 18),
+          label: const Text('Add Screening'),
+        ),
+      ]);
+      if (size.maxWidth < 860 ||
+          MediaQuery.textScalerOf(context).scale(14) > 21) {
+        return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [heading, const SizedBox(height: 12), actions]);
+      }
+      return Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+        Expanded(child: heading),
+        const SizedBox(width: 16),
+        actions,
+      ]);
+    });
   }
 
-  Widget _buildPatientProfileCard(
-    MotherRecord patient,
-    _ScreeningRecord? latest,
-  ) {
-    final age = patient.dateOfBirth == null
-        ? 'N/A'
-        : functions.calculateAge(patient.dateOfBirth!).toString();
-    final lastScreening = latest?.createdAt != null
-        ? dateTimeFormat('d MMM y', latest!.createdAt!)
-        : 'Not yet screened';
-
+  Widget _buildPatientProfileCard(MotherRecord patient) {
+    final identifier = _patientIdentifier(patient);
+    final shortRef = identifier.length > 18
+        ? '${identifier.substring(0, 8)}…${identifier.substring(identifier.length - 4)}'
+        : identifier;
+    final birthDate = patient.dateOfBirth;
     return DawaCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              DawaAvatarCircle(
-                name: patient.name,
-                size: 58.0,
-                moduleColor: DawaTokens.brandPrimary,
-              ),
-              const SizedBox(width: 14.0),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              DawaAvatarCircle(name: patient.name, size: 44),
+              const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: 8.0,
-                      runSpacing: 8.0,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Text(
-                          patient.name.trim().isEmpty
-                              ? 'Unnamed patient'
-                              : patient.name,
-                          style:
-                              DawaTextStyles.pageTitle.copyWith(fontSize: 24.0),
-                        ),
-                        _buildRiskBadge(latest?.riskLevel ?? 'unknown'),
-                      ],
-                    ),
-                    const SizedBox(height: 6.0),
-                    Text(
-                      'Patient ID ${_patientIdentifier(patient)}',
-                      style: DawaTextStyles.secondary.copyWith(
-                        color: DawaTokens.textMuted,
-                      ),
-                    ),
-                  ],
-                ),
+                  child: Semantics(
+                      header: true,
+                      child: Text(
+                        patient.name.trim().isEmpty
+                            ? 'Unnamed patient'
+                            : patient.name,
+                        style: DawaTextStyles.cardTitle.copyWith(fontSize: 20),
+                      ))),
+            ]),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(
+                  child: Text('Ref $shortRef',
+                      style: DawaTextStyles.secondary.copyWith(fontSize: 12))),
+              IconButton(
+                tooltip: 'Copy full patient reference',
+                icon: const Icon(Icons.copy_outlined, size: 16),
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: identifier));
+                  if (mounted)
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Patient reference copied')));
+                },
               ),
-            ],
-          ),
-          const SizedBox(height: 18.0),
-          Wrap(
-            spacing: 10.0,
-            runSpacing: 10.0,
-            children: [
-              _profileField('Age', age, Icons.cake_outlined),
-              _profileField(
+            ]),
+            const Divider(height: 24, color: DawaTokens.border),
+            _profileField(
                 'Date of birth',
-                patient.dateOfBirth == null
+                birthDate == null
                     ? 'Not recorded'
-                    : dateTimeFormat('d MMM y', patient.dateOfBirth!),
-                Icons.event_outlined,
-              ),
-              _profileField(
+                    : '${dateTimeFormat('d MMM y', birthDate)} · ${functions.calculateAge(birthDate)} years',
+                Icons.cake_outlined),
+            _profileField(
                 'Phone',
                 patient.phoneNumber.trim().isEmpty
                     ? 'Not recorded'
                     : patient.phoneNumber,
-                Icons.phone_outlined,
-              ),
-              _profileField(
+                Icons.phone_outlined),
+            _profileField(
                 'Location',
                 patient.address.trim().isEmpty
                     ? 'Not recorded'
                     : patient.address,
-                Icons.location_on_outlined,
-              ),
-              _profileField(
+                Icons.location_on_outlined),
+            _profileField(
                 'Occupation',
                 patient.occupation.trim().isEmpty
                     ? 'Not recorded'
                     : patient.occupation,
-                Icons.work_outline_rounded,
-              ),
-              _profileField(
-                'Last screening',
-                lastScreening,
-                Icons.history_toggle_off_rounded,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
+                Icons.work_outline_rounded),
+          ],
+        ));
   }
 
-  Widget _buildQuickActionsCard(MotherRecord patient) {
-    return DawaCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Quick Actions', style: DawaTextStyles.cardTitle),
-          const SizedBox(height: 8.0),
-          Text(
-            'Launch screening with this patient already selected, or open the full maternal record when you need the longer clinical form.',
-            style: DawaTextStyles.secondary,
-          ),
-          const SizedBox(height: 16.0),
-          Wrap(
-            spacing: 10.0,
-            runSpacing: 10.0,
+  Widget _buildScreeningWorkspace(
+      MotherRecord patient, AsyncSnapshot<List<_ScreeningRecord>> history) {
+    final records = history.data ?? const <_ScreeningRecord>[];
+    final loading =
+        history.connectionState == ConnectionState.waiting && !history.hasData;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if (!loading && !history.hasError && records.isNotEmpty) ...[
+        _buildLatestScreeningCard(records.first),
+        const SizedBox(height: 20),
+      ],
+      DawaCard(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              ElevatedButton.icon(
-                onPressed: () => _openAddScreening(patient),
-                icon: const Icon(Icons.add_circle_outline_rounded, size: 18.0),
-                label: const Text('Add Screening'),
-              ),
-              OutlinedButton.icon(
-                onPressed: _openLegacyRecord,
-                icon: const Icon(Icons.description_outlined, size: 18.0),
-                label: const Text('Open Full Record'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRiskSummaryCard(_ScreeningRecord? latest) {
-    final headline =
-        latest == null ? 'No screenings yet' : latest.primaryResultOrFallback;
-    final recommendation = latest == null
-        ? 'Start the first screening for this patient.'
-        : latest.recommendationSummary;
-
-    return DawaCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Risk Summary', style: DawaTextStyles.cardTitle),
-          const SizedBox(height: 12.0),
-          Wrap(
-            spacing: 10.0,
-            runSpacing: 10.0,
-            children: [
-              _summaryChip(
-                'Status',
-                latest == null ? 'No screening' : latest.statusLabel,
-                Icons.assignment_turned_in_outlined,
-              ),
-              _summaryChip(
-                'Risk level',
-                latest == null ? 'Unknown' : latest.riskLabel,
-                Icons.health_and_safety_outlined,
-              ),
-              _summaryChip(
-                'Source',
-                latest?.sourceLabel ?? 'Not available',
-                Icons.hub_outlined,
-              ),
-            ],
-          ),
-          const SizedBox(height: 14.0),
-          Text(
-            headline,
-            style: DawaTextStyles.pageTitle.copyWith(fontSize: 20.0),
-          ),
-          const SizedBox(height: 8.0),
-          Text(
-            recommendation,
-            style: DawaTextStyles.secondary,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLatestScreeningCard(_ScreeningRecord? latest) {
-    return DawaCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child:
-                    Text('Latest Screening', style: DawaTextStyles.cardTitle),
-              ),
-              if (latest != null)
+              Text('Screening History', style: DawaTextStyles.cardTitle),
+              if (!loading && !history.hasError && records.isNotEmpty)
                 Text(
-                  latest.completedLabel,
-                  style: DawaTextStyles.secondary.copyWith(
-                    color: DawaTokens.textMuted,
-                  ),
-                ),
+                    '${records.length} saved ${records.length == 1 ? 'screening' : 'screenings'}',
+                    style: DawaTextStyles.secondary.copyWith(fontSize: 12)),
+            ]),
+        const SizedBox(height: 4),
+        Text('Cervical cancer · Newest first',
+            style: DawaTextStyles.secondary.copyWith(fontSize: 12)),
+        const SizedBox(height: 16),
+        if (loading)
+          const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()))
+        else if (history.hasError)
+          ClinicalEmptyState(
+            surface: false,
+            icon: Icons.cloud_off_outlined,
+            title: 'Screening history unavailable',
+            message:
+                'Check your connection and try loading the saved results again.',
+            actionLabel: 'Retry',
+            onAction: () => setState(() => _historyRefreshKey++),
+          )
+        else if (records.isEmpty)
+          ClinicalEmptyState(
+            surface: false,
+            icon: Icons.assignment_outlined,
+            title: 'No screenings yet',
+            message: 'No cervical cancer results are saved for this patient.',
+            actionLabel: 'Add Screening',
+            onAction: () => _openAddScreening(patient),
+          )
+        else
+          Column(children: [
+            for (var index = 0; index < records.length; index++) ...[
+              if (index > 0) const Divider(height: 1, color: DawaTokens.border),
+              _buildHistoryRecordCard(records[index]),
             ],
-          ),
-          const SizedBox(height: 14.0),
-          if (latest == null)
-            Text(
-              'No screenings yet. Start the first screening for this patient.',
-              style: DawaTextStyles.secondary,
-            )
-          else
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16.0),
-              decoration: BoxDecoration(
-                color: DawaTokens.surfaceSecondary,
-                borderRadius: BorderRadius.circular(DawaTokens.radiusLg),
-                border: Border.all(color: DawaTokens.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: 8.0,
-                    runSpacing: 8.0,
-                    children: [
-                      _buildRiskBadge(latest.riskLevel),
-                      _smallBadge(
-                        latest.sourceLabel,
-                        DawaTokens.brandPrimaryPale,
-                        DawaTokens.brandPrimary,
-                      ),
-                      _smallBadge(
-                        latest.secondOpinionBadgeLabel,
-                        latest.secondOpinionBadgeBackground,
-                        latest.secondOpinionBadgeForeground,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12.0),
-                  Text(
-                    latest.primaryResultOrFallback,
-                    style: DawaTextStyles.pageTitle.copyWith(fontSize: 20.0),
-                  ),
-                  const SizedBox(height: 6.0),
-                  Text(
-                    '${latest.confidenceLabel} confidence',
-                    style: DawaTextStyles.secondary,
-                  ),
-                  const SizedBox(height: 12.0),
-                  Text(
-                    latest.recommendationSummary,
-                    style: DawaTextStyles.secondary,
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
+          ]),
+      ])),
+    ]);
   }
 
-  Widget _buildScreeningHistoryCard(
-    MotherRecord patient,
-    AsyncSnapshot<List<_ScreeningRecord>> historySnapshot,
-  ) {
+  Widget _buildLatestScreeningCard(_ScreeningRecord record) {
     return DawaCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Screening History', style: DawaTextStyles.cardTitle),
-                    const SizedBox(height: 4.0),
-                    Text(
-                      'All CaCx screening results linked to this patient, newest first.',
-                      style: DawaTextStyles.secondary,
-                    ),
-                  ],
-                ),
-              ),
-              ElevatedButton.icon(
-                onPressed: () => _openAddScreening(patient),
-                icon: const Icon(Icons.add_rounded, size: 18.0),
-                label: const Text('Add Screening'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16.0),
-          if (historySnapshot.connectionState == ConnectionState.waiting &&
-              !historySnapshot.hasData)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16.0),
-              child: Text(
-                'Loading screening history...',
-                style: DawaTextStyles.secondary,
-              ),
-            )
-          else if (historySnapshot.hasError)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16.0),
-              child: Text(
-                'Could not load screening history. Please try again.',
-                style: DawaTextStyles.secondary.copyWith(
-                  color: DawaTokens.statusDangerText,
-                ),
-              ),
-            )
-          else if ((historySnapshot.data ?? const []).isEmpty)
-            _buildEmptyHistoryState(patient)
-          else
-            Column(
-              children: (historySnapshot.data ?? const [])
-                  .map(
-                    (record) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12.0),
-                      child: _buildHistoryRecordCard(record),
-                    ),
-                  )
-                  .toList(),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyHistoryState(MotherRecord patient) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24.0),
-      decoration: BoxDecoration(
-        color: DawaTokens.surfaceSecondary,
-        borderRadius: BorderRadius.circular(DawaTokens.radiusLg),
-        border: Border.all(color: DawaTokens.border),
-      ),
-      child: Column(
-        children: [
-          const Icon(
-            Icons.assignment_outlined,
-            size: 40.0,
-            color: DawaTokens.brandPrimary,
-          ),
-          const SizedBox(height: 12.0),
-          Text('No screenings yet', style: DawaTextStyles.cardTitle),
-          const SizedBox(height: 6.0),
-          Text(
-            'Start the first screening for this patient.',
-            textAlign: TextAlign.center,
-            style: DawaTextStyles.secondary,
-          ),
-          const SizedBox(height: 14.0),
-          ElevatedButton.icon(
-            onPressed: () => _openAddScreening(patient),
-            icon: const Icon(Icons.add_rounded, size: 18.0),
-            label: const Text('Add Screening'),
-          ),
-        ],
-      ),
-    );
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          spacing: 12,
+          runSpacing: 8,
+          children: [
+            Text('Latest screening', style: DawaTextStyles.cardTitle),
+            _buildRiskBadge(record.riskLevel),
+          ]),
+      const SizedBox(height: 12),
+      Text(record.primaryResultOrFallback,
+          style: DawaTextStyles.pageTitle.copyWith(fontSize: 24)),
+      const SizedBox(height: 8),
+      Text('${record.completedLabel} · ${record.sourceLabel}',
+          style: DawaTextStyles.secondary),
+      if (record.primaryConfidence != null) ...[
+        const SizedBox(height: 6),
+        Text('${record.confidenceLabel} confidence',
+            style: DawaTextStyles.secondary),
+      ],
+      const SizedBox(height: 12),
+      Text(record.recommendationSummary, style: DawaTextStyles.body),
+      const SizedBox(height: 12),
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        _smallBadge(record.statusLabel, record.statusBadgeBackground,
+            record.statusBadgeForeground),
+        if (record.secondOpinionStatus != 'not_required')
+          _smallBadge(record.secondOpinionBadgeLabel,
+              DawaTokens.surfaceTertiary, DawaTokens.textSecondary),
+      ]),
+      const SizedBox(height: 12),
+      Text('AI estimate — clinician must review',
+          style: DawaTextStyles.secondary.copyWith(fontSize: 12)),
+      const SizedBox(height: 4),
+      TextButton.icon(
+          onPressed: () => _showScreeningDetails(record),
+          icon: const Icon(Icons.open_in_new_rounded, size: 16),
+          label: const Text('Review latest result')),
+    ]));
   }
 
   Widget _buildHistoryRecordCard(_ScreeningRecord record) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16.0),
-      decoration: BoxDecoration(
-        color: DawaTokens.surfaceSecondary,
-        borderRadius: BorderRadius.circular(DawaTokens.radiusLg),
-        border: Border.all(color: DawaTokens.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: 8.0,
-            runSpacing: 8.0,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text('CaCx Screening', style: DawaTextStyles.cardTitle),
-              _buildRiskBadge(record.riskLevel),
-              _smallBadge(
-                record.sourceLabel,
-                DawaTokens.brandPrimaryPale,
-                DawaTokens.brandPrimary,
-              ),
-              _smallBadge(
-                record.statusLabel,
-                record.statusBadgeBackground,
-                record.statusBadgeForeground,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10.0),
-          Text(
-            '${record.primaryResultOrFallback} · ${record.confidenceLabel} confidence',
-            style: DawaTextStyles.body.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 6.0),
-          Text(
-            '${record.deviceStatusLabel} · ${record.secondOpinionSummary}',
-            style: DawaTextStyles.secondary,
-          ),
-          const SizedBox(height: 6.0),
-          Text(
-            'Completed on ${record.completedLabel}',
-            style: DawaTextStyles.secondary.copyWith(
-              color: DawaTokens.textMuted,
-            ),
-          ),
-          const SizedBox(height: 12.0),
-          Text(
-            record.recommendationSummary,
-            style: DawaTextStyles.secondary,
-          ),
-          const SizedBox(height: 14.0),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton(
-              onPressed: () => _showScreeningDetails(record),
-              child: const Text('View Details'),
-            ),
-          ),
-        ],
-      ),
-    );
+    return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  Text(record.completedLabel,
+                      style: DawaTextStyles.secondary.copyWith(fontSize: 12)),
+                  _buildRiskBadge(record.riskLevel),
+                ]),
+            const SizedBox(height: 8),
+            Text(record.primaryResultOrFallback,
+                style: DawaTextStyles.cardTitle),
+            const SizedBox(height: 6),
+            Text(record.sourceLabel, style: DawaTextStyles.secondary),
+            const SizedBox(height: 4),
+            Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                    onPressed: () => _showScreeningDetails(record),
+                    icon: const Icon(Icons.article_outlined, size: 16),
+                    label: const Text('View Details'))),
+          ],
+        ));
   }
 
   Future<void> _showScreeningDetails(_ScreeningRecord record) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.72,
-          minChildSize: 0.55,
-          maxChildSize: 0.94,
-          builder: (context, controller) {
-            return Container(
-              decoration: BoxDecoration(
-                color: FlutterFlowTheme.of(context).secondaryBackground,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(24.0),
-                ),
-              ),
-              child: Column(
-                children: [
-                  const SizedBox(height: 12.0),
-                  Container(
-                    width: 42.0,
-                    height: 4.0,
-                    decoration: BoxDecoration(
-                      color: DawaTokens.borderStrong,
-                      borderRadius: BorderRadius.circular(99.0),
-                    ),
-                  ),
-                  Expanded(
-                    child: ListView(
-                      controller: controller,
-                      padding:
-                          const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 28.0),
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Screening Details',
-                                style: DawaTextStyles.pageTitle,
-                              ),
-                            ),
-                            IconButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              icon: const Icon(Icons.close_rounded),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12.0),
-                        _detailSection(
-                          'Result Summary',
-                          [
-                            _detailRow('Module', 'CaCx'),
-                            _detailRow('Primary result',
-                                record.primaryResultOrFallback),
-                            _detailRow(
-                                'Primary confidence', record.confidenceLabel),
-                            _detailRow('Risk level', record.riskLabel),
-                            _detailRow('Source', record.sourceLabel),
-                            _detailRow('Completed', record.completedLabel),
-                            _detailRow('Save status', 'Saved to Supabase'),
-                          ],
-                        ),
-                        const SizedBox(height: 12.0),
-                        _detailSection(
-                          'Review Status',
-                          [
-                            _detailRow(
-                                'Device status', record.deviceStatusLabel),
-                            _detailRow(
-                              'Second opinion',
-                              record.secondOpinionSummary,
-                            ),
-                            _detailRow(
-                              'Second opinion result',
-                              record.secondOpinionResultOrFallback,
-                            ),
-                            _detailRow(
-                              'Second opinion confidence',
-                              record.secondOpinionConfidenceLabel,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12.0),
-                        _detailSection(
-                          'Clinical Recommendation',
-                          [
-                            Text(
-                              record.recommendationSummary,
-                              style: DawaTextStyles.secondary,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12.0),
-                        _detailSection(
-                          'Image',
-                          [
-                            _buildImagePreview(record),
-                            const SizedBox(height: 10.0),
-                            _detailRow(
-                              'Image path',
-                              record.imagePath?.trim().isNotEmpty == true
-                                  ? record.imagePath!
-                                  : 'No image path saved',
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12.0),
-                        _detailSection(
-                          'Raw Metadata',
-                          [
-                            _detailRow(
-                                'Primary source label', record.primarySource),
-                            _detailRow(
-                              'Device endpoint',
-                              record.deviceEndpoint?.trim().isNotEmpty == true
-                                  ? record.deviceEndpoint!
-                                  : 'Not recorded',
-                            ),
-                            _detailRow(
-                              'Device error',
-                              record.deviceError?.trim().isNotEmpty == true
-                                  ? record.deviceError!
-                                  : 'None',
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
+    Widget content() => SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(children: [
+              Expanded(
+                  child: Semantics(
+                      header: true,
+                      child: Text('Screening Details',
+                          style: DawaTextStyles.pageTitle))),
+              IconButton(
+                  tooltip: 'Close screening details',
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded)),
+            ]),
+            const SizedBox(height: 8),
+            Text('AI estimate — clinician must review',
+                style: DawaTextStyles.secondary),
+            const SizedBox(height: 20),
+            _detailSection('Result summary', [
+              _detailRow('Module', 'Cervical cancer'),
+              _detailRow('Primary result', record.primaryResultOrFallback),
+              _detailRow('Primary confidence', record.confidenceLabel),
+              _detailRow('Risk level', record.riskLabel),
+              _detailRow('Source', record.sourceLabel),
+              _detailRow('Completed', record.completedLabel),
+            ]),
+            const SizedBox(height: 16),
+            _detailSection('Review status', [
+              _detailRow('Device status', record.deviceStatusLabel),
+              _detailRow('Second opinion', record.secondOpinionSummary),
+              _detailRow('Second opinion result',
+                  record.secondOpinionResultOrFallback),
+              _detailRow('Second opinion confidence',
+                  record.secondOpinionConfidenceLabel),
+            ]),
+            const SizedBox(height: 16),
+            _detailSection('Clinical recommendation', [
+              Text(record.recommendationSummary, style: DawaTextStyles.body),
+            ]),
+            const SizedBox(height: 16),
+            _detailSection('Screening image', [_buildImagePreview(record)]),
+            const SizedBox(height: 16),
+            ExpansionTile(title: const Text('Diagnostics'), children: [
+              _detailRow('Primary source', record.primarySource),
+              _detailRow(
+                  'Device endpoint', record.deviceEndpoint ?? 'Not recorded'),
+              _detailRow('Device error', record.deviceError ?? 'None'),
+              _detailRow('Image path', record.imagePath ?? 'Not recorded'),
+            ]),
+          ]),
         );
-      },
-    );
+    if (MediaQuery.sizeOf(context).width >= 720) {
+      await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => Dialog(
+                backgroundColor: DawaTokens.surface,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(DawaTokens.radiusLg)),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                      maxWidth: 720,
+                      maxHeight: MediaQuery.sizeOf(dialogContext).height * .85),
+                  child: content(),
+                ),
+              ));
+    } else {
+      await showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: DawaTokens.surface,
+          useSafeArea: true,
+          builder: (_) =>
+              FractionallySizedBox(heightFactor: .9, child: content()));
+    }
   }
 
   Widget _buildImagePreview(_ScreeningRecord record) {
@@ -1075,84 +596,39 @@ class _PatientDetailsWidgetState extends State<PatientDetailsWidget> {
 
   Widget _detailRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 160.0,
-            child: Text(
-              label,
-              style: DawaTextStyles.secondary.copyWith(
-                color: DawaTokens.textMuted,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(value, style: DawaTextStyles.secondary),
-          ),
-        ],
-      ),
-    );
+        padding: const EdgeInsets.only(bottom: 12),
+        child: LayoutBuilder(builder: (context, size) {
+          final caption = Text(label, style: DawaTextStyles.secondary);
+          final detail = Text(value, style: DawaTextStyles.body);
+          if (size.maxWidth < 480 ||
+              MediaQuery.textScalerOf(context).scale(14) > 21) {
+            return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [caption, const SizedBox(height: 4), detail]);
+          }
+          return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SizedBox(width: 170, child: caption),
+            Expanded(child: detail),
+          ]);
+        }));
   }
 
   Widget _profileField(String label, String value, IconData icon) {
-    return Container(
-      constraints: const BoxConstraints(minWidth: 150.0, maxWidth: 240.0),
-      padding: const EdgeInsets.all(12.0),
-      decoration: BoxDecoration(
-        color: DawaTokens.surfaceSecondary,
-        borderRadius: BorderRadius.circular(DawaTokens.radiusMd),
-        border: Border.all(color: DawaTokens.border),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 16.0, color: DawaTokens.brandPrimary),
-          const SizedBox(width: 8.0),
+    return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(icon, size: 18, color: DawaTokens.textMuted),
+          const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: DawaTextStyles.label.copyWith(
-                    color: DawaTokens.textMuted,
-                    fontSize: 10.0,
-                  ),
-                ),
-                const SizedBox(height: 4.0),
-                Text(value, style: DawaTextStyles.secondary),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _summaryChip(String label, String value, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
-      decoration: BoxDecoration(
-        color: DawaTokens.surfaceSecondary,
-        borderRadius: BorderRadius.circular(99.0),
-        border: Border.all(color: DawaTokens.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14.0, color: DawaTokens.brandPrimary),
-          const SizedBox(width: 6.0),
-          Text(
-            '$label: $value',
-            style: DawaTextStyles.secondary.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text(label,
+                    style: DawaTextStyles.secondary.copyWith(fontSize: 12)),
+                const SizedBox(height: 4),
+                Text(value, style: DawaTextStyles.body),
+              ])),
+        ]));
   }
 
   Widget _buildRiskBadge(String riskLevel) {
